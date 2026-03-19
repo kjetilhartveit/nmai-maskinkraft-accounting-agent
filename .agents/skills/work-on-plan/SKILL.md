@@ -15,5 +15,5 @@ Use this skill when:
 
 ## Instructions
 
-- Check the plan in [PLAN.md](../../../docs/plans/{plan folder}/PLAN.md) and keep working on it. Follow the instructions in the plan.
+- Check the plan in [PLAN.md](../../../docs/plans/1-initial-setup/PLAN.md) and keep working on it. Follow the instructions in the plan.
 - If the specific plan is not found, then check the [plans](../../../docs/plans/) folder and find the next plan.

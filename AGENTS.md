@@ -1,3 +1,24 @@
+# Information
+
+The purpose of this repository is to work on the task "Accounting Agent" in the Norwegian Championship in AI.
+
+In a nutshell we must build a system where we parse prompts in natural language into API calls to the Tripletex API.
+
+There are many caveats to consider which are well documented in the official documentation and in the [FINDINGS.md](docs/reports/FINDINGS.md).
+
+In order for us to create the best possible system there are many things we need to know first; many of which are mentioned in [RECOMMENDATIONS.md](docs/reports/RECOMMENDATIONS.md).
+
+Here's a list of tasks I think we need to work on to get started:
+
+- Create the initial framework for the system using TypeScript.
+- Get us up and running and submit against the endpoint. Our system should be deterministic (apart from the LLM of course) and easy to run.
+- We will thoroughly examine the Tripletex API and learn the ins and outs of it. Some key details are exploring the possibilities, especially in terms of how we can use as few API calls as possible to do operations. We should batch when we can and be smart about it. Sometimes we must create things in advance to avoid errors, because in real attempts the sandbox is empty - and this is what we should simulate.
+- Although we will create helpful tools for the LLM (like skills perhaps and documentation in the AGENTS.md), what is perhaps even more important is creating an evaluation system which we can use to rate setups. What we'll do is use sample prompts (including those we gain from submitting tasks) and add the answers to it (e.g. the data to identify and the most efficient API calls). We can use this data to evaluate systems and see what works and what doesn't, which LLMs perform the best and so on. We could even rate setups based on properties per prompt, e.g. the complexitity, the language and so on. And we must be able to run evaluation tests a reasonable number of times to increase our confidence in the results.
+
+## Technologies
+
+- Programming language: TypeScript.
+
 ## Links
 
 - **App**: https://app.ainm.no
@@ -5,24 +26,9 @@
 - **Docs overview**: https://app.ainm.no/docs
 - **Docs - Task Accounting Agent**: https://app.ainm.no/docs/tripletex/overview
 - **Task submission**: https://app.ainm.no/submit/tripletex
+- **Tripletex API documentation**: https://kkpqfuj-amager.tripletex.dev/v2-docs/
 - **Prizes and how it works**: https://app.ainm.no/prizes
 - **Team**: Maskinkraft
-
-## Caveats
-
-- Do **not** submit tasks yet!
-
-# Plan
-
-- [x] Thoroughly examine the task and the docs. Learn the ins and outs of the task. Identify the biggest hurdles and blockers.
-  - [x] Explain the most technical aspects in a more easy to understand manner. Teach me as you go. Create a report with your findings. → [FINDINGS.md](docs/plans/1-research/FINDINGS.md)
-  - [x] Come up with recommendations with a solution. Be thorough and aim to win the prize by making the best solution. Create a report with your recommendations. → [RECOMMENDATIONS.md](docs/plans/1-research/RECOMMENDATIONS.md)
-
-## Execution of plan
-
-- You should git commit and push regularly, particularly after making many code changes.
-- After every step you should tick the step off the plan and make sure everything is committed and pushed.
-- Be autonomous, but if you need my input then ask for it in [QA.md](QA.md).
 
 # The docs folder
 

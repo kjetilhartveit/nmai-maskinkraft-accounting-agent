@@ -1,0 +1,30 @@
+[
+  {
+    "prompt": "Create employee Anna Berg, email anna@test.no",
+    "language": "en"
+  },
+  {
+    "prompt": "Créez trois départements dans Tripletex : \"Logistikk\", \"Kundeservice\" et \"Administrasjon\".",
+    "language": "fr"
+  },
+  {
+    "prompt": "Crie e envie uma fatura ao cliente Porto Alegre Lda (org. nº 842889154) por 11200 NOK sem IVA. A fatura refere-se a Consultoria de dados.",
+    "language": "pt"
+  },
+  {
+    "prompt": "Erstellen Sie das Projekt \"Analyse Windkraft\" verknüpft mit dem Kunden Windkraft GmbH (Org.-Nr. 897356171). Projektleiter ist Finn Richter (finn.richter@example.org).",
+    "language": "de"
+  },
+  {
+    "prompt": "Erstellen und senden Sie eine Rechnung an den Kunden Waldstein GmbH (Org.-Nr. 925346519) über 25100 NOK ohne MwSt. Die Rechnung betrifft Systementwicklung.",
+    "language": "de"
+  },
+  {
+    "prompt": "Opprett tre avdelingar i Tripletex: \"Logistikk\", \"Innkjøp\" og \"IT\".",
+    "language": "no"
+  },
+  {
+    "prompt": "Registrieren Sie den Lieferanten Waldstein GmbH mit der Organisationsnummer 891505019. E-Mail: faktura@waldsteingmbh.no.",
+    "language": "de"
+  }
+]
