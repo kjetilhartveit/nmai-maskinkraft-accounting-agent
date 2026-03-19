@@ -1,6 +1,6 @@
-# {Project name}
+# Norwegian Championship in AI: Accounting Agent
 
-{Short description for humans}
+The purpose of this repository is to work on the task "Accounting Agent" in the Norwegian Championship in AI.
 
 # For AI agents
 
