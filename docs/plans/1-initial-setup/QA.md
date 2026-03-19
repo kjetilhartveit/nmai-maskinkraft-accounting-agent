@@ -12,7 +12,7 @@ Which LLM provider should we use for prompt parsing? The recommendations suggest
 
 ### Answer
 
-(waiting for user answer)
+I have a Pro subscription for Claude, how do I obtain the API key?
 
 ## Q2: Sandbox credentials
 
@@ -20,17 +20,19 @@ Have you obtained your sandbox credentials from https://app.ainm.no/submit/tripl
 
 ### Answer
 
-(waiting for user answer)
+API url is in the environment variable `SANDBOX_API_URL` in the .env file.
+Session token is in the environment variable `SANDBOX_SESSION_TOKEN` in the .env file.
 
 ## Q3: Vipps verification
 
 Is the team Vipps-verified on the platform? This affects our rate limits significantly:
+
 - **Verified:** 3 concurrent submissions, 4 per task per day
 - **Unverified:** 1 concurrent, 2 per task per day
 
 ### Answer
 
-(waiting for user answer)
+I think we are all verified.
 
 ## Q4: Deployment strategy
 
@@ -43,7 +45,7 @@ How do you want to deploy the agent? We need HTTPS for the competition endpoint.
 
 ### Answer
 
-(waiting for user answer)
+Let's try Option A.
 
 ## Q5: Are you working solo or with a team?
 
@@ -51,4 +53,4 @@ This affects how we structure the code, branching strategy, and whether we need 
 
 ### Answer
 
-(waiting for user answer)
+I'm currently working solo.
