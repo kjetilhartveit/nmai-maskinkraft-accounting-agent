@@ -14,6 +14,8 @@ Here's a list of tasks I think we need to work on to get started:
 - Get us up and running and submit against the endpoint. Our system should be deterministic (apart from the LLM of course) and easy to run.
 - We will thoroughly examine the Tripletex API and learn the ins and outs of it. Some key details are exploring the possibilities, especially in terms of how we can use as few API calls as possible to do operations. We should batch when we can and be smart about it. Sometimes we must create things in advance to avoid errors, because in real attempts the sandbox is empty - and this is what we should simulate.
 - Although we will create helpful tools for the LLM (like skills perhaps and documentation in the AGENTS.md), what is perhaps even more important is creating an evaluation system which we can use to rate setups. What we'll do is use sample prompts (including those we gain from submitting tasks) and add the answers to it (e.g. the data to identify and the most efficient API calls). We can use this data to evaluate systems and see what works and what doesn't, which LLMs perform the best and so on. We could even rate setups based on properties per prompt, e.g. the complexitity, the language and so on. And we must be able to run evaluation tests a reasonable number of times to increase our confidence in the results.
+  - When we run the tests we should make sure they don't have access to the answers, only the prompts.
+- Once our systems are ready, then we can start testing in larger scale and try new ideas and iterate to find the most optimal solution(s).
 
 ## Technologies
 
@@ -29,6 +31,14 @@ Here's a list of tasks I think we need to work on to get started:
 - **Tripletex API documentation**: https://kkpqfuj-amager.tripletex.dev/v2-docs/
 - **Prizes and how it works**: https://app.ainm.no/prizes
 - **Team**: Maskinkraft
+
+## Evaluation system
+
+Some details we can evaluate are:
+
+- Different LLMs.
+- Diffrent system prompts.
+- Skills vs AGENTS.md and hybrid solutions.
 
 # The docs folder
 
