@@ -14,9 +14,9 @@
 
 # Plan
 
-- [ ] Thoroughly examine the task and the docs. Learn the ins and outs of the task. Identify the biggest hurdles and blockers.
-  - [ ] Explain the most technical aspects in a more easy to understand manner. Teach me as you go. Create a report with your findings.
-  - [ ] Come up with recommendations with a solution. Be thorough and aim to win the prize by making the best solution. Create a report with your recommendations.
+- [x] Thoroughly examine the task and the docs. Learn the ins and outs of the task. Identify the biggest hurdles and blockers.
+  - [x] Explain the most technical aspects in a more easy to understand manner. Teach me as you go. Create a report with your findings. → [FINDINGS.md](docs/plans/1-research/FINDINGS.md)
+  - [x] Come up with recommendations with a solution. Be thorough and aim to win the prize by making the best solution. Create a report with your recommendations. → [RECOMMENDATIONS.md](docs/plans/1-research/RECOMMENDATIONS.md)
 
 ## Execution of plan
 
