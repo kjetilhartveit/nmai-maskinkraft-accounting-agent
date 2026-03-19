@@ -3,21 +3,88 @@
 ## Plan
 
 - [x] Thoroughly examine the task and the docs. Learn the ins and outs of the task. Identify the biggest hurdles and blockers.
-  - [x] Explain the most technical aspects in a more easy to understand manner. Teach me as you go. Create a report with your findings. → [FINDINGS.md](docs/reports/FINDINGS.md)
-  - [x] Come up with recommendations with a solution. Be thorough and aim to win the prize by making the best solution. Create a report with your recommendations. → [RECOMMENDATIONS.md](docs/reports/RECOMMENDATIONS.md)
-- [ ] Look at the next steps and think about my plan specifically in order to achieve the best possible results. What do you think is missing? Feel free to add steps/sub-steps to the plan. You may ask for clarifying questions in [QA.md](QA.md) if needed.
-- [ ] Create the initial framework for the system using TypeScript.
-- [ ] Get us up and running and submit against the endpoint. Our system should be deterministic (apart from the LLM of course) and easy to run (also for humans). Automate submittions and session tokens etc. as much as possible.
-- [ ] We will thoroughly examine the Tripletex API and learn the ins and outs of it. Some key details are exploring the possibilities, especially in terms of how we can use as few API calls as possible to do operations. We should batch when we can and be smart about it. Sometimes we must create things in advance to avoid errors, because in real attempts the sandbox is empty - and this is what we should simulate.
-  - [ ] Create a report with your findings in a new report regarding the Tripletex API.
-- [ ] **Create a testing framework:** Although we will create helpful tools for the LLM (like skills perhaps and documentation in the AGENTS.md), what is perhaps even more important is creating an evaluation system which we can use to rate setups. What we'll do is use sample prompts (including those we gain from submitting tasks) and add the answers to it (e.g. the data to identify and the most efficient API calls). We can use this data to evaluate systems and see what works and what doesn't, which LLMs perform the best and so on. We could even rate setups based on properties per prompt, e.g. the complexitity, the language and so on. And we must be able to run evaluation tests a reasonable number of times to increase our confidence in the results.
-  - When we run the tests we should make sure they don't have access to the answers, only the prompts.
-  - How do we scale this up and making it possible to try different setups in parallell and without polluting context?
-  - [ ] You may create a new report with reflections around this and suggestions on how we can create the best test suite which suits our needs.
-- [ ] **Obtaining data, verifying answers and creating a verification system:** In order for our tests suites to be effective, we must actually verify that the "answers" are indeed the best possible answers. This might be a continuous process to a certain extent. We should run agents against prompts and try to solve the tasks to the best of their ability, and then later a human can verify the results and confirm answers. When it comes to API calls it's not so easy though, because it's hard to say whether the API calls has errors and/or if they are valid and/or work at all.
+  - [x] Explain the most technical aspects in a more easy to understand manner. Teach me as you go. Create a report with your findings. → [FINDINGS.md](../../reports/FINDINGS.md)
+  - [x] Come up with recommendations with a solution. Be thorough and aim to win the prize by making the best solution. Create a report with your recommendations. → [RECOMMENDATIONS.md](../../reports/RECOMMENDATIONS.md)
+- [x] Review the plan and think about what is missing for achieving the best possible results. Add steps/sub-steps and ask clarifying questions in [QA.md](QA.md).
+- [ ] **Resolve blockers:** Answer the questions in [QA.md](QA.md) before proceeding. We need API keys, sandbox credentials, and deployment decisions.
+- [ ] **Project initialization:** Set up the TypeScript project with all required tooling.
+  - [ ] Initialize npm project with `package.json` and `tsconfig.json`
+  - [ ] Install core dependencies: Express (or Fastify), Anthropic SDK (or OpenAI), dotenv
+  - [ ] Set up project structure: `src/`, `src/handlers/`, `src/lib/`, `src/types/`
+  - [ ] Configure `.env` handling for LLM API key and any other secrets
+  - [ ] Create a basic `/solve` POST endpoint that returns `{"status": "completed"}`
+  - [ ] Add npm scripts: `dev` (watch mode), `build`, `start`
+- [ ] **Tripletex API client:** Build a robust, typed HTTP client.
+  - [ ] Basic Auth handling (username `0`, session token as password)
+  - [ ] Typed response wrappers (`ListResponse<T>`, `SingleResponse<T>`)
+  - [ ] Error handling and structured logging (track every API call and 4xx errors for debugging)
+  - [ ] Common helpers: `create()`, `get()`, `search()`, `update()`, `delete()`
+  - [ ] Field selection support (`?fields=id,name,...`)
+- [ ] **LLM prompt parser:** Build the core multilingual parsing component.
+  - [ ] Integrate LLM SDK (Claude or OpenAI — depends on answer to QA)
+  - [ ] Design the structured extraction system prompt: extract task type, entities, field values, dependencies, language
+  - [ ] Define TypeScript types for parsed task output (discriminated union per task type)
+  - [ ] Handle all 7 languages (Norwegian, Nynorsk, English, Spanish, Portuguese, German, French)
+  - [ ] Handle file attachments: decode base64, pass to LLM vision for data extraction
+- [ ] **Task router and handler framework:** Create the routing and execution system.
+  - [ ] Define a `TaskHandler` interface (each task type implements it)
+  - [ ] Build a router that maps parsed task type → handler
+  - [ ] Implement dependency resolution: handlers declare prerequisites, framework creates them in order
+  - [ ] Fallback handler for unrecognized tasks (attempt dynamic LLM-driven API calls)
+- [ ] **Tier 1 task handlers:** Simple single-entity operations. Get these right first.
+  - [ ] Create employee (POST `/employee`)
+  - [ ] Create customer (POST `/customer`)
+  - [ ] Create product (POST `/product`)
+  - [ ] Create department (POST `/department`)
+  - [ ] Update employee / customer (GET + PUT)
+  - [ ] Other Tier 1 tasks as discovered through submissions
+- [ ] **Deploy and submit:** Get on the leaderboard as soon as possible.
+  - [ ] Set up HTTPS exposure (Cloudflare Tunnel for local dev or Cloud Run for production — depends on QA answer)
+  - [ ] Submit endpoint URL to https://app.ainm.no/submit/tripletex
+  - [ ] Verify first submission works and review API logs
+  - [ ] Iterate on any failures from the first submissions
+- [ ] **Tripletex API deep-dive:** Explore the sandbox systematically. This informs all handler improvements.
+  - [ ] Test every relevant endpoint in the sandbox (employee, customer, product, invoice, order, department, project, travelExpense, ledger)
+  - [ ] Document required vs. optional fields per endpoint
+  - [ ] Document resource dependencies and creation order
+  - [ ] Discover batch/list endpoints that can reduce API calls
+  - [ ] Create a report: → `docs/reports/TRIPLETEX-API.md`
+- [ ] **Tier 2 task handlers:** Multi-step workflows (×2 multiplier, opens early Friday).
+  - [ ] Invoice workflow: create customer → create product → create order → create invoice
+  - [ ] Register payment on invoice
+  - [ ] Credit notes
+  - [ ] Travel expense with receipt attachments
+  - [ ] Project linked to customer and department
+  - [ ] Other Tier 2 tasks as discovered
+- [ ] **Tier 3 task handlers:** Complex accounting (×3 multiplier, opens early Saturday).
+  - [ ] Bank reconciliation from CSV
+  - [ ] Ledger corrections / error correction
+  - [ ] Year-end closing procedures
+  - [ ] Other Tier 3 tasks as discovered
+- [ ] **Testing & evaluation framework:** Build automated testing and evaluation.
+  - [ ] Store sample prompts with expected outcomes in a structured format (`tests/fixtures/`)
+  - [ ] Create a test runner that sends prompts to our agent and verifies outcomes against a sandbox
+  - [ ] Support comparing different LLMs, system prompts, and configurations
+  - [ ] Ensure tests don't leak answers to the agent (prompts only, verification is separate)
+  - [ ] Track metrics: correctness, API call count, 4xx error count, latency
+  - [ ] Create a report with reflections and design → `docs/reports/TESTING-FRAMEWORK.md`
+- [ ] **Obtaining data and verifying answers:** Continuously improve our test data.
+  - [ ] Collect prompts from real submissions (the competition assigns tasks weighted toward those we've attempted less)
+  - [ ] Run agents against prompts and record API calls + outcomes
+  - [ ] Have a human verify the "golden answers" for each task type
+  - [ ] Build a verification system that compares agent output against golden answers
+- [ ] **Optimization:** Maximize the efficiency bonus (up to ×2 on top of tier multiplier).
+  - [ ] Audit every handler for unnecessary API calls
+  - [ ] Eliminate all 4xx errors in the happy path (validate locally before sending)
+  - [ ] Use batch endpoints where available
+  - [ ] Skip unnecessary GET calls (use IDs from POST responses)
+  - [ ] Test across all 7 languages to ensure consistent performance
+  - [ ] Profile and optimize response time (well under 5-minute limit)
 
 ### Execution of plan
 
 - You should git commit and push regularly, particularly after making many code changes.
 - After every step you should tick the step off the plan and make sure everything is committed and pushed.
 - Be autonomous, but if you need my input then ask for it in [QA.md](QA.md).
+- **Priority order:** Get a working submission on the leaderboard ASAP (steps 3-8), then expand coverage (steps 9-11), then optimize (steps 12-14).
+- Steps 9 (API deep-dive) and 12-13 (testing/data) can be done in parallel with handler development.
