@@ -1,0 +1,27 @@
+AGENTS.md
+  746449092519bcf5 17-19
+docs/plans/1-research/FINDINGS.md
+  746449092519bcf5 1-266
+docs/plans/1-research/RECOMMENDATIONS.md
+  746449092519bcf5 1-305
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.15",
+  "base_commit_sha": "9e0618994b9fa71caf9df6397a00bc1a67e70b4e",
+  "prompts": {
+    "746449092519bcf5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "479824c0-4025-4dfe-a141-6be1bc9d7e63",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Kjetil Hårtveit <kjetil_runescape@hotmail.com>",
+      "messages": [],
+      "total_additions": 574,
+      "total_deletions": 3,
+      "accepted_lines": 574,
+      "overriden_lines": 0
+    }
+  }
+}
