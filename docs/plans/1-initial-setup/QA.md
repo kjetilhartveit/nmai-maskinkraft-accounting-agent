@@ -12,7 +12,7 @@ Which LLM provider should we use for prompt parsing? The recommendations suggest
 
 ### Answer
 
-I have a Pro subscription for Claude, how do I obtain the API key?
+Use OpenRouter with Vercel AI SDK. I have set up the environment variable `OPENROUTER_API_KEY` in the .env file.
 
 ## Q2: Sandbox credentials
 

@@ -17,9 +17,11 @@ Here's a list of tasks I think we need to work on to get started:
   - When we run the tests we should make sure they don't have access to the answers, only the prompts.
 - Once our systems are ready, then we can start testing in larger scale and try new ideas and iterate to find the most optimal solution(s).
 
-## Technologies
+## Tech stack
 
+- Framework: FastAPI.
 - Programming language: TypeScript.
+- AI: OpenRouter + Vercel AI SDK.
 
 ## Links
 
@@ -39,6 +41,10 @@ Some details we can evaluate are:
 - Different LLMs.
 - Diffrent system prompts.
 - Skills vs AGENTS.md and hybrid solutions.
+
+# Environment variables
+
+A full list of the environment variables can be found in [.env.example](.env.example). We should make sure to keep the environment variables up-to-date.
 
 # The docs folder
 
