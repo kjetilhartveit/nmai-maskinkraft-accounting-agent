@@ -1,5 +1,6 @@
 import type { TripletexClient } from "../lib/tripletex-client.js";
 import type { ParsedTask } from "../types/index.js";
+import type { SequenceContext } from "../lib/sequence-context.js";
 import {
   getDefaultDepartmentId,
   findEmployeeByEmail,
@@ -33,8 +34,16 @@ function buildEmployeeBody(
 export async function handleCreateEmployee(
   client: TripletexClient,
   task: ParsedTask,
+  ctx: SequenceContext,
 ): Promise<void> {
-  const departmentId = await getDefaultDepartmentId(client);
+  // Check if a department was created earlier in the sequence that matches
+  const deptName = String(task.entities[0]?.department ?? task.entities[0]?.departmentName ?? "");
+  let departmentId = deptName ? ctx.getDepartmentId(deptName) : undefined;
+  if (!departmentId) {
+    departmentId = await getDefaultDepartmentId(client);
+  } else {
+    console.log(`[Handler] Using department from context: ${deptName} → id=${departmentId}`);
+  }
 
   for (const entity of task.entities) {
     // Check if employee already exists by email
@@ -47,6 +56,7 @@ export async function handleCreateEmployee(
         console.log(
           `[Handler] Employee with email ${entity.email} already exists: id=${existing.id}`,
         );
+        ctx.registerEmployee(String(entity.email), existing.id);
         continue;
       }
     }
@@ -60,13 +70,21 @@ export async function handleCreateEmployee(
         console.log(
           `[Handler] Employee ${firstName} ${lastName} already exists: id=${existing.id}`,
         );
+        ctx.registerEmployee(`${firstName} ${lastName}`, existing.id);
         continue;
       }
     }
 
-    // Create new employee
-    const body = buildEmployeeBody(entity, departmentId);
+    // Use department from entity if specified and present in context
+    const entityDept = String(entity.department ?? entity.departmentName ?? "");
+    const entityDeptId = entityDept ? ctx.getDepartmentId(entityDept) : undefined;
+    const deptForEmployee = entityDeptId ?? departmentId;
+
+    const body = buildEmployeeBody(entity, deptForEmployee);
     const result = await client.post<{ id: number }>("/employee", body);
     console.log(`[Handler] Created employee: id=${result.value.id}`);
+
+    ctx.registerEmployee(`${firstName} ${lastName}`, result.value.id);
+    if (entity.email) ctx.registerEmployee(String(entity.email), result.value.id);
   }
 }

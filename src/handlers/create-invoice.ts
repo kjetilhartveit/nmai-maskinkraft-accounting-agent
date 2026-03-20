@@ -1,5 +1,6 @@
 import type { TripletexClient } from "../lib/tripletex-client.js";
 import type { ParsedTask } from "../types/index.js";
+import type { SequenceContext } from "../lib/sequence-context.js";
 import {
   today,
   daysFromNow,
@@ -82,8 +83,19 @@ async function createOrderForInvoice(
 export async function handleCreateInvoice(
   client: TripletexClient,
   task: ParsedTask,
-  sendAfterCreate = false,
+  ctxOrSend?: SequenceContext | boolean,
+  maybeSend?: boolean,
 ): Promise<void> {
+  // Support both (client, task, ctx) and legacy (client, task, sendAfterCreate) signatures
+  let ctx: SequenceContext | undefined;
+  let sendAfterCreate = false;
+  if (typeof ctxOrSend === "boolean") {
+    sendAfterCreate = ctxOrSend;
+  } else if (ctxOrSend) {
+    ctx = ctxOrSend;
+    sendAfterCreate = maybeSend ?? false;
+  }
+
   // Ensure bank account is configured (required for invoice creation)
   await ensureBankAccountConfigured(client);
 
@@ -109,9 +121,17 @@ export async function handleCreateInvoice(
 
   // If no order exists, create one with the customer and product/amount
   if (!order && customerName) {
-    const customer = await findCustomerByName(client, customerName);
+    // Try context first to avoid a lookup API call
+    let customerId = ctx?.getCustomerId(customerName);
+    let customer: Customer | null = null;
+    if (customerId) {
+      console.log(`[Handler] Using customer from context: ${customerName} → id=${customerId}`);
+      customer = { id: customerId, name: customerName };
+    } else {
+      customer = await findCustomerByName(client, customerName);
+    }
+
     if (customer) {
-      // Extract product name and amount from entity
       const productName = String(
         entity.productName ?? entity.product ?? entity.description ?? "Tjeneste",
       );
@@ -155,6 +175,7 @@ export async function handleCreateInvoice(
 export async function handleSendInvoice(
   client: TripletexClient,
   task: ParsedTask,
+  ctx: SequenceContext,
 ): Promise<void> {
-  return handleCreateInvoice(client, task, true);
+  return handleCreateInvoice(client, task, ctx, true);
 }

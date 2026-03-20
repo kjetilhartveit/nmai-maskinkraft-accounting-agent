@@ -5,7 +5,7 @@ import { TripletexClient } from "../lib/tripletex-client.js";
 import { parsePrompt, type ParsePromptOptions } from "../lib/llm.js";
 import { executeTaskSequence } from "../handlers/index.js";
 import { resetCaches } from "../lib/tripletex-helpers.js";
-import { logSolveRequest, type SolveLogEntry } from "../lib/solve-logger.js";
+import { logSolveRequest, logRawRequest, type SolveLogEntry } from "../lib/solve-logger.js";
 import { config } from "../lib/config.js";
 
 export const solveRouter = new Hono();
@@ -55,8 +55,23 @@ solveRouter.post("/solve", async (c) => {
 
   try {
     const rawBody = await c.req.json();
+    const rawHeaders = Object.fromEntries(
+      [...c.req.raw.headers.entries()].filter(([k]) => !k.toLowerCase().includes("authorization")),
+    );
+
+    console.log(`[Solve] ${solveId} | === INCOMING REQUEST ===`);
+    console.log(`[Solve] ${solveId} | Headers: ${JSON.stringify(rawHeaders)}`);
     console.log(`[Solve] ${solveId} | Raw body keys: ${Object.keys(rawBody).join(", ")}`);
     console.log(`[Solve] ${solveId} | prompt length: ${rawBody.prompt?.length ?? "missing"}, files type: ${rawBody.files === null ? "null" : Array.isArray(rawBody.files) ? `array(${rawBody.files.length})` : typeof rawBody.files}, creds: ${rawBody.tripletex_credentials ? "present" : "missing"}`);
+    console.log(`[Solve] ${solveId} | Full prompt: ${JSON.stringify(rawBody.prompt)}`);
+    console.log(`[Solve] ${solveId} | Base URL: ${rawBody.tripletex_credentials?.base_url ?? "missing"}`);
+
+    logRawRequest({
+      id: solveId,
+      timestamp: new Date().toISOString(),
+      headers: rawHeaders,
+      body: rawBody,
+    });
 
     const parsed = SolveRequestSchema.safeParse(rawBody);
 

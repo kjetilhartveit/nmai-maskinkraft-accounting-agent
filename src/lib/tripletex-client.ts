@@ -60,9 +60,9 @@ export class TripletexClient {
 
       if (isError) {
         const errorBody = await res.text();
+        this.callLog[this.callLog.length - 1].errorBody = errorBody;
         console.error(
-          `[Tripletex] ${method} ${endpoint} → ${status} (${durationMs}ms)`,
-          errorBody,
+          `[Tripletex] ${method} ${endpoint} → ${status} (${durationMs}ms)\n${errorBody}`,
         );
         throw new TripletexApiError(method, endpoint, status, errorBody);
       }
@@ -138,7 +138,7 @@ export class TripletexApiError extends Error {
     public readonly body: string,
   ) {
     super(
-      `Tripletex API error: ${method} ${endpoint} → ${status}: ${body.slice(0, 200)}`,
+      `Tripletex API error: ${method} ${endpoint} → ${status}: ${body}`,
     );
     this.name = "TripletexApiError";
   }

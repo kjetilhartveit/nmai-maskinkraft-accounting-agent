@@ -75,4 +75,5 @@ export interface ApiCallLog {
   status: number;
   durationMs: number;
   isError: boolean;
+  errorBody?: string;
 }

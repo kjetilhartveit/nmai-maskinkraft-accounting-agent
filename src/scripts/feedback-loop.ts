@@ -85,7 +85,7 @@ async function main() {
     console.log(`\n⚠ Recent failures:`);
     const recentFails = failures.slice(-5);
     for (const f of recentFails) {
-      console.log(`  - ${f.id} [${f.source}]: ${f.error?.slice(0, 100) ?? "unknown"}`);
+      console.log(`  - ${f.id} [${f.source}]: ${f.error ?? "unknown"}`);
     }
   }
 

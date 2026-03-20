@@ -72,7 +72,7 @@ export async function runEvalCase(
       success: false,
       serverReportedSuccess: false,
       parseMatch: false,
-      error: `Unexpected response (${res.status}): ${JSON.stringify(json).slice(0, 200)}`,
+      error: `Unexpected response (${res.status}): ${JSON.stringify(json)}`,
     };
   }
 

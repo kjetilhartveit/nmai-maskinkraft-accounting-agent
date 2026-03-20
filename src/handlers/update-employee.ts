@@ -1,10 +1,12 @@
 import type { TripletexClient } from "../lib/tripletex-client.js";
 import type { ParsedTask } from "../types/index.js";
+import type { SequenceContext } from "../lib/sequence-context.js";
 import { findEmployeeByName } from "../lib/tripletex-helpers.js";
 
 export async function handleUpdateEmployee(
   client: TripletexClient,
   task: ParsedTask,
+  _ctx: SequenceContext,
 ): Promise<void> {
   for (const entity of task.entities) {
     const firstName = String(entity.firstName ?? "");

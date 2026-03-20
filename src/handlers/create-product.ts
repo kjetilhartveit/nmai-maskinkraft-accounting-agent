@@ -1,5 +1,6 @@
 import type { TripletexClient } from "../lib/tripletex-client.js";
 import type { ParsedTask } from "../types/index.js";
+import type { SequenceContext } from "../lib/sequence-context.js";
 import {
   getDefaultDepartmentId,
   getDefaultProductVatTypeId,
@@ -35,6 +36,7 @@ function buildProductBody(
 export async function handleCreateProduct(
   client: TripletexClient,
   task: ParsedTask,
+  _ctx: SequenceContext,
 ): Promise<void> {
   const [departmentId, vatTypeId, unitId] = await Promise.all([
     getDefaultDepartmentId(client),

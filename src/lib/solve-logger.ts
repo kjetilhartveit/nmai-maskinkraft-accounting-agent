@@ -4,6 +4,23 @@ import type { ApiCallLog, ParsedTaskSequence } from "../types/index.js";
 
 const LOGS_DIR = join(import.meta.dirname, "../../data/solve-logs");
 
+export interface RawRequestLogEntry {
+  id: string;
+  timestamp: string;
+  headers: Record<string, string>;
+  body: unknown;
+}
+
+export function logRawRequest(entry: RawRequestLogEntry): void {
+  try {
+    ensureLogsDir();
+    const file = join(LOGS_DIR, "raw-requests.jsonl");
+    writeFileSync(file, JSON.stringify(entry) + "\n", { flag: "a" });
+  } catch (err) {
+    console.error("[Logger] Failed to write raw request log:", err);
+  }
+}
+
 export interface SolveLogEntry {
   id: string;
   timestamp: string;

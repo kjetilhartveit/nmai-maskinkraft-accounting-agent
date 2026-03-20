@@ -1,5 +1,6 @@
 import type { TripletexClient } from "../lib/tripletex-client.js";
 import type { ParsedTask } from "../types/index.js";
+import type { SequenceContext } from "../lib/sequence-context.js";
 
 function buildCustomerBody(entity: Record<string, unknown>): Record<string, unknown> {
   const body: Record<string, unknown> = {
@@ -17,14 +18,21 @@ function buildCustomerBody(entity: Record<string, unknown>): Record<string, unkn
 export async function handleCreateCustomer(
   client: TripletexClient,
   task: ParsedTask,
+  ctx: SequenceContext,
 ): Promise<void> {
   const bodies = task.entities.map(buildCustomerBody);
 
   if (bodies.length === 1) {
     const result = await client.post<{ id: number }>("/customer", bodies[0]);
+    const name = String(bodies[0].name ?? "");
+    ctx.registerCustomer(name, result.value.id);
     console.log(`[Handler] Created customer: id=${result.value.id}`);
   } else {
     const result = await client.postList<{ id: number }>("/customer/list", bodies);
+    result.values.forEach((v, i) => {
+      const name = String(bodies[i]?.name ?? "");
+      ctx.registerCustomer(name, v.id);
+    });
     console.log(`[Handler] Created ${result.values.length} customers`);
   }
 }

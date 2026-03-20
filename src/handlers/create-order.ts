@@ -1,5 +1,6 @@
 import type { TripletexClient } from "../lib/tripletex-client.js";
 import type { ParsedTask } from "../types/index.js";
+import type { SequenceContext } from "../lib/sequence-context.js";
 import {
   findCustomerByName,
   findOrCreateProduct,
@@ -18,17 +19,24 @@ interface ProductLine {
 export async function handleCreateOrder(
   client: TripletexClient,
   task: ParsedTask,
+  ctx: SequenceContext,
 ): Promise<void> {
   const entity = task.entities[0] ?? {};
 
-  // Resolve customer
+  // Resolve customer — check context first
   const customerName = String(
     entity.customerName ?? entity.customer ?? entity.name ?? "",
   );
   let customerId: number | null = null;
   if (customerName) {
-    const customer = await findCustomerByName(client, customerName);
-    if (customer) customerId = customer.id;
+    const ctxId = ctx.getCustomerId(customerName);
+    if (ctxId) {
+      console.log(`[Handler] Using customer from context: ${customerName} → id=${ctxId}`);
+      customerId = ctxId;
+    } else {
+      const customer = await findCustomerByName(client, customerName);
+      if (customer) customerId = customer.id;
+    }
   }
   if (!customerId && entity.customerId) customerId = Number(entity.customerId);
   if (!customerId) {

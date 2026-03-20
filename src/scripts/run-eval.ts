@@ -1,9 +1,13 @@
 import "dotenv/config";
+import { readFileSync, writeFileSync } from "fs";
+import { join } from "path";
 import { config } from "../lib/config.js";
 import { testCases } from "../eval/test-cases.js";
 import { runEval, summarize } from "../eval/runner.js";
-import { printEvalTable } from "../eval/reporter.js";
+import { printEvalTable, findBaselineImprovements, printBaselineImprovements } from "../eval/reporter.js";
 import type { EvalConfig } from "../eval/types.js";
+
+const TEST_CASES_FILE = join(import.meta.dirname, "../eval/test-cases.ts");
 
 function parseArgs(argv: string[]): {
   model?: string;
@@ -12,6 +16,7 @@ function parseArgs(argv: string[]): {
   serverUrl?: string;
   iterations?: number;
   filter?: string;
+  updateBaselines?: boolean;
 } {
   const out: ReturnType<typeof parseArgs> = {};
   for (let i = 0; i < argv.length; i++) {
@@ -28,9 +33,31 @@ function parseArgs(argv: string[]): {
       out.iterations = parseInt(argv[++i], 10);
     } else if (a === "--filter" && argv[i + 1]) {
       out.filter = argv[++i];
+    } else if (a === "--update-baselines") {
+      out.updateBaselines = true;
     }
   }
   return out;
+}
+
+function applyBaselineUpdates(improvements: { testCaseId: string; newMax: number }[]): void {
+  let content = readFileSync(TEST_CASES_FILE, "utf-8");
+
+  for (const imp of improvements) {
+    const idPattern = new RegExp(
+      `(id:\\s*"${imp.testCaseId}"[\\s\\S]*?expectedApiCalls:\\s*\\{[^}]*max:\\s*)\\d+`,
+    );
+    const match = content.match(idPattern);
+    if (match) {
+      content = content.replace(idPattern, `$1${imp.newMax}`);
+      console.log(`  Updated ${imp.testCaseId}: max → ${imp.newMax}`);
+    } else {
+      console.warn(`  Could not find expectedApiCalls.max for ${imp.testCaseId}`);
+    }
+  }
+
+  writeFileSync(TEST_CASES_FILE, content);
+  console.log(`\nWrote updated baselines to ${TEST_CASES_FILE}`);
 }
 
 async function main() {
@@ -67,6 +94,16 @@ async function main() {
   });
   const summary = summarize(results);
   printEvalTable(results, summary);
+
+  const improvements = findBaselineImprovements(results, cases);
+  if (improvements.length > 0) {
+    if (args.updateBaselines) {
+      console.log(`\nApplying ${improvements.length} baseline improvement(s)...`);
+      applyBaselineUpdates(improvements);
+    } else {
+      printBaselineImprovements(improvements);
+    }
+  }
 }
 
 main().catch((e) => {
