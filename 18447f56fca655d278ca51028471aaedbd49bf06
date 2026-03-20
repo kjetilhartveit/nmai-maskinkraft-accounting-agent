@@ -1,0 +1,27 @@
+src/handlers/create-employee.ts
+  337de63860b9f879 10-14,39-68,86,88,90-92,102,104-106,117-122,124-125
+src/handlers/update-employee.ts
+  337de63860b9f879 5,7-26,61-64
+src/handlers/create-project.ts
+  337de63860b9f879 11,64-66
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.15",
+  "base_commit_sha": "18447f56fca655d278ca51028471aaedbd49bf06",
+  "prompts": {
+    "337de63860b9f879": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "60fea3ea-ce92-4f94-9618-02d2df3eb3db",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Kjetil Hårtveit <kjetil_runescape@hotmail.com>",
+      "messages": [],
+      "total_additions": 84,
+      "total_deletions": 32,
+      "accepted_lines": 84,
+      "overriden_lines": 0
+    }
+  }
+}
