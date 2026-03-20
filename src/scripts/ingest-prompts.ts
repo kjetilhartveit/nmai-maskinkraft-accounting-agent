@@ -1,19 +1,16 @@
 import "dotenv/config";
 import { writeFileSync, existsSync, mkdirSync } from "fs";
 import { join } from "path";
-import { createOpenAI } from "@ai-sdk/openai";
-import { generateObject } from "ai";
+// Archived: OpenRouter + Vercel AI SDK
+// import { createOpenAI } from "@ai-sdk/openai";
+// import { generateObject } from "ai";
+// const openrouter = createOpenAI({ ... });
 import { z } from "zod";
 import { config } from "../lib/config.js";
+import { geminiGenerateStructured } from "../lib/gemini.js";
 import type { TestCase } from "../eval/types.js";
 import { testCases as existingCases } from "../eval/test-cases.js";
 import db from "../lib/db.js";
-
-const openrouter = createOpenAI({
-  baseURL: "https://openrouter.ai/api/v1",
-  apiKey: config.openrouter.apiKey,
-  compatibility: "compatible",
-});
 
 const CANDIDATES_DIR = join(import.meta.dirname, "../../data/eval-candidates");
 
@@ -78,10 +75,10 @@ async function analyzePrompt(
   prompt: string,
   model: string,
 ): Promise<z.infer<typeof CandidateSchema>> {
-  const { object } = await generateObject({
-    model: openrouter(model),
+  const { object } = await geminiGenerateStructured({
+    model,
     schema: CandidateSchema,
-    system: ANALYSIS_PROMPT,
+    system: ANALYSIS_PROMPT + `\n\nRespond with valid JSON matching: { id, language, tier, taskType, taskTypeAlternatives?, expectedEntities, expectedTaskSequence?, optimalApiCalls: [{ method, endpoint, notes }], optimalCallCount, notes }`,
     prompt: `Analyze this accounting task prompt and produce a test case specification:\n\n"${prompt}"`,
   });
   return object;
@@ -122,7 +119,7 @@ async function main() {
   }
 
   const args = process.argv.slice(2).filter((a) => a !== "--");
-  const model = args.find((a) => a.startsWith("--model="))?.split("=")[1] ?? config.openrouter.model;
+  const model = args.find((a) => a.startsWith("--model="))?.split("=")[1] ?? config.google.model;
   const sourceFilter = args.find((a) => a.startsWith("--source="))?.split("=")[1];
   const dryRun = args.includes("--dry-run");
 

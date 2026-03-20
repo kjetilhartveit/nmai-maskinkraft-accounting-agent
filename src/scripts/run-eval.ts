@@ -65,7 +65,7 @@ async function main() {
   const args = parseArgs(argv);
 
   const evalConfig: EvalConfig = {
-    model: args.model ?? config.openrouter.model,
+    model: args.model ?? config.google.model,
     ...(args.systemPromptVariant
       ? { systemPromptVariant: args.systemPromptVariant }
       : {}),

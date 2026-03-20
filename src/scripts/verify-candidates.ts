@@ -1,19 +1,16 @@
 import "dotenv/config";
 import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync } from "fs";
 import { join } from "path";
-import { createOpenAI } from "@ai-sdk/openai";
-import { generateObject } from "ai";
+// Archived: OpenRouter + Vercel AI SDK
+// import { createOpenAI } from "@ai-sdk/openai";
+// import { generateObject } from "ai";
+// const openrouter = createOpenAI({ ... });
 import { z } from "zod";
 import { config } from "../lib/config.js";
+import { geminiGenerateStructured } from "../lib/gemini.js";
 import { testCases as existingCases } from "../eval/test-cases.js";
 import type { TestCase } from "../eval/types.js";
 import type { TaskType } from "../types/index.js";
-
-const openrouter = createOpenAI({
-  baseURL: "https://openrouter.ai/api/v1",
-  apiKey: config.openrouter.apiKey,
-  compatibility: "compatible",
-});
 
 const CANDIDATES_DIR = join(import.meta.dirname, "../../data/eval-candidates");
 const VERIFIED_DIR = join(import.meta.dirname, "../../data/verified");
@@ -84,10 +81,10 @@ async function verifyCandidate(
   candidate: CandidateEntry,
   model: string,
 ): Promise<z.infer<typeof VerificationSchema>> {
-  const { object } = await generateObject({
-    model: openrouter(model),
+  const { object } = await geminiGenerateStructured({
+    model,
     schema: VerificationSchema,
-    system: VERIFY_PROMPT,
+    system: VERIFY_PROMPT + `\n\nRespond with valid JSON matching: { taskType, taskTypeAlternatives?, expectedEntities, expectedTaskSequence?, optimalCallCount, tier, language, agreement: "agree"|"disagree"|"partial", disagreementDetails?, correctedFields? }`,
     prompt: `Verify this test case specification:
 
 PROMPT: "${prompt}"
@@ -177,7 +174,7 @@ async function main() {
   }
 
   const args = process.argv.slice(2);
-  const model = args.find(a => a.startsWith("--model="))?.split("=")[1] ?? config.openrouter.model;
+  const model = args.find(a => a.startsWith("--model="))?.split("=")[1] ?? config.google.model;
   const dryRun = args.includes("--dry-run");
   const autoPromote = !args.includes("--no-promote");
 
