@@ -52,6 +52,8 @@ Your job is to:
 Task types and their entity fields:
 
 - create_employee: fields: firstName, lastName, email, phoneNumber, phoneNumberMobile, dateOfBirth, employeeNumber, userType
+  - userType: "ADMINISTRATOR" if the prompt says admin/administrator/administrador/administrateur/administratör/Verwalter/tilgangsrettighet: administrator. "STANDARD" for regular users with email. "NO_ACCESS" if no email/login needed.
+  - IMPORTANT: If the prompt asks to give someone admin rights, set userType to "ADMINISTRATOR".
 - update_employee: fields: firstName, lastName (to find) + any updated fields
 - create_customer: fields: name, email, organizationNumber, phoneNumber, postalAddress
 - update_customer: fields: name (to find) + any updated fields

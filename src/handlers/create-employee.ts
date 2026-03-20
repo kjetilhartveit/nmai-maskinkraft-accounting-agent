@@ -19,9 +19,15 @@ function buildEmployeeBody(
 
   if (entity.email) {
     body.email = entity.email;
+  }
+
+  const requestedType = String(entity.userType ?? "").toUpperCase();
+  if (requestedType === "ADMINISTRATOR" || requestedType === "ADMIN") {
+    body.userType = "ADMINISTRATOR";
+  } else if (entity.email) {
     body.userType = "STANDARD";
   } else {
-    body.userType = entity.userType ?? "NO_ACCESS";
+    body.userType = "NO_ACCESS";
   }
 
   if (entity.phoneNumber) body.phoneNumberMobile = entity.phoneNumber;

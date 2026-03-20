@@ -3,23 +3,63 @@ import type { ParsedTask } from "../types/index.js";
 import type { SequenceContext } from "../lib/sequence-context.js";
 import {
   findCustomerByName,
+  findEmployeeByName,
+  findEmployeeByEmail,
   today,
   getProjectManagerEmployeeId,
 } from "../lib/tripletex-helpers.js";
+
+async function resolveProjectManagerId(
+  client: TripletexClient,
+  entity: Record<string, unknown>,
+  ctx: SequenceContext,
+): Promise<number | null> {
+  const pmFirstName = String(entity.projectManagerFirstName ?? "");
+  const pmLastName = String(entity.projectManagerLastName ?? "");
+  const pmEmail = String(entity.projectManagerEmail ?? "");
+
+  if (pmFirstName && pmLastName) {
+    const ctxId = ctx.getEmployeeId(`${pmFirstName} ${pmLastName}`);
+    if (ctxId) {
+      console.log(`[Handler] Using project manager from context: ${pmFirstName} ${pmLastName} → id=${ctxId}`);
+      return ctxId;
+    }
+    const emp = await findEmployeeByName(client, pmFirstName, pmLastName);
+    if (emp) {
+      console.log(`[Handler] Found project manager: ${pmFirstName} ${pmLastName} → id=${emp.id}`);
+      return emp.id;
+    }
+  }
+
+  if (pmEmail) {
+    const ctxId = ctx.getEmployeeId(pmEmail);
+    if (ctxId) {
+      console.log(`[Handler] Using project manager from context (email): ${pmEmail} → id=${ctxId}`);
+      return ctxId;
+    }
+    const emp = await findEmployeeByEmail(client, pmEmail);
+    if (emp) {
+      console.log(`[Handler] Found project manager by email: ${pmEmail} → id=${emp.id}`);
+      return emp.id;
+    }
+  }
+
+  return getProjectManagerEmployeeId(client);
+}
 
 export async function handleCreateProject(
   client: TripletexClient,
   task: ParsedTask,
   ctx: SequenceContext,
 ): Promise<void> {
-  const projectManagerId = await getProjectManagerEmployeeId(client);
-
-  if (!projectManagerId) {
-    console.warn("[Handler] No employee with project manager rights found");
-    return;
-  }
-
   for (const entity of task.entities) {
+    const projectManagerId = await resolveProjectManagerId(client, entity, ctx);
+
+    if (!projectManagerId) {
+      console.warn("[Handler] No employee with project manager rights found");
+      return;
+    }
+
     const body: Record<string, unknown> = {
       name: entity.name ?? entity.projectName ?? "",
       projectManager: { id: projectManagerId },
@@ -29,7 +69,6 @@ export async function handleCreateProject(
     if (entity.endDate) body.endDate = entity.endDate;
     if (entity.description) body.description = entity.description;
 
-    // Resolve customer — check context first to avoid redundant API call
     const customerName = String(entity.customerName ?? entity.customer ?? "");
     if (customerName) {
       const ctxCustomerId = ctx.getCustomerId(customerName);

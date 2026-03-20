@@ -30,10 +30,15 @@ export async function handleUpdateEmployee(
       lastName,
     };
 
-    if (entity.email) {
-      body.email = entity.email;
+    if (entity.email) body.email = entity.email;
+
+    const requestedType = String(entity.userType ?? "").toUpperCase();
+    if (requestedType === "ADMINISTRATOR" || requestedType === "ADMIN") {
+      body.userType = "ADMINISTRATOR";
+    } else if (entity.email) {
       body.userType = "STANDARD";
     }
+
     if (entity.phoneNumber) body.phoneNumberMobile = entity.phoneNumber;
     if (entity.phoneNumberMobile) body.phoneNumberMobile = entity.phoneNumberMobile;
     if (entity.dateOfBirth) body.dateOfBirth = entity.dateOfBirth;
