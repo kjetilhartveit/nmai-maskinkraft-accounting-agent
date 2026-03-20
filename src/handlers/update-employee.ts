@@ -1,8 +1,7 @@
 import type { TripletexClient } from "../lib/tripletex-client.js";
 import type { ParsedTask } from "../types/index.js";
 import type { SequenceContext } from "../lib/sequence-context.js";
-import { findEmployeeByName } from "../lib/tripletex-helpers.js";
-import { grantProjectManagerEntitlement } from "./create-employee.js";
+import { findEmployeeByName, getCompanyId } from "../lib/tripletex-helpers.js";
 
 function isAdminRequested(entity: Record<string, unknown>): boolean {
   const t = String(entity.userType ?? "").toUpperCase();
@@ -13,15 +12,17 @@ async function grantAdminEntitlement(
   client: TripletexClient,
   employeeId: number,
 ): Promise<void> {
+  const companyId = await getCompanyId(client);
   try {
     await client.post("/employee/entitlement", {
       employee: { id: employeeId },
-      entitlement: "ADMINISTRATOR",
+      entitlementId: 1,
+      customer: { id: companyId },
     });
-    console.log(`[Handler] Granted ADMINISTRATOR entitlement to employee ${employeeId}`);
+    console.log(`[Handler] Granted ROLE_ADMINISTRATOR entitlement to employee ${employeeId}`);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.warn(`[Handler] Failed to grant ADMINISTRATOR entitlement: ${msg}`);
+    console.warn(`[Handler] Failed to grant ROLE_ADMINISTRATOR entitlement: ${msg}`);
   }
 }
 
@@ -55,6 +56,10 @@ export async function handleUpdateEmployee(
     if (entity.phoneNumber) body.phoneNumberMobile = entity.phoneNumber;
     if (entity.phoneNumberMobile) body.phoneNumberMobile = entity.phoneNumberMobile;
     if (entity.dateOfBirth) body.dateOfBirth = entity.dateOfBirth;
+
+    if (isAdminRequested(entity)) {
+      body.userType = "EXTENDED";
+    }
 
     await client.put<{ id: number }>(`/employee/${existing.id}`, body);
     console.log(`[Handler] Updated employee: id=${existing.id}`);

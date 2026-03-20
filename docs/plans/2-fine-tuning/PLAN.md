@@ -47,9 +47,22 @@ We have set up the project, but we must fine-tune our solution, fix bugs and set
   - We have reached the daily limit, so we should continue against our sandbox and improving our evals.
   - OpenRouter credit limit reached during eval, need to continue when replenished.
 - [ ] For later it would be useful if we could differentiate our runs with runs from other team members. Perhaps by date (in the UI) or other identifiers. Note that when we submit we also get GET requests (with path submissions) continuously which gives us information about the API calls made.
-- [ ] Consider adding previous solutions as inspiration in our system prompt.
-- [ ] Could we add a tool for the LLM to retrieve API information? This could be helpful for the LLM, especially if we don't have a handler for it.
+- [x] Consider adding previous solutions as inspiration in our system prompt.
+  - Added few-shot examples for payment, customer+invoice, custom dimension+voucher, and admin role tasks
+- [x] Could we add a tool for the LLM to retrieve API information? This could be helpful for the LLM, especially if we don't have a handler for it.
+  - Added `tripletex_post_list` batch creation tool to generic handler for efficiency
+  - Updated API reference with correct userType values (STANDARD/EXTENDED/NO_ACCESS) and entitlement format
 - [ ] Keep running our evals (we should have more now due to adding new test cases) and keep iterating on improving them if possible. Fix errors and be creative in case we think we have found the perfect way.
+  - Before credits ran out: 12/16 passing (multiline invoice fixed to 12 calls, admin role entitlements working with correct API format)
+
+### Key findings (round 3):
+1. **Employee userType** — valid values are `NO_ACCESS`, `STANDARD`, `EXTENDED`. There is NO `ADMINISTRATOR` value. Admin roles are granted via `POST /employee/entitlement`.
+2. **Entitlement API format** — requires `{ employee: {id}, entitlementId: <number>, customer: {id: <companyId>} }`, NOT `{ entitlement: "name" }`.
+3. **EXTENDED access required** — Entitlements (ROLE_ADMINISTRATOR, AUTH_PROJECT_MANAGER) can only be granted to employees with `userType: "EXTENDED"`.
+4. **PROJECT_MANAGER prerequisite** — AUTH_PROJECT_MANAGER (entitlementId 10) requires AUTH_CREATE_PROJECT (entitlementId 45) first.
+5. **userType is write-once** — Setting userType via PUT doesn't work; must be set during creation.
+6. **Product caching** — SequenceContext now caches product IDs between create_product and create_invoice handlers, reducing API calls by 3-8 per multi-line invoice.
+7. **maxTokens** — Set to 4096 for LLM parsing and 16384 for generic handler to avoid OpenRouter credit issues.
 
 ## Findings from competition submission
 

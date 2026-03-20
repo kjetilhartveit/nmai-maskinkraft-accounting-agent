@@ -92,7 +92,26 @@ Rules:
 - If the prompt involves a chain of operations (e.g. "create a customer and send them an invoice"), return multiple tasks in the correct execution order.
 - IMPORTANT: Reuse references between tasks. If you create a customer "Acme Ltd" and then create an invoice for them, use the same customerName "Acme Ltd" in both tasks.
 - CRITICAL: Do NOT force tasks into a wrong type. If the prompt asks to create a "custom accounting dimension" or "regnskapsdimensjon", do NOT map it to create_department. Use "unknown" instead. The "unknown" handler is a full agentic system that can execute ANY Tripletex API operation.
-- For "unknown" tasks: extract ALL information from the prompt into the entities array — names, values, numbers, dates, amounts, descriptions, account numbers, dimension names, etc. Put everything you can extract in the entity fields using descriptive field names.`;
+- For "unknown" tasks: extract ALL information from the prompt into the entities array — names, values, numbers, dates, amounts, descriptions, account numbers, dimension names, etc. Put everything you can extract in the entity fields using descriptive field names.
+
+Examples of correct parsing:
+
+Example 1 - Payment on existing invoice (DO NOT create a new invoice):
+Prompt: "O cliente Estrela Lda tem uma fatura pendente de 13650 NOK. Registe o pagamento."
+→ tasks: [{ taskType: "create_payment", entities: [{ customerName: "Estrela Lda", amount: 13650 }] }]
+WRONG: [{ taskType: "create_invoice" }, { taskType: "create_payment" }] — the invoice already exists!
+
+Example 2 - Customer + invoice (MUST create customer first for fresh sandbox):
+Prompt: "Crie e envie uma fatura ao cliente Porto Alegre Lda (org. nº 842889154) por 11200 NOK."
+→ tasks: [{ taskType: "create_customer", entities: [{ name: "Porto Alegre Lda", organizationNumber: "842889154" }] }, { taskType: "send_invoice", entities: [{ customerName: "Porto Alegre Lda", amount: 11200 }] }]
+
+Example 3 - Custom dimension + voucher (SINGLE unknown task):
+Prompt: "Cree una dimensión contable personalizada Region con valores Nord-Norge y Vestlandet. Registre un asiento en cuenta 7100 por 34350 NOK vinculado a Nord-Norge."
+→ tasks: [{ taskType: "unknown", entities: [{ dimensionName: "Region", dimensionValues: ["Nord-Norge", "Vestlandet"], accountNumber: 7100, amount: 34350, linkedDimensionValue: "Nord-Norge" }] }]
+
+Example 4 - Employee with admin role:
+Prompt: "Create employee Maria Svensson (maria@test.com) as an administrator."
+→ tasks: [{ taskType: "create_employee", entities: [{ firstName: "Maria", lastName: "Svensson", email: "maria@test.com", userType: "ADMINISTRATOR" }] }]`;
 
 const SYSTEM_PROMPT_MINIMAL = `You parse Tripletex accounting prompts into JSON: tasks array (each with taskType and entities), and prompt language.
 Known task types: create_employee, update_employee, create_customer, update_customer, create_product, create_department, create_invoice, send_invoice, create_payment, create_credit_note, create_order, create_travel_expense, delete_travel_expense, create_project, create_voucher, create_supplier, unknown.
@@ -162,6 +181,7 @@ export async function parsePrompt(
     schema: ParsedResponseSchema,
     system,
     prompt: userContent,
+    maxTokens: 4096,
   });
   const durationMs = Math.round(performance.now() - start);
 

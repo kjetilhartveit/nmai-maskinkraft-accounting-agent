@@ -30,7 +30,7 @@ IMPORTANT RULES:
 7. If a POST/PUT fails with 422, read the error message carefully — it tells you which field is wrong. Fix it and retry.
 8. For custom accounting dimensions: create the dimension name first, then create values using the returned dimensionIndex.
 9. The sandbox MAY have pre-existing data for certain tasks (like invoices for payment tasks). ALWAYS search for existing resources first.
-10. Be efficient: minimize the number of API calls.
+10. Be efficient: minimize the number of API calls. Use tripletex_post_list for batch creation (e.g. /department/list, /product/list).
 11. When you're done, stop calling tools and summarize what you did.
 
 CRITICAL endpoint patterns:
@@ -85,6 +85,7 @@ export async function handleGenericTask(
     system: buildSystemPrompt(),
     prompt: buildUserPrompt(task),
     maxSteps: MAX_STEPS,
+    maxTokens: 16384,
     tools: {
       tripletex_get: tool({
         description:
@@ -207,6 +208,39 @@ export async function handleGenericTask(
             const msg = err instanceof Error ? err.message : String(err);
             console.error(
               `[GenericHandler] PUT-ACTION ${fullEndpoint} failed: ${msg}`,
+            );
+            return { success: false, error: msg };
+          }
+        },
+      }),
+      tripletex_post_list: tool({
+        description:
+          "Make a POST request with an ARRAY body to a /list endpoint. Use for batch creating multiple resources at once (e.g. POST /department/list, POST /product/list). Returns { values: [...] }.",
+        parameters: z.object({
+          endpoint: z
+            .string()
+            .describe(
+              'API list endpoint path, e.g. "/department/list", "/product/list"',
+            ),
+          body: z
+            .array(z.record(z.unknown()))
+            .describe("Array of JSON objects to create"),
+        }),
+        execute: async ({ endpoint, body }) => {
+          console.log(
+            `[GenericHandler] POST-LIST ${endpoint} (${body.length} items)`,
+          );
+          try {
+            const result = await client.postList<unknown>(endpoint, body);
+            return {
+              success: true,
+              count: result.values.length,
+              values: result.values,
+            };
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            console.error(
+              `[GenericHandler] POST-LIST ${endpoint} failed: ${msg}`,
             );
             return { success: false, error: msg };
           }

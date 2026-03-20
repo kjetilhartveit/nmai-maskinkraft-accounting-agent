@@ -110,6 +110,7 @@ async function createOrderForInvoice(
   client: TripletexClient,
   customerId: number,
   productLines: ProductLine[],
+  ctx?: SequenceContext,
 ): Promise<Order> {
   const orderDate = today();
   const deliveryDate = daysFromNow(14);
@@ -128,16 +129,24 @@ async function createOrderForInvoice(
       vatTypeId = await findVatTypeIdByRate(client, line.vatRate);
     }
 
-    const product = await findOrCreateProduct(
-      client,
-      line.productName,
-      line.unitPrice,
-      vatTypeId,
-    );
+    const cachedId = ctx?.getProductId(line.productName);
+    let productId: number;
+    if (cachedId) {
+      console.log(`[Handler] Using product from context: ${line.productName} → id=${cachedId}`);
+      productId = cachedId;
+    } else {
+      const product = await findOrCreateProduct(
+        client,
+        line.productName,
+        line.unitPrice,
+        vatTypeId,
+      );
+      productId = product.id;
+    }
 
     await client.post("/order/orderline", {
       order: { id: orderId },
-      product: { id: product.id },
+      product: { id: productId },
       count: line.quantity,
       unitPriceExcludingVatCurrency: line.unitPrice,
     });
@@ -204,6 +213,7 @@ export async function handleCreateInvoice(
           client,
           customer.id,
           productLines,
+          ctx,
         );
       }
     }

@@ -44,7 +44,7 @@ function buildProductBody(
 export async function handleCreateProduct(
   client: TripletexClient,
   task: ParsedTask,
-  _ctx: SequenceContext,
+  ctx: SequenceContext,
 ): Promise<void> {
   const [departmentId, defaultVatTypeId, unitId] = await Promise.all([
     getDefaultDepartmentId(client),
@@ -69,6 +69,8 @@ export async function handleCreateProduct(
 
     if (existing) {
       console.log(`[Handler] Product already exists: ${productName} (id=${existing.id})`);
+      if (productName) ctx.registerProduct(productName, existing.id);
+      if (productNumber) ctx.registerProduct(String(productNumber), existing.id);
       continue;
     }
 
@@ -88,8 +90,13 @@ export async function handleCreateProduct(
   if (toCreate.length === 1) {
     const result = await client.post<Product>("/product", toCreate[0]);
     console.log(`[Handler] Created product: id=${result.value.id}`);
+    const name = String(toCreate[0].name ?? "");
+    if (name) ctx.registerProduct(name, result.value.id);
   } else {
     const result = await client.postList<Product>("/product/list", toCreate);
     console.log(`[Handler] Created ${result.values.length} products`);
+    for (const p of result.values) {
+      if (p.name) ctx.registerProduct(p.name, p.id);
+    }
   }
 }

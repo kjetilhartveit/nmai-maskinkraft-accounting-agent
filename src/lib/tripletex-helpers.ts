@@ -44,6 +44,23 @@ let cachedDefaultDepartmentId: number | null = null;
 let cachedNokCurrencyId: number | null = null;
 let cachedProductVatTypeId: number | null = null;
 let cachedProductUnitId: number | null = null;
+let cachedCompanyId: number | null = null;
+
+export async function getCompanyId(
+  client: TripletexClient,
+): Promise<number> {
+  if (cachedCompanyId) return cachedCompanyId;
+  const result = await client.list<{ companyId: number }>("/employee", {
+    from: "0",
+    count: "1",
+  });
+  const emp = result.values?.[0];
+  if (emp?.companyId) {
+    cachedCompanyId = emp.companyId;
+    return emp.companyId;
+  }
+  throw new Error("Could not determine company ID");
+}
 
 export async function getDefaultDepartmentId(
   client: TripletexClient,
@@ -345,6 +362,7 @@ export function resetCaches(): void {
   cachedProductVatTypeId = null;
   cachedProductUnitId = null;
   cachedVatTypes = null;
+  cachedCompanyId = null;
   bankAccountConfigured = false;
   cachedProjectManagerId = null;
 }

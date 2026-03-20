@@ -3,6 +3,7 @@ import type { ParsedTask } from "../types/index.js";
 import type { SequenceContext } from "../lib/sequence-context.js";
 import {
   getDefaultDepartmentId,
+  getCompanyId,
   findEmployeeByEmail,
   findEmployeeByName,
 } from "../lib/tripletex-helpers.js";
@@ -24,7 +25,7 @@ function buildEmployeeBody(
 
   if (entity.email) {
     body.email = entity.email;
-    body.userType = "STANDARD";
+    body.userType = "EXTENDED";
   } else {
     body.userType = "NO_ACCESS";
   }
@@ -36,36 +37,80 @@ function buildEmployeeBody(
   return body;
 }
 
-async function grantAdminEntitlement(
+const ENTITLEMENT_ADMIN = 1;            // ROLE_ADMINISTRATOR
+const ENTITLEMENT_PM = 10;              // AUTH_PROJECT_MANAGER
+const ENTITLEMENT_CREATE_PROJECT = 45;  // AUTH_CREATE_PROJECT (prerequisite for PM)
+
+async function grantEntitlement(
+  client: TripletexClient,
+  employeeId: number,
+  entitlementId: number,
+  companyId: number,
+  label: string,
+): Promise<boolean> {
+  try {
+    await client.post("/employee/entitlement", {
+      employee: { id: employeeId },
+      entitlementId,
+      customer: { id: companyId },
+    });
+    console.log(`[Handler] Granted ${label} (entitlementId=${entitlementId}) to employee ${employeeId}`);
+    return true;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn(`[Handler] Failed to grant ${label}: ${msg}`);
+    return false;
+  }
+}
+
+async function ensureExtendedAccess(
   client: TripletexClient,
   employeeId: number,
 ): Promise<void> {
   try {
-    await client.post("/employee/entitlement", {
-      employee: { id: employeeId },
-      entitlement: "ADMINISTRATOR",
+    const emp = await client.get<{
+      id: number;
+      version: number;
+      userType: string | null;
+      firstName: string;
+      lastName: string;
+      email: string | null;
+      dateOfBirth: string | null;
+    }>(`/employee/${employeeId}`);
+    if (emp.value.userType === "EXTENDED") return;
+    await client.put(`/employee/${employeeId}`, {
+      id: employeeId,
+      version: emp.value.version,
+      firstName: emp.value.firstName,
+      lastName: emp.value.lastName,
+      email: emp.value.email,
+      dateOfBirth: emp.value.dateOfBirth ?? "1990-01-01",
+      userType: "EXTENDED",
     });
-    console.log(`[Handler] Granted ADMINISTRATOR entitlement to employee ${employeeId}`);
+    console.log(`[Handler] Upgraded employee ${employeeId} to EXTENDED access`);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.warn(`[Handler] Failed to grant ADMINISTRATOR entitlement: ${msg}`);
+    console.warn(`[Handler] Failed to upgrade employee to EXTENDED: ${msg}`);
   }
+}
+
+async function grantAdminEntitlement(
+  client: TripletexClient,
+  employeeId: number,
+): Promise<void> {
+  await ensureExtendedAccess(client, employeeId);
+  const companyId = await getCompanyId(client);
+  await grantEntitlement(client, employeeId, ENTITLEMENT_ADMIN, companyId, "ROLE_ADMINISTRATOR");
 }
 
 export async function grantProjectManagerEntitlement(
   client: TripletexClient,
   employeeId: number,
 ): Promise<void> {
-  try {
-    await client.post("/employee/entitlement", {
-      employee: { id: employeeId },
-      entitlement: "PROJECT_MANAGER",
-    });
-    console.log(`[Handler] Granted PROJECT_MANAGER entitlement to employee ${employeeId}`);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.warn(`[Handler] Failed to grant PROJECT_MANAGER entitlement: ${msg}`);
-  }
+  await ensureExtendedAccess(client, employeeId);
+  const companyId = await getCompanyId(client);
+  await grantEntitlement(client, employeeId, ENTITLEMENT_CREATE_PROJECT, companyId, "AUTH_CREATE_PROJECT");
+  await grantEntitlement(client, employeeId, ENTITLEMENT_PM, companyId, "AUTH_PROJECT_MANAGER");
 }
 
 export async function handleCreateEmployee(

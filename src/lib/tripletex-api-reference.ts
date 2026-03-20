@@ -18,7 +18,8 @@ export const TRIPLETEX_API_REFERENCE = `
 ### Employee
 - GET /employee — list/search. Params: firstName, lastName, email, fields, from, count
 - POST /employee — create. Body: { firstName, lastName, email, dateOfBirth?, phoneNumberMobile?, employeeNumber?, userType? }
-  - userType: "STANDARD" (default), "ADMINISTRATOR" (full admin)
+  - userType: "NO_ACCESS" | "STANDARD" | "EXTENDED". Use "EXTENDED" for users who need admin or PM roles.
+  - Note: "ADMINISTRATOR" is NOT a valid userType — admin is granted via entitlements.
 - PUT /employee/{id} — update (include id, version, and changed fields)
 - POST /employee/employment — create employment. Body: { employee: {id}, startDate, employmentType, percentageOfFullTimeEquivalent, division?: {id} }
   - employmentType: "ORDINARY" | "MARITIME" | "FREELANCE"
@@ -148,8 +149,9 @@ export const TRIPLETEX_API_REFERENCE = `
 
 ### Employee Entitlements
 - GET /employee/entitlement — list role entitlements. Params: employeeId, from, count  
-- POST /employee/entitlement — grant entitlement. Body: { employee: {id}, entitlement: "<entitlement_name>" }
-  - Key entitlements: "ADMINISTRATOR", "PROJECT_MANAGER"
+- POST /employee/entitlement — grant entitlement. Body: { employee: {id}, entitlementId: <number>, customer: {id: <companyId>} }
+  - Key entitlementIds: 1 = ROLE_ADMINISTRATOR, 10 = AUTH_PROJECT_MANAGER, 45 = AUTH_CREATE_PROJECT
+  - IMPORTANT: employee must have userType "EXTENDED" to receive entitlements. AUTH_PROJECT_MANAGER requires AUTH_CREATE_PROJECT (45) first.
 
 ### Salary
 - POST /salary/transaction — create salary voucher. Body: { date, year, month, payslips: [...] }

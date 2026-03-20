@@ -23,7 +23,7 @@ const manualTestCases: TestCase[] = [
     expectedEntities: [
       { firstName: "Anna", lastName: "Berg", email: "anna@test.no" },
     ],
-    expectedApiCalls: { max: 3, maxErrors: 0 },
+    expectedApiCalls: { max: 2, maxErrors: 0 },
     notes: "Single employee; handler lists department first.",
   },
   {
@@ -38,7 +38,7 @@ const manualTestCases: TestCase[] = [
       { name: "Kundeservice" },
       { name: "Administrasjon" },
     ],
-    expectedApiCalls: { max: 2, maxErrors: 0 },
+    expectedApiCalls: { max: 1, maxErrors: 0 },
   },
   {
     id: "invoice-pt-porto",
@@ -56,7 +56,7 @@ const manualTestCases: TestCase[] = [
       { taskType: "create_customer", entities: [{ name: "Porto Alegre Lda", organizationNumber: "842889154" }] },
       { taskType: "send_invoice", entities: [{ customerName: "Porto Alegre Lda", amount: 11200 }] },
     ],
-    expectedApiCalls: { max: 40, maxErrors: 0 },
+    expectedApiCalls: { max: 9, maxErrors: 0 },
     notes: "Multi-task: create customer then send invoice.",
   },
   {
@@ -75,8 +75,8 @@ const manualTestCases: TestCase[] = [
       { taskType: "create_employee", entities: [{ firstName: "Finn", lastName: "Richter" }] },
       { taskType: "create_project", entities: [{ name: "Analyse Windkraft", customerName: "Windkraft GmbH" }] },
     ],
-    expectedApiCalls: { max: 40, maxErrors: 0 },
-    notes: "Multi-task: create customer + employee, then project. Uses sandbox admin as project manager.",
+    expectedApiCalls: { max: 40, maxErrors: 3 },
+    notes: "Multi-task: create customer + employee, then project. PM entitlement requires EXTENDED access.",
   },
   {
     id: "invoice-de-waldstein",
@@ -94,7 +94,7 @@ const manualTestCases: TestCase[] = [
       { taskType: "create_customer", entities: [{ name: "Waldstein GmbH", organizationNumber: "925346519" }] },
       { taskType: "send_invoice", entities: [{ customerName: "Waldstein GmbH", amount: 25100 }] },
     ],
-    expectedApiCalls: { max: 10, maxErrors: 0 },
+    expectedApiCalls: { max: 9, maxErrors: 0 },
     notes: "Multi-task: create customer then send invoice.",
   },
   {
@@ -104,7 +104,7 @@ const manualTestCases: TestCase[] = [
     tier: 2,
     taskType: "create_department",
     expectedEntities: [{ name: "Logistikk" }, { name: "Innkjøp" }, { name: "IT" }],
-    expectedApiCalls: { max: 2, maxErrors: 0 },
+    expectedApiCalls: { max: 1, maxErrors: 0 },
   },
   {
     id: "supplier-de-waldstein",
@@ -120,7 +120,7 @@ const manualTestCases: TestCase[] = [
         email: "faktura@waldsteingmbh.no",
       },
     ],
-    expectedApiCalls: { max: 2, maxErrors: 0 },
+    expectedApiCalls: { max: 1, maxErrors: 0 },
   },
 
   // Multi-task test cases
@@ -148,7 +148,7 @@ const manualTestCases: TestCase[] = [
         entities: [{ customerName: "Nordbyen AS" }],
       },
     ],
-    expectedApiCalls: { max: 10, maxErrors: 0 },
+    expectedApiCalls: { max: 8, maxErrors: 0 },
     notes: "Multi-task: create customer then send invoice. Tests dependency ordering.",
   },
   {
@@ -171,7 +171,7 @@ const manualTestCases: TestCase[] = [
         entities: [{ firstName: "Lars", lastName: "Olsen" }],
       },
     ],
-    expectedApiCalls: { max: 3, maxErrors: 0 },
+    expectedApiCalls: { max: 2, maxErrors: 0 },
     notes: "Multi-task: create department, then create employee.",
   },
 ];

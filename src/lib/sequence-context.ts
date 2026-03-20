@@ -8,6 +8,7 @@ export class SequenceContext {
   private customers = new Map<string, number>();    // name → id
   private employees = new Map<string, number>();    // "firstName lastName" or email → id
   private suppliers = new Map<string, number>();    // name → id
+  private products = new Map<string, number>();     // name or number → id
 
   registerDepartment(name: string, id: number): void {
     this.departments.set(name.toLowerCase(), id);
@@ -39,5 +40,13 @@ export class SequenceContext {
 
   getSupplierId(name: string): number | undefined {
     return this.suppliers.get(name.toLowerCase());
+  }
+
+  registerProduct(key: string, id: number): void {
+    this.products.set(key.toLowerCase(), id);
+  }
+
+  getProductId(key: string): number | undefined {
+    return this.products.get(key.toLowerCase());
   }
 }
