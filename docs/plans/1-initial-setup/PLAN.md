@@ -70,14 +70,40 @@
   - [x] Created `pnpm eval:compare` script that runs multiple model/prompt configurations side-by-side and prints a comparison table with pass rate, API call count, errors, and latency.
   - [x] Context pollution prevented: each eval request sends `X-Eval-Mode: true` which resets all cached lookups (department, currency, VAT type, product unit) so each test case runs against a clean state.
   - You are given much freedom and should also communicate to us what you are doing and what you are thinking.
-- [ ] Our Tripletex sandbox API must be empty on each run, because this is how it will work in the competition. Can you make sure we clear the sandbox before each run? This includes both submits and evals.
-- [ ] I ran a submit and it seems like the server is working and doing something, however all checks failed. I also don't see any records of the attempt in the folders `solve-logs`, `answers` or `eval-candidates`. What is going on? Please investigate this.
-  - It would be nice if you had access to the checks and communication with the server so we can see what is going on. If needed check the official documentation, perhaps it contains something useful.
-  - We do have the browser tool in Cursor which you can use to trigger a submit - combine that with looking at the logs coming in via the tunnel and/or the dev server and then perhaps we can get a view of what's going on? If not, can we fix the logging and the terminal output so we can see what's going on?
-  - The browser tool is open so you can trigger a submit. Note that we only have 72 daily submissions so be sparse and efficient with your calls.
-- [ ] It's not entirely clear to me what I'm supposed to do with the `eval-candidates`, I know you want me to verify manually but it's not so easy to do. I think we must use LLMs to verify answers which we later can use in our evals.
-- [ ] We need to come up with a feedback loop and a way to improve the eval system continuously with data we gather from submissions. Can you help me make a feedback loop and give me an overview of how the flow and how it works?
-- [ ] I want to see and understand the entire process and loop. Perhaps you can create a dashboard/visualizer, so if we start a submit or eval I can monitor what is going on, what is called, what data is coming in, and so on.
+- [x] Our Tripletex sandbox API must be empty on each run, because this is how it will work in the competition. Can you make sure we clear the sandbox before each run? This includes both submits and evals.
+  - [x] Created `pnpm reset-sandbox` script that cleans departments, travel expenses, vouchers, and projects from the dev sandbox.
+  - [x] Competition always provides a fresh sandbox per submission (no action needed).
+  - [x] Server now resets all in-memory caches on every request (not just eval mode), since each competition sandbox is fresh.
+  - Note: Employees, customers, suppliers, and products cannot be deleted via the Tripletex API. The dev sandbox will accumulate these.
+- [x] I ran a submit and it seems like the server is working and doing something, however all checks failed. I also don't see any records of the attempt in the folders `solve-logs`, `answers` or `eval-candidates`. What is going on? Please investigate this.
+  - [x] **Root cause found**: Multiple issues that together caused silent failures:
+    1. **Validation failures returned HTTP 400** instead of the required `{ "status": "completed" }` with HTTP 200. If the competition sent `"files": null` (instead of `[]`), Zod rejected it and returned 400 with no logging.
+    2. **No request-level logging** — there was no middleware to log incoming requests, so we couldn't see what was hitting the server.
+    3. **Competition source detection was broken** — checking `baseUrl.includes("ainm.no")` but the competition sends a `tripletex.dev` proxy URL.
+  - [x] **Fixes applied**:
+    1. Zod schema now accepts `files: null` (transforms to `[]`).
+    2. Validation failures now return HTTP 200 with `{ "status": "completed" }` and are logged.
+    3. Added HTTP middleware logging for ALL requests (method, path, user-agent, response status, duration).
+    4. All errors are now logged to `data/solve-logs/solves.jsonl` including validation failures.
+    5. Fixed competition source detection — now compares against sandbox URL instead of checking for "ainm.no".
+  - [x] Fixed TripletexClient to handle 204 No Content responses (DELETE operations were silently failing).
+- [x] It's not entirely clear to me what I'm supposed to do with the `eval-candidates`, I know you want me to verify manually but it's not so easy to do. I think we must use LLMs to verify answers which we later can use in our evals.
+  - [x] Created `pnpm verify` — LLM-based cross-verification of eval candidates. Uses a second LLM pass to independently verify each candidate's task type, entities, sequence, and optimal call count.
+  - [x] Auto-promotes verified candidates to `data/verified/promoted-test-cases.json`. Flagged disagreements for human review.
+  - [x] Eval system now loads test cases from both `src/eval/test-cases.ts` (manually curated) and `data/verified/promoted-test-cases.json` (LLM-verified).
+- [x] We need to come up with a feedback loop and a way to improve the eval system continuously with data we gather from submissions. Can you help me make a feedback loop and give me an overview of how the flow and how it works?
+  - [x] Created `pnpm feedback` — runs the full pipeline: status overview → ingest prompts → verify candidates → run eval.
+  - [x] The feedback loop flow:
+    1. **Collect**: Competition/manual solves are logged to `data/solve-logs/`.
+    2. **Ingest**: `pnpm ingest` analyzes new prompts and generates candidate test cases.
+    3. **Verify**: `pnpm verify` cross-checks candidates with a second LLM pass and auto-promotes verified ones.
+    4. **Eval**: `pnpm eval` runs the test suite (including promoted cases) to measure performance.
+    5. **Iterate**: Fix failures, try different models/prompts, re-run.
+- [x] I want to see and understand the entire process and loop. Perhaps you can create a dashboard/visualizer, so if we start a submit or eval I can monitor what is going on, what is called, what data is coming in, and so on.
+  - [x] Created `pnpm dashboard` — real-time web dashboard on `http://localhost:3001`.
+  - [x] Dashboard shows: success rate, solve count by source, API call stats, test case count, and a live table of recent solves.
+  - [x] Each solve row shows: timestamp, source (competition/eval/manual), status, prompt preview, task types, API calls, errors, duration, and expandable details (individual API calls, full prompt, error messages).
+  - [x] Uses Server-Sent Events for real-time updates — new solves appear instantly with a highlight animation.
 
 ### Execution of plan
 

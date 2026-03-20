@@ -5,6 +5,17 @@ import { solveRouter } from "./routes/solve.js";
 
 const app = new Hono();
 
+app.use("*", async (c, next) => {
+  const start = performance.now();
+  const method = c.req.method;
+  const path = c.req.path;
+  const ua = c.req.header("User-Agent") ?? "-";
+  console.log(`[HTTP] → ${method} ${path} (UA: ${ua})`);
+  await next();
+  const ms = Math.round(performance.now() - start);
+  console.log(`[HTTP] ← ${method} ${path} ${c.res.status} (${ms}ms)`);
+});
+
 app.get("/", (c) => {
   return c.json({
     name: "nmai-maskinkraft-accounting-agent",

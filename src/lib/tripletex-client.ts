@@ -70,6 +70,10 @@ export class TripletexClient {
       console.log(
         `[Tripletex] ${method} ${endpoint} → ${status} (${durationMs}ms)`,
       );
+
+      if (status === 204 || res.headers.get("content-length") === "0") {
+        return undefined as T;
+      }
       return (await res.json()) as T;
     } catch (error) {
       if (error instanceof TripletexApiError) throw error;

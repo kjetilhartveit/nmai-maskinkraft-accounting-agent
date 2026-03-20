@@ -1,7 +1,19 @@
+import { readFileSync, existsSync } from "fs";
+import { join } from "path";
 import type { TestCase } from "./types.js";
 
+function loadPromotedCases(): TestCase[] {
+  const promotedFile = join(import.meta.dirname, "../../data/verified/promoted-test-cases.json");
+  if (!existsSync(promotedFile)) return [];
+  try {
+    return JSON.parse(readFileSync(promotedFile, "utf-8")) as TestCase[];
+  } catch {
+    return [];
+  }
+}
+
 /** Baseline cases derived from docs/sample-tripletex-prompts.json with expected parse targets. */
-export const testCases: TestCase[] = [
+const manualTestCases: TestCase[] = [
   {
     id: "employee-anna-en",
     prompt: "Create employee Anna Berg, email anna@test.no",
@@ -157,3 +169,10 @@ export const testCases: TestCase[] = [
     notes: "Multi-task: create department, then create employee.",
   },
 ];
+
+const promoted = loadPromotedCases();
+const promotedIds = new Set(promoted.map(tc => tc.id));
+const deduped = manualTestCases.filter(tc => !promotedIds.has(tc.id));
+
+/** All test cases: manually curated + LLM-verified promoted cases. */
+export const testCases: TestCase[] = [...deduped, ...promoted];

@@ -1,0 +1,50 @@
+[
+  {
+    "id": "dept-engineering-employee-lars-en",
+    "prompt": "Create a department called Engineering and then hire employee Lars Olsen (lars.olsen@example.com) into it.",
+    "language": "en",
+    "tier": 2,
+    "taskType": "create_employee",
+    "expectedEntities": [
+      {
+        "type": "department",
+        "name": "Engineering"
+      },
+      {
+        "type": "employee",
+        "firstName": "Lars",
+        "lastName": "Olsen",
+        "email": "lars.olsen@example.com",
+        "department": "Engineering"
+      }
+    ],
+    "expectedApiCalls": {
+      "max": 8,
+      "maxErrors": 2
+    },
+    "expectedTaskSequence": [
+      {
+        "taskType": "create_department",
+        "entities": [
+          {
+            "type": "department",
+            "name": "Engineering"
+          }
+        ]
+      },
+      {
+        "taskType": "create_employee",
+        "entities": [
+          {
+            "type": "employee",
+            "firstName": "Lars",
+            "lastName": "Olsen",
+            "email": "lars.olsen@example.com",
+            "department": "Engineering"
+          }
+        ]
+      }
+    ],
+    "notes": "Strict sequencing is required: the department must be created before the employee so that the department ID is available to attach to the employee record. No batch endpoints are applicable here since there is only one department and one employee. The email field maps to the employee's work email. The prompt uses the word 'hire', which implies creating a new employee record (not updating an existing one)."
+  }
+]

@@ -13,7 +13,7 @@ export const TripletexCredentialsSchema = z.object({
 
 export const SolveRequestSchema = z.object({
   prompt: z.string().min(1),
-  files: z.array(FileAttachmentSchema).default([]),
+  files: z.array(FileAttachmentSchema).nullable().default([]).transform(v => v ?? []),
   tripletex_credentials: TripletexCredentialsSchema,
 });
 

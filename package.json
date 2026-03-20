@@ -14,7 +14,11 @@
     "eval:compare": "tsx src/scripts/eval-compare.ts",
     "capture": "tsx src/scripts/capture-run.ts",
     "ingest": "tsx src/scripts/ingest-prompts.ts",
-    "submit": "tsx src/scripts/submit.ts"
+    "submit": "tsx src/scripts/submit.ts",
+    "reset-sandbox": "tsx src/scripts/reset-sandbox.ts",
+    "verify": "tsx src/scripts/verify-candidates.ts",
+    "feedback": "tsx src/scripts/feedback-loop.ts",
+    "dashboard": "tsx src/scripts/dashboard.ts"
   },
   "dependencies": {
     "@ai-sdk/openai": "^1.3.22",

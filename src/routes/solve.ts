@@ -6,6 +6,7 @@ import { parsePrompt, type ParsePromptOptions } from "../lib/llm.js";
 import { executeTaskSequence } from "../handlers/index.js";
 import { resetCaches } from "../lib/tripletex-helpers.js";
 import { logSolveRequest, type SolveLogEntry } from "../lib/solve-logger.js";
+import { config } from "../lib/config.js";
 
 export const solveRouter = new Hono();
 
@@ -31,6 +32,14 @@ function evalParseOptions(c: { req: { header: (name: string) => string | undefin
   };
 }
 
+function detectSource(evalMode: boolean, baseUrl: string): "competition" | "eval" | "manual" {
+  if (evalMode) return "eval";
+  const sandboxUrl = config.sandbox.apiUrl;
+  if (sandboxUrl && baseUrl === sandboxUrl) return "manual";
+  if (baseUrl && baseUrl !== sandboxUrl) return "competition";
+  return "manual";
+}
+
 solveRouter.post("/solve", async (c) => {
   const start = performance.now();
   const evalMode = c.req.header("X-Eval-Mode") === "true";
@@ -41,17 +50,46 @@ solveRouter.post("/solve", async (c) => {
   let filesCount = 0;
   let baseUrl = "";
 
-  if (evalMode) {
-    resetCaches();
-  }
+  // Always reset caches — competition sandboxes are always fresh
+  resetCaches();
 
   try {
     const rawBody = await c.req.json();
+    console.log(`[Solve] ${solveId} | Raw body keys: ${Object.keys(rawBody).join(", ")}`);
+    console.log(`[Solve] ${solveId} | prompt length: ${rawBody.prompt?.length ?? "missing"}, files type: ${rawBody.files === null ? "null" : Array.isArray(rawBody.files) ? `array(${rawBody.files.length})` : typeof rawBody.files}, creds: ${rawBody.tripletex_credentials ? "present" : "missing"}`);
+
     const parsed = SolveRequestSchema.safeParse(rawBody);
 
     if (!parsed.success) {
-      console.error("[Solve] Invalid request body:", parsed.error.issues);
-      return c.json({ error: "Invalid request body" }, 400);
+      const issues = parsed.error.issues.map(i => `${i.path.join(".")}: ${i.message}`).join("; ");
+      console.error(`[Solve] ${solveId} | Validation failed: ${issues}`);
+
+      const source = detectSource(evalMode, rawBody.tripletex_credentials?.base_url ?? "");
+      logSolveRequest({
+        id: solveId,
+        timestamp: new Date().toISOString(),
+        prompt: rawBody.prompt ?? "",
+        filesCount: Array.isArray(rawBody.files) ? rawBody.files.length : 0,
+        baseUrl: rawBody.tripletex_credentials?.base_url ?? "",
+        parsedSequence: undefined,
+        apiCalls: [],
+        apiCallStats: { total: 0, errors: 0, totalDuration: 0 },
+        elapsedMs: Math.round(performance.now() - start),
+        success: false,
+        error: `Validation: ${issues}`,
+        source,
+      });
+
+      if (evalMode) {
+        return c.json({
+          status: "completed",
+          success: false,
+          apiCallStats: { total: 0, errors: 0, details: [] },
+          elapsedMs: Math.round(performance.now() - start),
+          error: `Validation: ${issues}`,
+        } satisfies SolveEvalResponseBody);
+      }
+      return c.json({ status: "completed" } satisfies SolveResponse);
     }
 
     const { files, tripletex_credentials } = parsed.data;
@@ -59,7 +97,8 @@ solveRouter.post("/solve", async (c) => {
     filesCount = files.length;
     baseUrl = tripletex_credentials.base_url;
 
-    console.log(`[Solve] ${solveId} | Received prompt (${prompt.length} chars)`);
+    const source = detectSource(evalMode, baseUrl);
+    console.log(`[Solve] ${solveId} | Received prompt (${prompt.length} chars) [${source}]`);
     console.log(`[Solve] ${solveId} | Files: ${filesCount}, Base URL: ${baseUrl}`);
 
     client = new TripletexClient(
@@ -80,7 +119,6 @@ solveRouter.post("/solve", async (c) => {
       `[Solve] ${solveId} | Completed in ${elapsed}ms | API calls: ${stats.total} (${stats.errors} errors, ${stats.totalDuration}ms total API time)`,
     );
 
-    const source = evalMode ? "eval" as const : (baseUrl.includes("ainm.no") ? "competition" as const : "manual" as const);
     logSolveRequest({
       id: solveId,
       timestamp: new Date().toISOString(),
@@ -110,15 +148,14 @@ solveRouter.post("/solve", async (c) => {
       return c.json(body);
     }
 
-    const response: SolveResponse = { status: "completed" };
-    return c.json(response);
+    return c.json({ status: "completed" } satisfies SolveResponse);
   } catch (error) {
     const elapsed = Math.round(performance.now() - start);
     console.error(`[Solve] ${solveId} | Error after ${elapsed}ms:`, error);
     const message = error instanceof Error ? error.message : String(error);
 
     const stats = client?.stats ?? { total: 0, errors: 0, totalDuration: 0 };
-    const source = evalMode ? "eval" as const : (baseUrl.includes("ainm.no") ? "competition" as const : "manual" as const);
+    const source = detectSource(evalMode, baseUrl);
     logSolveRequest({
       id: solveId,
       timestamp: new Date().toISOString(),
@@ -150,7 +187,6 @@ solveRouter.post("/solve", async (c) => {
       return c.json(body, 200);
     }
 
-    const response: SolveResponse = { status: "completed" };
-    return c.json(response);
+    return c.json({ status: "completed" } satisfies SolveResponse);
   }
 });
