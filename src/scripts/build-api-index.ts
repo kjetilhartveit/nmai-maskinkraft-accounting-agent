@@ -9,6 +9,7 @@ interface EndpointInfo {
   method: string;
   summary: string;
   tags: string[];
+  beta: boolean;
   parameters: { name: string; in: string; required: boolean; type: string }[];
   requestBodyFields: { name: string; type: string; required: boolean }[];
 }
@@ -70,11 +71,13 @@ for (const [path, methods] of Object.entries(spec.paths as Record<string, Record
       }
     }
 
+    const summary = operation.summary ?? "";
     endpoints.push({
       path,
       method: method.toUpperCase(),
-      summary: operation.summary ?? "",
+      summary,
       tags: operation.tags ?? [],
+      beta: summary.includes("[BETA]"),
       parameters: params,
       requestBodyFields,
     });
@@ -82,5 +85,6 @@ for (const [path, methods] of Object.entries(spec.paths as Record<string, Record
 }
 
 writeFileSync(INDEX_PATH, JSON.stringify(endpoints));
-console.log(`\nBuilt index: ${endpoints.length} endpoints → ${INDEX_PATH}`);
+const betaCount = endpoints.filter((e) => e.beta).length;
+console.log(`\nBuilt index: ${endpoints.length} endpoints (${betaCount} BETA) → ${INDEX_PATH}`);
 console.log(`Index size: ${(Buffer.byteLength(JSON.stringify(endpoints)) / 1024).toFixed(0)}KB`);

@@ -59,7 +59,11 @@ async function grantEntitlement(
     return true;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.warn(`[Handler] Failed to grant ${label}: ${msg}`);
+    if (msg.includes("403")) {
+      console.warn(`[Handler] Entitlement endpoint returned 403 (BETA endpoint, not available in sandbox). Continuing without ${label}.`);
+    } else {
+      console.warn(`[Handler] Failed to grant ${label}: ${msg}`);
+    }
     return false;
   }
 }

@@ -33,9 +33,27 @@ IMPORTANT RULES:
 7. If a POST/PUT fails with 422, read the error message carefully — it tells you which field is wrong. Fix it and retry.
 8. For custom accounting dimensions: create the dimension name first, then create values using the returned dimensionIndex.
 9. The sandbox MAY have pre-existing data for certain tasks (like invoices for payment tasks). ALWAYS search for existing resources first.
-10. Be efficient: minimize the number of API calls. Use tripletex_post_list for batch creation (e.g. /department/list, /product/list).
+10. Be efficient: minimize the number of API calls. Use tripletex_post_list for batch creation ONLY for non-beta /list endpoints (e.g. /department/list, /product/list, /employee/list, /supplier/list).
 11. When you're done, stop calling tools and summarize what you did.
-12. If you're unsure about an endpoint's exact path, parameters, or required fields, use the api_search tool first to look it up in the full Tripletex API documentation (546 endpoints available).
+12. If you're unsure about an endpoint's exact path, parameters, or required fields, use the api_search tool first to look it up in the full Tripletex API documentation (800 endpoints available, 115 are BETA).
+
+CRITICAL — BETA ENDPOINT RULES:
+- Many Tripletex endpoints marked [BETA] return 403 Forbidden in the competition sandbox. They are NOT available.
+- If you get a 403 error, the endpoint is almost certainly BETA. Do NOT retry the same endpoint. Switch to a non-beta alternative.
+- KNOWN BETA ENDPOINTS TO AVOID:
+  * POST /customer/list (batch) → use repeated POST /customer instead
+  * POST /invoice/list (batch) → use repeated POST /invoice instead
+  * POST /order/list (batch) → use repeated POST /order instead
+  * POST /project/list (batch) → use repeated POST /project instead
+  * DELETE /customer/{id} → customers cannot be deleted
+  * PUT /project/{id} → projects cannot be updated via API
+  * DELETE /project/{id} → projects cannot be deleted
+  * POST /company/salesmodules → modules cannot be activated via API
+  * All /incomingInvoice/* endpoints → not available
+  * All /documentArchive/* endpoints → not available
+- SAFE BATCH ENDPOINTS (non-beta): /department/list, /product/list, /employee/list, /supplier/list, /ledger/account/list
+- When the api_search tool returns results, endpoints marked [BETA] will be flagged. Prefer non-beta alternatives.
+- Some BETA endpoints MAY work (like GET /project/{id}), but don't rely on them — have a fallback plan.
 
 CRITICAL endpoint patterns:
 - List endpoints require date params: GET /invoice needs invoiceDateFrom + invoiceDateTo, GET /order needs orderDateFrom + orderDateTo
@@ -70,6 +88,20 @@ function buildUserPrompt(task: ParsedTask): string {
 
 function isIdEndpoint(endpoint: string): boolean {
   return /\/\d+$/.test(endpoint) || /\/\d+\/\w+$/.test(endpoint);
+}
+
+const KNOWN_BETA_PATTERNS = [
+  "/customer/list", "/invoice/list", "/order/list", "/project/list",
+  "/incomingInvoice", "/documentArchive", "/company/salesmodules",
+];
+
+function enrich403Error(endpoint: string, errorMsg: string): string {
+  const isBetaLikely = KNOWN_BETA_PATTERNS.some((p) => endpoint.includes(p)) || errorMsg.includes("403");
+  if (isBetaLikely && errorMsg.includes("403")) {
+    const base = endpoint.replace(/\/list$/, "");
+    return `${errorMsg}\n\n⚠️ This endpoint is likely [BETA] and returns 403 in the competition sandbox. Do NOT retry this endpoint. Use an alternative: for batch /list endpoints, use repeated single POST to ${base} instead. For other BETA endpoints, check the api_search tool for alternatives.`;
+  }
+  return errorMsg;
 }
 
 export async function handleGenericTask(
@@ -120,7 +152,7 @@ export async function handleGenericTask(
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
           console.error(`[GenericHandler] GET ${endpoint} failed: ${msg}`);
-          return { success: false, error: msg };
+          return { success: false, error: enrich403Error(endpoint, msg) };
         }
       },
     },
@@ -151,7 +183,7 @@ export async function handleGenericTask(
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
           console.error(`[GenericHandler] POST ${endpoint} failed: ${msg}`);
-          return { success: false, error: msg };
+          return { success: false, error: enrich403Error(endpoint, msg) };
         }
       },
     },
@@ -182,7 +214,7 @@ export async function handleGenericTask(
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
           console.error(`[GenericHandler] PUT ${endpoint} failed: ${msg}`);
-          return { success: false, error: msg };
+          return { success: false, error: enrich403Error(endpoint, msg) };
         }
       },
     },
@@ -216,7 +248,7 @@ export async function handleGenericTask(
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
           console.error(`[GenericHandler] PUT-ACTION ${fullEndpoint} failed: ${msg}`);
-          return { success: false, error: msg };
+          return { success: false, error: enrich403Error(fullEndpoint, msg) };
         }
       },
     },
@@ -253,7 +285,7 @@ export async function handleGenericTask(
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
           console.error(`[GenericHandler] POST-LIST ${endpoint} failed: ${msg}`);
-          return { success: false, error: msg };
+          return { success: false, error: enrich403Error(endpoint, msg) };
         }
       },
     },
@@ -279,7 +311,7 @@ export async function handleGenericTask(
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
           console.error(`[GenericHandler] DELETE ${endpoint} failed: ${msg}`);
-          return { success: false, error: msg };
+          return { success: false, error: enrich403Error(endpoint, msg) };
         }
       },
     },

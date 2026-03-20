@@ -8,6 +8,7 @@ interface EndpointInfo {
   method: string;
   summary: string;
   tags: string[];
+  beta: boolean;
   parameters: { name: string; in: string; required: boolean; type: string }[];
   requestBodyFields: { name: string; type: string; required: boolean }[];
 }
@@ -43,6 +44,7 @@ export function searchEndpoints(query: string, maxResults = 10): string {
       if (summaryLower.includes(term)) score += 2;
       if (tagsLower.includes(term)) score += 2;
     }
+    if (ep.beta) score = Math.max(0, score - 2);
     return { ep, score };
   }).filter((s) => s.score > 0);
 
@@ -52,7 +54,9 @@ export function searchEndpoints(query: string, maxResults = 10): string {
   if (results.length === 0) return `No endpoints found matching "${query}".`;
 
   return results.map(({ ep }) => {
-    let doc = `### ${ep.method} ${ep.path}\n`;
+    let doc = `### ${ep.method} ${ep.path}`;
+    if (ep.beta) doc += ` ⚠️ [BETA — likely returns 403 in sandbox, avoid if possible]`;
+    doc += `\n`;
     doc += `Summary: ${ep.summary}\n`;
     if (ep.tags.length) doc += `Tags: ${ep.tags.join(", ")}\n`;
 
@@ -90,7 +94,9 @@ export function getEndpointDetail(path: string, method: string): string {
   );
   if (!ep) return `Endpoint ${method.toUpperCase()} ${path} not found in API index.`;
 
-  let doc = `### ${ep.method} ${ep.path}\nSummary: ${ep.summary}\n`;
+  let doc = `### ${ep.method} ${ep.path}`;
+  if (ep.beta) doc += ` ⚠️ [BETA — likely returns 403 in sandbox, avoid if possible]`;
+  doc += `\nSummary: ${ep.summary}\n`;
   if (ep.tags.length) doc += `Tags: ${ep.tags.join(", ")}\n`;
 
   if (ep.parameters.length) {

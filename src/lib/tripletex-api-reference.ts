@@ -15,6 +15,12 @@ export const TRIPLETEX_API_REFERENCE = `
 - All dates must be YYYY-MM-DD format.
 - When linking to existing resources, use { id: <number> } format.
 
+### BETA Endpoint Warning
+Many endpoints marked [BETA] in the Tripletex API return 403 Forbidden in the competition sandbox.
+- Safe batch /list endpoints: /department/list, /product/list, /employee/list, /supplier/list, /ledger/account/list
+- BETA batch endpoints (403): /customer/list, /invoice/list, /order/list, /project/list — use single POST instead
+- If any call returns 403, assume the endpoint is BETA and switch to an alternative. Do NOT retry.
+
 ### Employee
 - GET /employee — list/search. Params: firstName, lastName, email, fields, from, count
 - POST /employee — create. Body: { firstName, lastName, email, dateOfBirth?, phoneNumberMobile?, employeeNumber?, userType? }
@@ -28,7 +34,8 @@ export const TRIPLETEX_API_REFERENCE = `
 - GET /customer — list/search. Params: name, email, organizationNumber, from, count
 - POST /customer — create. Body: { name, email?, organizationNumber?, phoneNumber?, isCustomer: true, postalAddress?: { addressLine1, postalCode, city } }
 - PUT /customer/{id} — update
-- DELETE /customer/{id} — delete
+- ~~DELETE /customer/{id}~~ — [BETA, returns 403] customers cannot be deleted
+- ~~POST /customer/list~~ — [BETA, returns 403] use repeated POST /customer instead
 
 ### Supplier
 - GET /supplier — list/search. Params: name, email, organizationNumber, from, count
@@ -63,6 +70,7 @@ export const TRIPLETEX_API_REFERENCE = `
   - IMPORTANT: Bank account must be configured on ledger account 1920 before creating invoices.
 - POST /invoice/{id}/:send — send an invoice via email/EHF
   - Params: sendType (EMAIL), overrideEmailAddress?
+- ~~POST /invoice/list~~ — [BETA, returns 403] use repeated POST /invoice instead
 
 ### Invoice Payment (IMPORTANT — use PUT with query params, NOT body)
 - PUT /invoice/{id}/:payment — register payment on invoice. Uses QUERY PARAMETERS:
@@ -78,13 +86,17 @@ export const TRIPLETEX_API_REFERENCE = `
 - POST /order — create. Body: { customer: {id}, orderDate, deliveryDate (REQUIRED), orderLines: [{ product?: {id}, description, count, unitPriceExcludingVatCurrency }] }
   - IMPORTANT: deliveryDate is REQUIRED.
   - orderLines can reference existing products or use inline descriptions.
+- ~~POST /order/list~~ — [BETA, returns 403] use repeated POST /order instead
 
 ### Order Line
 - POST /order/orderline — create a single order line. Body: { order: {id}, product?: {id}, description, count, unitPriceExcludingVatCurrency }
 
 ### Project
 - GET /project — list. Params: name, from, count
-- POST /project — create. Body: { name, startDate, endDate?, projectManager: {id}, department: {id}, isInternal: true/false, customer?: {id}, description?, projectCategory?: {id} }
+- POST /project — create (non-beta). Body: { name, startDate, endDate?, projectManager: {id}, department: {id}, isInternal: true/false, customer?: {id}, description?, projectCategory?: {id} }
+- ~~POST /project/list~~ — [BETA, returns 403] use repeated POST /project instead
+- ~~PUT /project/{id}~~ — [BETA, returns 403] projects cannot be updated via API
+- ~~DELETE /project/{id}~~ — [BETA, returns 403] projects cannot be deleted
 
 ### Travel Expense
 - GET /travelExpense — list. Params: employeeId, from, count
@@ -134,9 +146,10 @@ export const TRIPLETEX_API_REFERENCE = `
 - POST /bank/reconciliation/match — match transactions. Body: { bankReconciliation: {id}, transactions: [{id}] }
 - POST /bank/statement/import — upload bank statement (multipart)
 
-### Incoming Invoice
-- POST /incomingInvoice — create. Body: { invoiceDate, invoiceDueDate, supplier: {id}, voucher: {id} }
-- POST /incomingInvoice/{voucherId}/addPayment — register payment
+### Incoming Invoice [BETA — returns 403]
+- ~~POST /incomingInvoice~~ — [BETA] not available in sandbox
+- ~~POST /incomingInvoice/{voucherId}/addPayment~~ — [BETA] not available
+- Alternative: Create a voucher with balanced postings on the correct accounts to record incoming invoices.
 
 ### Supplier Invoice
 - GET /supplierInvoice — list
@@ -144,14 +157,14 @@ export const TRIPLETEX_API_REFERENCE = `
 
 ### Company Settings
 - PUT /company — update company info
-- POST /company/salesmodules — activate modules. Body: { name }
-  - Module names: e.g. "ACCOUNTING", "INVOICE", "PROJECT"
+- ~~POST /company/salesmodules~~ — [BETA, returns 403] modules cannot be activated via API
 
-### Employee Entitlements
+### Employee Entitlements [BETA — may return 403]
 - GET /employee/entitlement — list role entitlements. Params: employeeId, from, count  
 - POST /employee/entitlement — grant entitlement. Body: { employee: {id}, entitlementId: <number>, customer: {id: <companyId>} }
   - Key entitlementIds: 1 = ROLE_ADMINISTRATOR, 10 = AUTH_PROJECT_MANAGER, 45 = AUTH_CREATE_PROJECT
   - IMPORTANT: employee must have userType "EXTENDED" to receive entitlements. AUTH_PROJECT_MANAGER requires AUTH_CREATE_PROJECT (45) first.
+  - WARNING: These endpoints are [BETA]. If they return 403, the entitlement cannot be granted via API. The first employee in the sandbox usually already has project manager rights.
 
 ### Salary
 - POST /salary/transaction — create salary voucher. Body: { date, year, month, payslips: [...] }
