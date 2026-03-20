@@ -1,0 +1,43 @@
+src/scripts/verify-candidates.ts
+  968f4308cb99bcb4 1-269
+src/scripts/feedback-loop.ts
+  968f4308cb99bcb4 1-141
+src/types/index.ts
+  968f4308cb99bcb4 16
+src/scripts/reset-sandbox.ts
+  968f4308cb99bcb4 1-76
+src/lib/tripletex-client.ts
+  968f4308cb99bcb4 73-76
+src/eval/test-cases.ts
+  968f4308cb99bcb4 1-2,5-14,16,172-178
+src/index.ts
+  968f4308cb99bcb4 8-18
+src/routes/solve.ts
+  968f4308cb99bcb4 9,35-42,53-54,58-60,64-83,85-92,100-101,151,158,190
+src/scripts/dashboard.ts
+  968f4308cb99bcb4 1-294
+docs/plans/1-initial-setup/PLAN.md
+  968f4308cb99bcb4 73-106
+package.json
+  968f4308cb99bcb4 17-21
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.15",
+  "base_commit_sha": "33c5c8ebda71a29b7b0cbacd6efca7f81cdc1bf7",
+  "prompts": {
+    "968f4308cb99bcb4": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "352e7a3e-d64f-4e37-8f6a-ef3c86ce2127",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Kjetil Hårtveit <kjetil_runescape@hotmail.com>",
+      "messages": [],
+      "total_additions": 1213,
+      "total_deletions": 333,
+      "accepted_lines": 924,
+      "overriden_lines": 0
+    }
+  }
+}
