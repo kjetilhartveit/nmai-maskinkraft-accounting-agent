@@ -1,0 +1,43 @@
+src/eval/test-cases.ts
+  dc005ff5010b2747 1-107
+src/eval/runner.ts
+  dc005ff5010b2747 1-141
+docs/plans/1-initial-setup/PLAN.md
+  dc005ff5010b2747 28
+src/eval/types.ts
+  dc005ff5010b2747 1-50
+package.json
+  dc005ff5010b2747 12-13
+src/routes/solve.ts
+  dc005ff5010b2747 3,5,7,11-32,35-41,61-63,65,73-87,93-111
+src/scripts/run-eval.ts
+  dc005ff5010b2747 1-55
+docs/reports/EVALUATION-FRAMEWORK.md
+  dc005ff5010b2747 1-116
+src/eval/match.ts
+  dc005ff5010b2747 1-115
+src/lib/llm.ts
+  dc005ff5010b2747 79-103,107,110-111,115,117
+src/eval/reporter.ts
+  dc005ff5010b2747 1-43
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.15",
+  "base_commit_sha": "d9c7303eda67e7a5490a6f08228c5376c9f39f50",
+  "prompts": {
+    "dc005ff5010b2747": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "5672a6a0-1631-4064-bb48-97af30ba945f",
+        "model": "claude-4.6-opus-high-thinking"
+      },
+      "human_author": "Kjetil Hårtveit <kjetil_runescape@hotmail.com>",
+      "messages": [],
+      "total_additions": 969,
+      "total_deletions": 248,
+      "accepted_lines": 774,
+      "overriden_lines": 0
+    }
+  }
+}
