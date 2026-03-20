@@ -1,0 +1,39 @@
+docs/plans/2-fine-tuning/PLAN.md
+  66a48f9c1c2d72ac 46,48-53
+src/eval/test-cases.ts
+  66a48f9c1c2d72ac 59,78-79,97,151,174-175
+data/verified/promoted-test-cases.json
+  66a48f9c1c2d72ac 17,29-30,41,73-74,85-86,105-106
+src/lib/sequence-context.ts
+  66a48f9c1c2d72ac 12,53-60
+src/handlers/create-invoice.ts
+  66a48f9c1c2d72ac 194-197,202
+src/lib/tripletex-helpers.ts
+  66a48f9c1c2d72ac 49-52
+src/handlers/create-employee.ts
+  66a48f9c1c2d72ac 7,70,81,91-95,97,101,108,110-116,124,126-132,152-158,163,169,186,190-198,201,204-205
+src/scripts/dashboard.ts
+  66a48f9c1c2d72ac 275-290,331-336,342-343,359-360,385-395
+src/handlers/create-project.ts
+  66a48f9c1c2d72ac 67-68
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.15",
+  "base_commit_sha": "198744b7bd4a9e5ca2f575288f1e21ca9bfbec3d",
+  "prompts": {
+    "66a48f9c1c2d72ac": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "7be80840-85ce-4c4b-9774-b2726284f6dc",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Kjetil Hårtveit <kjetil_runescape@hotmail.com>",
+      "messages": [],
+      "total_additions": 327,
+      "total_deletions": 235,
+      "accepted_lines": 135,
+      "overriden_lines": 0
+    }
+  }
+}
