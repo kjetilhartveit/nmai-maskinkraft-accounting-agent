@@ -43,15 +43,16 @@ We have set up the project, but we must fine-tune our solution, fix bugs and set
   - Payment: 4 calls, 0 errors
   - Department batch: 1 call (using /department/list)
   - Dimension+voucher: 20 calls, 7 errors (complex agentic task, voucher postings don't support dimension fields)
-- [ ] Continue submitting and iterating based on competition results.
+- [ ] Keep running our evals (we should have more now due to adding new test cases) and keep iterating on improving them if possible. We should not accept any errors and if we think we are perfect, try to be creative in case we can improve even more (especially on more complex cases where we use many API calls).
+  - Before credits ran out: 12/16 passing (multiline invoice fixed to 12 calls, admin role entitlements working with correct API format)
+  - [ ] In the [test-cases.ts](../../../src/eval/test-cases.ts) file we have a few tasks with very high expectedApiCalls (40, 9 and 8) all of these must be down to reasonable numbers. And we should not accept any errors.
 - [ ] For later it would be useful if we could differentiate our runs with runs from other team members. Perhaps by timetamp/date (in the UI) or other identifiers. Note that when we submit we also get GET requests (with path submissions) continuously which gives us information about the API calls made.
+- [ ] Continue submitting and iterating based on competition results.
 - [x] Consider adding previous solutions as inspiration in our system prompt.
   - Added few-shot examples for payment, customer+invoice, custom dimension+voucher, and admin role tasks
 - [x] Could we add a tool for the LLM to retrieve API information? This could be helpful for the LLM, especially if we don't have a handler for it.
   - Added `tripletex_post_list` batch creation tool to generic handler for efficiency
   - Updated API reference with correct userType values (STANDARD/EXTENDED/NO_ACCESS) and entitlement format
-- [ ] Keep running our evals (we should have more now due to adding new test cases) and keep iterating on improving them if possible. Fix errors and be creative in case we think we have found the perfect way.
-  - Before credits ran out: 12/16 passing (multiline invoice fixed to 12 calls, admin role entitlements working with correct API format)
 
 ### Execution of plan
 
