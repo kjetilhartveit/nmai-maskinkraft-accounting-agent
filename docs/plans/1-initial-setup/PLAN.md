@@ -23,14 +23,19 @@
   - [x] Optimized batch handlers: department/customer/supplier/employee all use `/list` endpoints when creating multiple entities.
   - [x] Added `postList` to TripletexClient and new helpers: getDefaultCurrencyId, getDefaultProductVatTypeId, getDefaultProductUnitId, findCustomerByName, findOrCreateProduct, today, daysFromNow.
   - [x] Updated system prompt with per-task entity field guidance and date normalization rules.
-- [ ] Get us up and running and submit against the endpoint. Our system should be deterministic (apart from the LLM of course) and easy to run (also for humans). Automate submittions and session tokens etc. as much as possible.
+- [x] Get us up and running and submit against the endpoint. Our system should be deterministic (apart from the LLM of course) and easy to run (also for humans). Automate submittions and session tokens etc. as much as possible.
   - [x] Verify `pnpm dev` starts the server and `/solve` accepts POST requests.
   - [x] Test against the sandbox with a sample prompt end-to-end.
   - [x] Set up Cloudflare Tunnel (`pnpm tunnel`) for HTTPS exposure.
-  - [ ] When submitting against the competition platform endpoint it should save the logs and most importantly the prompts, so that we can iterate on them (find the most optimal answer) and them to our evals.
-  - [ ] Is it possible to submit to the endpoint URL programmatically?
-    - [ ] Note that I've added the `AINM_ACCESS_TOKEN` env token which we can use to stay logged in to the competition platform. Can you make a mental note of it and perhaps also how we can refresh the token if it expires?
-  - [ ] Submit the endpoint URL to the competition platform.
+  - [x] When submitting against the competition platform endpoint it should save the logs and most importantly the prompts, so that we can iterate on them (find the most optimal answer) and them to our evals.
+    - Added `SolveLogEntry` logger that writes every `/solve` request to `data/solve-logs/solves.jsonl` (full details) and `data/solve-logs/prompts.jsonl` (prompt + parsed task for quick review). Logs are automatically categorised as "competition", "eval", or "manual" based on the base URL.
+  - [x] Is it possible to submit to the endpoint URL programmatically?
+    - Investigated: the competition platform (app.ainm.no) uses Next.js Server Actions for form submission, which means there is no public REST API to call. Programmatic submission would require reverse-engineering the Server Action IDs from the JS bundles, which is fragile and may violate fair play rules.
+    - **Recommended workflow:** Use the browser at https://app.ainm.no/submit/tripletex — each click triggers a new evaluation. Keep tunnel running and re-submit from the browser.
+    - [x] Note that I've added the `AINM_ACCESS_TOKEN` env token which we can use to stay logged in to the competition platform. Can you make a mental note of it and perhaps also how we can refresh the token if it expires?
+      - The `AINM_ACCESS_TOKEN` is a JWT with an `exp` claim (~7-day TTL). The `pnpm submit` script checks expiry and warns when it's running low. To refresh: sign in again at https://app.ainm.no via Google, then extract the `access_token` cookie from DevTools → Application → Cookies → app.ainm.no. Update the value in `.env`.
+  - [x] Submit the endpoint URL to the competition platform.
+    - Created `pnpm submit` script that validates the token, checks server health, platform connectivity, and prints clear step-by-step instructions for submission. The actual submission is done via the browser form (see above).
 - [x] We will thoroughly examine the Tripletex API and learn the ins and outs of it. Some key details are exploring the possibilities, especially in terms of how we can use as few API calls as possible to do operations. We should batch when we can and be smart about it. Sometimes we must create things in advance to avoid errors, because in real attempts the sandbox is empty - and this is what we should simulate.
   - [x] Create a report with your findings in a new report regarding the Tripletex API. → [TRIPLETEX-API.md](../../reports/TRIPLETEX-API.md)
 - [x] **Create a testing framework:** Although we will create helpful tools for the LLM (like skills perhaps and documentation in the AGENTS.md), what is perhaps even more important is creating an evaluation system which we can use to rate setups. What we'll do is use sample prompts (including those we gain from submitting tasks) and add the answers to it (e.g. the data to identify and the most efficient API calls). We can use this data to evaluate systems and see what works and what doesn't, which LLMs perform the best and so on. And we must be able to run evaluation tests a reasonable number of times to increase our confidence in the results.

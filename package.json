@@ -11,7 +11,8 @@
     "test:sandbox": "tsx src/scripts/test-sandbox.ts",
     "test:e2e": "tsx src/scripts/test-e2e.ts",
     "eval": "tsx src/scripts/run-eval.ts",
-    "capture": "tsx src/scripts/capture-run.ts"
+    "capture": "tsx src/scripts/capture-run.ts",
+    "submit": "tsx src/scripts/submit.ts"
   },
   "dependencies": {
     "@ai-sdk/openai": "^1.3.22",

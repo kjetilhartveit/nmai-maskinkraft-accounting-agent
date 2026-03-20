@@ -3,6 +3,7 @@ node_modules/
 dist/
 docs/reports/tripletex-openapi.json
 data/captures/
+data/solve-logs/
 
 # Claude
 /.claude/settings.local.json
