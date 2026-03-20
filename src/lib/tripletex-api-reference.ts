@@ -54,16 +54,28 @@ export const TRIPLETEX_API_REFERENCE = `
 - POST /contact — create. Body: { firstName, lastName, email?, phoneNumberMobile?, customer?: {id}, department?: {id} }
 
 ### Invoice
-- GET /invoice — list. Params: invoiceDateFrom, invoiceDateTo, customerId, from, count
+- GET /invoice — list. REQUIRED params: invoiceDateFrom (YYYY-MM-DD), invoiceDateTo (YYYY-MM-DD). Optional: customerId, from, count
+  - IMPORTANT: Both invoiceDateFrom and invoiceDateTo are REQUIRED. Use wide date range like 2020-01-01 to 2026-12-31.
+- GET /invoice/{id} — get single invoice by ID. Returns { value: {...} }
 - POST /invoice — create. Body: { invoiceDate, invoiceDueDate, customer: {id}, orders: [{id}], comment? }
   - Typically requires an Order first. Or include orderLines inline.
   - IMPORTANT: Bank account must be configured on ledger account 1920 before creating invoices.
 - POST /invoice/{id}/:send — send an invoice via email/EHF
   - Params: sendType (EMAIL), overrideEmailAddress?
 
+### Invoice Payment (IMPORTANT — use PUT with query params, NOT body)
+- PUT /invoice/{id}/:payment — register payment on invoice. Uses QUERY PARAMETERS:
+  - paymentDate (YYYY-MM-DD) — required
+  - paymentTypeId (number) — required (get from GET /invoice/paymentType)
+  - paidAmount (number) — required (amount in invoice currency)
+  - paidAmountCurrency (number) — optional
+  - Use the tripletex_put_action tool for this endpoint!
+  - Example: PUT /invoice/123/:payment?paymentDate=2026-03-20&paymentTypeId=456&paidAmount=10000
+
 ### Order
-- GET /order — list. Params: from, count
-- POST /order — create. Body: { customer: {id}, orderDate, deliveryDate?, receiver_email?, orderLines: [{ product?: {id}, description, count, unitPriceExcludingVatCurrency }] }
+- GET /order — list. REQUIRED params: orderDateFrom (YYYY-MM-DD), orderDateTo (YYYY-MM-DD). Optional: from, count
+- POST /order — create. Body: { customer: {id}, orderDate, deliveryDate (REQUIRED), orderLines: [{ product?: {id}, description, count, unitPriceExcludingVatCurrency }] }
+  - IMPORTANT: deliveryDate is REQUIRED.
   - orderLines can reference existing products or use inline descriptions.
 
 ### Order Line
@@ -144,11 +156,13 @@ export const TRIPLETEX_API_REFERENCE = `
 - POST /asset — create. Body: { name, dateOfAcquisition, acquisitionCost, account: {id}, depreciationAccount: {id}, lifetime, depreciationMethod }
 
 ### Common Patterns
-1. Fresh sandbox = no data. You must create dependencies first.
-2. Invoices require: customer → product → order → invoice (or inline order lines).
-3. Bank account (1920) must have a bankAccountNumber configured before invoice creation.
-4. Projects require: department → employee (as project manager) → project.
-5. Voucher postings must balance (debits + credits = 0).
-6. Use GET to search for existing resources before creating duplicates.
+1. The sandbox MAY have pre-existing data (e.g. a customer with an invoice for payment tasks). ALWAYS search first.
+2. When searching: use wide date ranges (2020-01-01 to 2026-12-31) for date-required endpoints.
+3. Invoices require: customer → product → order → invoice (or inline order lines).
+4. Bank account (1920) must have a bankAccountNumber configured before invoice creation.
+5. Projects require: department → employee (as project manager) → project.
+6. Voucher postings must balance (debits + credits = 0).
 7. Custom dimensions: create dimensionName first, then dimensionValues with the returned dimensionIndex.
+8. Action endpoints (/:payment, /:send, /:deliver, /:approve) use QUERY PARAMETERS, not body.
+9. For payment tasks: find existing invoice → get payment types → PUT /invoice/{id}/:payment with query params.
 `;

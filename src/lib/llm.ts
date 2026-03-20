@@ -60,7 +60,8 @@ Task types and their entity fields:
 - create_order: ONE entity with: customerName, orderDate (YYYY-MM-DD), deliveryDate (YYYY-MM-DD), ourReference, yourReference. Plus extra entities for products: name, quantity, unitPrice.
 - create_invoice: fields: customerName, orderId, invoiceDate (YYYY-MM-DD), dueDate (YYYY-MM-DD), comment, amount (total excluding VAT), productName or description (what the invoice is for)
 - send_invoice: same as create_invoice — creates and sends immediately. Always extract the amount and product/service description.
-- create_payment: fields: invoiceId, amount, paymentDate (YYYY-MM-DD)
+- create_payment: fields: customerName, organizationNumber, amount, paymentDate (YYYY-MM-DD), description/service (what the invoice is for)
+  - IMPORTANT: If the prompt says the client "has" a pending/outstanding invoice, the invoice ALREADY EXISTS in the sandbox. Return ONLY create_payment, NOT create_invoice + create_payment. The handler will find the existing invoice.
 - create_credit_note: fields: invoiceId, comment
 - create_travel_expense: fields: employeeFirstName, employeeLastName, date (YYYY-MM-DD), amount, description, paymentType (COMPANY_CARD or EMPLOYEE_PAID)
 - delete_travel_expense: fields: employeeFirstName, employeeLastName OR travelExpenseId

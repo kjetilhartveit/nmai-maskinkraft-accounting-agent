@@ -24,14 +24,20 @@ IMPORTANT RULES:
 1. Read the task carefully and identify ALL required operations.
 2. Create dependencies first (e.g., customer before invoice, department before employee).
 3. Use GET requests to search for existing resources before creating duplicates.
-4. All dates MUST be in YYYY-MM-DD format.
+4. All dates MUST be in YYYY-MM-DD format. Use 2026 as the year (current year).
 5. Voucher postings MUST balance (debits = credits).
 6. When creating resources, use the MINIMUM required fields to avoid validation errors.
-7. If a POST fails with 422, read the error message carefully — it tells you which field is wrong.
+7. If a POST/PUT fails with 422, read the error message carefully — it tells you which field is wrong. Fix it and retry.
 8. For custom accounting dimensions: create the dimension name first, then create values using the returned dimensionIndex.
-9. The sandbox is fresh/empty — you must create all prerequisites.
-10. Be efficient: minimize the number of API calls. Don't make unnecessary GET requests.
+9. The sandbox MAY have pre-existing data for certain tasks (like invoices for payment tasks). ALWAYS search for existing resources first.
+10. Be efficient: minimize the number of API calls.
 11. When you're done, stop calling tools and summarize what you did.
+
+CRITICAL endpoint patterns:
+- List endpoints require date params: GET /invoice needs invoiceDateFrom + invoiceDateTo, GET /order needs orderDateFrom + orderDateTo
+- Payment registration: use tripletex_put_action with PUT /invoice/{id}/:payment and query params: paymentDate, paymentTypeId, paidAmount
+- Action endpoints (containing /:action) use QUERY PARAMETERS, not request bodies. Use the tripletex_put_action tool for these.
+- Single-object GET (with ID in path like /invoice/123) returns { value: {...} }, NOT a list
 
 ${TRIPLETEX_API_REFERENCE}`;
 }
@@ -48,10 +54,15 @@ function buildUserPrompt(task: ParsedTask): string {
   parts.push(
     `\nDetected language: ${task.language}`,
     `\nTask type hint: ${task.taskType}`,
+    `\nToday's date: ${new Date().toISOString().slice(0, 10)}`,
     `\nExecute the necessary API calls now.`,
   );
 
   return parts.join("\n");
+}
+
+function isIdEndpoint(endpoint: string): boolean {
+  return /\/\d+$/.test(endpoint) || /\/\d+\/\w+$/.test(endpoint);
 }
 
 export async function handleGenericTask(
@@ -74,12 +85,12 @@ export async function handleGenericTask(
     tools: {
       tripletex_get: tool({
         description:
-          "Make a GET request to the Tripletex API. Use for searching/listing resources.",
+          "Make a GET request to the Tripletex API. Use for searching/listing resources. For list endpoints, returns { values: [...], fullResultSize }. For single-object endpoints (with ID), returns { value: {...} }.",
         parameters: z.object({
           endpoint: z
             .string()
             .describe(
-              'API endpoint path, e.g. "/employee", "/ledger/account"',
+              'API endpoint path, e.g. "/employee", "/ledger/account", "/invoice/123"',
             ),
           params: z
             .record(z.string())
@@ -93,6 +104,10 @@ export async function handleGenericTask(
             `[GenericHandler] GET ${endpoint} ${params ? JSON.stringify(params) : ""}`,
           );
           try {
+            if (isIdEndpoint(endpoint)) {
+              const result = await client.get<unknown>(endpoint, params);
+              return { success: true, value: result.value };
+            }
             const result = await client.list<unknown>(endpoint, params);
             return {
               success: true,
@@ -134,7 +149,7 @@ export async function handleGenericTask(
       }),
       tripletex_put: tool({
         description:
-          "Make a PUT request to the Tripletex API. Use for updating existing resources.",
+          "Make a PUT request with a JSON body. Use for updating existing resources (include id and version).",
         parameters: z.object({
           endpoint: z
             .string()
@@ -157,6 +172,39 @@ export async function handleGenericTask(
           } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
             console.error(`[GenericHandler] PUT ${endpoint} failed: ${msg}`);
+            return { success: false, error: msg };
+          }
+        },
+      }),
+      tripletex_put_action: tool({
+        description:
+          'Make a PUT request with QUERY PARAMETERS (no body). Use for action endpoints like "PUT /invoice/{id}/:payment", "PUT /travelExpense/:deliver", etc. These endpoints use query params instead of a JSON body.',
+        parameters: z.object({
+          endpoint: z
+            .string()
+            .describe(
+              'API endpoint path with action, e.g. "/invoice/123/:payment"',
+            ),
+          params: z
+            .record(z.string())
+            .describe(
+              'Query parameters, e.g. { "paymentDate": "2026-03-20", "paymentTypeId": "123", "paidAmount": "10000" }',
+            ),
+        }),
+        execute: async ({ endpoint, params }) => {
+          const qs = new URLSearchParams(params).toString();
+          const fullEndpoint = `${endpoint}?${qs}`;
+          console.log(
+            `[GenericHandler] PUT-ACTION ${fullEndpoint}`,
+          );
+          try {
+            const result = await client.put<unknown>(fullEndpoint, undefined);
+            return { success: true, value: result.value };
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            console.error(
+              `[GenericHandler] PUT-ACTION ${fullEndpoint} failed: ${msg}`,
+            );
             return { success: false, error: msg };
           }
         },
