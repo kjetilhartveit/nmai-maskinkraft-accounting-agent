@@ -1,11 +1,11 @@
 import "dotenv/config";
-import type { ParsedTask } from "../types/index.js";
+import type { ParsedTaskSequence } from "../types/index.js";
 import type { SolveEvalResponseBody } from "../routes/solve.js";
 import { config } from "../lib/config.js";
 import type { EvalConfig, EvalResult, EvalSummary, TestCase } from "./types.js";
 import {
   apiBoundsSatisfied,
-  entitiesMatch,
+  sequenceEntitiesMatch,
   languageMatches,
   taskTypeMatches,
 } from "./match.js";
@@ -76,18 +76,14 @@ export async function runEvalCase(
     };
   }
 
-  const parsedTask = json.parsedTask as ParsedTask | undefined;
+  const parsedSequence = json.parsedSequence as ParsedTaskSequence | undefined;
   const total = json.apiCallStats.total;
   const errors = json.apiCallStats.errors;
 
   const parseMatch =
-    taskTypeMatches(tc, parsedTask) &&
-    languageMatches(tc, parsedTask) &&
-    !!parsedTask &&
-    entitiesMatch(
-      parsedTask.entities as Record<string, unknown>[],
-      tc.expectedEntities,
-    );
+    taskTypeMatches(tc, parsedSequence) &&
+    languageMatches(tc, parsedSequence) &&
+    sequenceEntitiesMatch(tc, parsedSequence);
 
   const boundsOk = apiBoundsSatisfied(tc, total, errors);
   const success =
@@ -96,7 +92,7 @@ export async function runEvalCase(
   return {
     testCaseId: tc.id,
     config: evalConfig,
-    parsedTask,
+    parsedSequence,
     apiCalls: { count: total, errors },
     elapsedMs: json.elapsedMs ?? elapsedRoundtrip,
     success,
@@ -109,13 +105,21 @@ export async function runEvalCase(
 export async function runEval(
   evalConfig: EvalConfig,
   cases: TestCase[],
-  options?: { serverUrl?: string },
+  options?: { serverUrl?: string; iterations?: number },
 ): Promise<EvalResult[]> {
   const serverUrl = options?.serverUrl ?? DEFAULT_SERVER;
+  const iterations = options?.iterations ?? 1;
   const results: EvalResult[] = [];
-  for (const tc of cases) {
-    results.push(await runEvalCase(serverUrl, evalConfig, tc));
+
+  for (let iter = 0; iter < iterations; iter++) {
+    if (iterations > 1) {
+      console.log(`\n--- Iteration ${iter + 1}/${iterations} ---`);
+    }
+    for (const tc of cases) {
+      results.push(await runEvalCase(serverUrl, evalConfig, tc));
+    }
   }
+
   return results;
 }
 
@@ -124,13 +128,13 @@ export function summarize(results: EvalResult[]): EvalSummary {
   if (!first) {
     throw new Error("No results to summarize");
   }
-  const config = first.config;
+  const cfg = first.config;
   const passed = results.filter((r) => r.success).length;
   const totalElapsed = results.reduce((s, r) => s + r.elapsedMs, 0);
   const totalApi = results.reduce((s, r) => s + r.apiCalls.count, 0);
   const totalErr = results.reduce((s, r) => s + r.apiCalls.errors, 0);
   return {
-    config,
+    config: cfg,
     totalCases: results.length,
     passed,
     failed: results.length - passed,

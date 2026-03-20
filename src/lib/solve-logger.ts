@@ -1,6 +1,6 @@
 import { writeFileSync, mkdirSync, existsSync } from "fs";
 import { join } from "path";
-import type { ApiCallLog, ParsedTask } from "../types/index.js";
+import type { ApiCallLog, ParsedTaskSequence } from "../types/index.js";
 
 const LOGS_DIR = join(import.meta.dirname, "../../data/solve-logs");
 
@@ -10,7 +10,7 @@ export interface SolveLogEntry {
   prompt: string;
   filesCount: number;
   baseUrl: string;
-  parsedTask?: ParsedTask;
+  parsedSequence?: ParsedTaskSequence;
   apiCalls: ApiCallLog[];
   apiCallStats: { total: number; errors: number; totalDuration: number };
   elapsedMs: number;
@@ -34,13 +34,15 @@ export function logSolveRequest(entry: SolveLogEntry): void {
     writeFileSync(logFile, line, { flag: "a" });
 
     const promptFile = join(LOGS_DIR, "prompts.jsonl");
+    const tasks = entry.parsedSequence?.tasks ?? [];
     const promptEntry = {
       id: entry.id,
       timestamp: entry.timestamp,
       prompt: entry.prompt,
-      taskType: entry.parsedTask?.taskType ?? "unknown",
-      language: entry.parsedTask?.language ?? "unknown",
-      entities: entry.parsedTask?.entities ?? [],
+      taskTypes: tasks.map((t) => t.taskType),
+      taskCount: tasks.length,
+      language: entry.parsedSequence?.language ?? "unknown",
+      entities: tasks.flatMap((t) => t.entities),
       success: entry.success,
       source: entry.source,
     };

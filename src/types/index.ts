@@ -51,6 +51,12 @@ export interface ParsedTask {
   rawPrompt: string;
 }
 
+export interface ParsedTaskSequence {
+  tasks: ParsedTask[];
+  language: string;
+  rawPrompt: string;
+}
+
 export interface TripletexListResponse<T> {
   fullResultSize: number;
   from: number;

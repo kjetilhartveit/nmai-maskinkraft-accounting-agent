@@ -11,7 +11,9 @@
     "test:sandbox": "tsx src/scripts/test-sandbox.ts",
     "test:e2e": "tsx src/scripts/test-e2e.ts",
     "eval": "tsx src/scripts/run-eval.ts",
+    "eval:compare": "tsx src/scripts/eval-compare.ts",
     "capture": "tsx src/scripts/capture-run.ts",
+    "ingest": "tsx src/scripts/ingest-prompts.ts",
     "submit": "tsx src/scripts/submit.ts"
   },
   "dependencies": {

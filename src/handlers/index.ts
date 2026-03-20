@@ -1,5 +1,5 @@
 import type { TripletexClient } from "../lib/tripletex-client.js";
-import type { ParsedTask } from "../types/index.js";
+import type { ParsedTask, ParsedTaskSequence } from "../types/index.js";
 import { handleCreateEmployee } from "./create-employee.js";
 import { handleCreateCustomer } from "./create-customer.js";
 import { handleCreateDepartment } from "./create-department.js";
@@ -51,5 +51,17 @@ export async function executeTask(
     console.warn(
       `[Handler] No dedicated handler for task type: ${task.taskType}. Skipping execution.`,
     );
+  }
+}
+
+export async function executeTaskSequence(
+  client: TripletexClient,
+  sequence: ParsedTaskSequence,
+): Promise<void> {
+  console.log(`[Handler] Executing sequence of ${sequence.tasks.length} task(s)`);
+  for (let i = 0; i < sequence.tasks.length; i++) {
+    const task = sequence.tasks[i];
+    console.log(`[Handler] Task ${i + 1}/${sequence.tasks.length}: ${task.taskType}`);
+    await executeTask(client, task);
   }
 }

@@ -1,9 +1,9 @@
 import { Hono } from "hono";
 import { SolveRequestSchema } from "../types/index.js";
-import type { ApiCallLog, ParsedTask, SolveResponse } from "../types/index.js";
+import type { ApiCallLog, ParsedTaskSequence, SolveResponse } from "../types/index.js";
 import { TripletexClient } from "../lib/tripletex-client.js";
 import { parsePrompt, type ParsePromptOptions } from "../lib/llm.js";
-import { executeTask } from "../handlers/index.js";
+import { executeTaskSequence } from "../handlers/index.js";
 import { resetCaches } from "../lib/tripletex-helpers.js";
 import { logSolveRequest, type SolveLogEntry } from "../lib/solve-logger.js";
 
@@ -12,7 +12,7 @@ export const solveRouter = new Hono();
 export interface SolveEvalResponseBody {
   status: "completed";
   success: boolean;
-  parsedTask?: ParsedTask;
+  parsedSequence?: ParsedTaskSequence;
   apiCallStats: {
     total: number;
     errors: number;
@@ -36,7 +36,7 @@ solveRouter.post("/solve", async (c) => {
   const evalMode = c.req.header("X-Eval-Mode") === "true";
   const solveId = `solve-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
   let client: TripletexClient | undefined;
-  let parsedTask: ParsedTask | undefined;
+  let sequence: ParsedTaskSequence | undefined;
   let prompt = "";
   let filesCount = 0;
   let baseUrl = "";
@@ -68,10 +68,11 @@ solveRouter.post("/solve", async (c) => {
     );
 
     const parseOpts = evalMode ? evalParseOptions(c) : undefined;
-    parsedTask = await parsePrompt(prompt, files, parseOpts);
-    console.log(`[Solve] ${solveId} | Parsed task: ${parsedTask.taskType} (${parsedTask.language})`);
+    sequence = await parsePrompt(prompt, files, parseOpts);
+    const taskTypes = sequence.tasks.map((t) => t.taskType).join(" → ");
+    console.log(`[Solve] ${solveId} | Parsed ${sequence.tasks.length} task(s): ${taskTypes} (${sequence.language})`);
 
-    await executeTask(client, parsedTask);
+    await executeTaskSequence(client, sequence);
 
     const elapsed = Math.round(performance.now() - start);
     const stats = client.stats;
@@ -86,7 +87,7 @@ solveRouter.post("/solve", async (c) => {
       prompt,
       filesCount,
       baseUrl,
-      parsedTask,
+      parsedSequence: sequence,
       apiCalls: [...client.calls],
       apiCallStats: stats,
       elapsedMs: elapsed,
@@ -98,7 +99,7 @@ solveRouter.post("/solve", async (c) => {
       const body: SolveEvalResponseBody = {
         status: "completed",
         success: true,
-        parsedTask,
+        parsedSequence: sequence,
         apiCallStats: {
           total: stats.total,
           errors: stats.errors,
@@ -124,7 +125,7 @@ solveRouter.post("/solve", async (c) => {
       prompt,
       filesCount,
       baseUrl,
-      parsedTask,
+      parsedSequence: sequence,
       apiCalls: client ? [...client.calls] : [],
       apiCallStats: stats,
       elapsedMs: elapsed,
@@ -137,7 +138,7 @@ solveRouter.post("/solve", async (c) => {
       const body: SolveEvalResponseBody = {
         status: "completed",
         success: false,
-        parsedTask,
+        parsedSequence: sequence,
         apiCallStats: {
           total: stats.total,
           errors: stats.errors,

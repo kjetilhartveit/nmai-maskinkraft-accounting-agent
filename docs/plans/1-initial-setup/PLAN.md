@@ -49,13 +49,26 @@
   - [x] Created `data/verified/answers.json` with human-verified ground truth for 4 test cases.
   - [x] Identified optimization: department batch creation should use `/department/list` (1 call vs 3).
   - Note: This is a continuous process — we add more verified data as we test more prompts.
-- [ ] Task calls can be complex and consist of multiple tasks. The LLM must place the tasks in order to avoid errors and we must also think of using as few API calls as possible (this gives us a higher score). Our eval system should probably be generic enough so that this can be abstracted between the entire process - including how we parse the prompts, how we translate (in the parse prompt step or a sseparate step?) and so on.
-- [ ] The calls and prompts received from the server must be stored continuously, because we don't know if the connection will be lost during submits. I don't see any prompts/tasks/solves yet so make sure these are stored during submits.
+- [x] Task calls can be complex and consist of multiple tasks. The LLM must place the tasks in order to avoid errors and we must also think of using as few API calls as possible (this gives us a higher score). Our eval system should probably be generic enough so that this can be abstracted between the entire process - including how we parse the prompts, how we translate (in the parse prompt step or a sseparate step?) and so on.
+  - [x] Implemented multi-task prompt support: `parsePrompt` now returns `ParsedTaskSequence` (array of ordered tasks). The LLM is instructed to split complex prompts into dependency-ordered tasks.
+  - [x] Added dependency-aware safety sort (`TASK_PRIORITY` map) to guarantee correct execution order (departments → employees/customers/suppliers → products → orders/projects → invoices → payments).
+  - [x] Updated `executeTaskSequence` to run all tasks in order. Each task uses its own handler.
+  - [x] Eval system supports multi-task test cases via `expectedTaskSequence` field.
+  - [x] Tested with multi-task prompts (e.g. "create department + hire employee") — 3 API calls, 0 errors.
+- [x] The calls and prompts received from the server must be stored continuously, because we don't know if the connection will be lost during submits. I don't see any prompts/tasks/solves yet so make sure these are stored during submits.
   - I do see data in [data/verified/answers.json](../../../data/verified/answers.json) which is great though, but make sure our logger is working. Scouting for prompts we can use in our evals are key.
-  - [ ] We should have a system in place which enables us to improve on the eval system using the new data on prompts/tasks/solves that we gather continuously, and we should probably use LLMs to help us verify the results (more viable for complex tasks) - humans could verify the answers for the easier tasks.
-- [ ] We must ensure that the submits and that the solver is working and that we can connect to the server and send API calls. We must ensure that what are doing is working and then we can take it from there.
-  - [ ] You are encouraged to be active in calling submits and internal e2e tests to ensure the system is working continuously so we can work iteratively. If you need human in the loop, let me know.
-- [ ] Going forward we must see if we can scale up the eval system and that we can run evals in scale and with multiple iterations. We also must make sure it's secure from context pollution.
+  - [x] Verified logger writes to `data/solve-logs/solves.jsonl` and `data/solve-logs/prompts.jsonl` on every request (manual, eval, competition). Both files confirmed working via e2e tests.
+  - [x] We should have a system in place which enables us to improve on the eval system using the new data on prompts/tasks/solves that we gather continuously, and we should probably use LLMs to help us verify the results (more viable for complex tasks) - humans could verify the answers for the easier tasks.
+    - [x] Created `pnpm ingest` script: reads logged prompts, deduplicates against existing test cases, uses LLM to analyze each novel prompt and generate candidate test cases (id, tier, expected entities, optimal API calls, notes). Output is saved to `data/eval-candidates/` for human review before promotion to `src/eval/test-cases.ts`.
+- [x] We must ensure that the submits and that the solver is working and that we can connect to the server and send API calls. We must ensure that what are doing is working and then we can take it from there.
+  - [x] Verified: server starts (`pnpm dev`), health check returns OK, e2e test passes, sandbox API connectivity confirmed (GET /department 200, POST /employee 201 for new entities).
+  - [x] You are encouraged to be active in calling submits and internal e2e tests to ensure the system is working continuously so we can work iteratively. If you need human in the loop, let me know.
+    - Ran e2e tests and eval cases during development. All single-task and multi-task flows confirmed working.
+- [x] Going forward we must see if we can scale up the eval system and that we can run evals in scale and with multiple iterations. We also must make sure it's secure from context pollution.
+  - [x] Added `--iterations N` flag to `pnpm eval` for repeated runs to increase confidence. Each iteration resets caches via the `X-Eval-Mode` header.
+  - [x] Added `--filter` flag to `pnpm eval` to run subsets of test cases.
+  - [x] Created `pnpm eval:compare` script that runs multiple model/prompt configurations side-by-side and prints a comparison table with pass rate, API call count, errors, and latency.
+  - [x] Context pollution prevented: each eval request sends `X-Eval-Mode: true` which resets all cached lookups (department, currency, VAT type, product unit) so each test case runs against a clean state.
   - You are given much freedom and should also communicate to us what you are doing and what you are thinking.
 
 ### Execution of plan

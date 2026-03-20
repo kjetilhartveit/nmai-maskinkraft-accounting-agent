@@ -18,13 +18,13 @@ export function printEvalTable(results: EvalResult[], summary: EvalSummary): voi
   const colMs = 6;
 
   const header =
-    `${pad("case", colId)} ${pad("pass", colOk)} ${pad("parse", colParse)} ${pad("api", colApi)} ${pad("4xx+", colErr)} ${pad("ms", colMs)} task`;
+    `${pad("case", colId)} ${pad("pass", colOk)} ${pad("parse", colParse)} ${pad("api", colApi)} ${pad("4xx+", colErr)} ${pad("ms", colMs)} tasks`;
   console.log(header);
   console.log("-".repeat(header.length));
 
   for (const r of results) {
-    const task = r.parsedTask?.taskType ?? "?";
-    const line = `${pad(r.testCaseId, colId)} ${pad(fmtBool(r.success), colOk)} ${pad(fmtBool(r.parseMatch), colParse)} ${pad(String(r.apiCalls.count), colApi)} ${pad(String(r.apiCalls.errors), colErr)} ${pad(String(r.elapsedMs), colMs)} ${task}`;
+    const taskTypes = r.parsedSequence?.tasks.map((t) => t.taskType).join("→") ?? "?";
+    const line = `${pad(r.testCaseId, colId)} ${pad(fmtBool(r.success), colOk)} ${pad(fmtBool(r.parseMatch), colParse)} ${pad(String(r.apiCalls.count), colApi)} ${pad(String(r.apiCalls.errors), colErr)} ${pad(String(r.elapsedMs), colMs)} ${taskTypes}`;
     console.log(line);
     if (r.error && !r.success) {
       console.log(`  └─ ${r.error.slice(0, 120)}${r.error.length > 120 ? "…" : ""}`);

@@ -2,7 +2,7 @@ import { createOpenAI } from "@ai-sdk/openai";
 import { generateObject } from "ai";
 import { z } from "zod";
 import { config } from "./config.js";
-import type { FileAttachment, ParsedTask, TaskType } from "../types/index.js";
+import type { FileAttachment, ParsedTask, ParsedTaskSequence, TaskType } from "../types/index.js";
 
 const openrouter = createOpenAI({
   baseURL: "https://openrouter.ai/api/v1",
@@ -30,9 +30,13 @@ const TASK_TYPES: TaskType[] = [
   "unknown",
 ];
 
-const ParsedTaskSchema = z.object({
+const TaskSchema = z.object({
   taskType: z.enum(TASK_TYPES as [string, ...string[]]),
   entities: z.array(z.record(z.unknown())),
+});
+
+const ParsedResponseSchema = z.object({
+  tasks: z.array(TaskSchema).min(1),
   language: z.string(),
 });
 
@@ -40,9 +44,10 @@ const SYSTEM_PROMPT = `You are an expert accounting task parser for the Norwegia
 You receive a task prompt (potentially in Norwegian, Nynorsk, English, Spanish, Portuguese, German, or French) and must extract structured information.
 
 Your job is to:
-1. Identify the task type from the list of known types.
-2. Extract all entities and their field values mentioned in the prompt.
+1. Identify ALL task types needed to fulfil the prompt. A single prompt may require multiple sequential operations.
+2. Extract all entities and their field values for each task.
 3. Detect the language of the prompt.
+4. Order tasks so dependencies come first (e.g. create a customer before creating an invoice for that customer).
 
 Task types and their entity fields:
 
@@ -66,15 +71,16 @@ Task types and their entity fields:
 
 Rules:
 - All dates must be in YYYY-MM-DD format. Infer from context or use today if not given.
-- For multiple entities (e.g. "create three departments"), return each as a separate entity in the array.
+- For multiple entities of the same type (e.g. "create three departments"), return ONE task with each entity in the array.
 - For orders: first entity = order metadata, additional entities = product lines.
 - For vouchers: first entity = voucher metadata, additional entities = posting lines.
-- Extract ALL field values mentioned. Use English field names.`;
+- Extract ALL field values mentioned. Use English field names.
+- If the prompt involves a chain of operations (e.g. "create a customer and send them an invoice"), return multiple tasks in the correct execution order.
+- IMPORTANT: Reuse references between tasks. If you create a customer "Acme Ltd" and then create an invoice for them, use the same customerName "Acme Ltd" in both tasks.`;
 
-/** Optional shorter system prompt for A/B testing prompt variants. */
-const SYSTEM_PROMPT_MINIMAL = `You parse Tripletex accounting prompts into JSON: task type, entities (English field names), and prompt language.
+const SYSTEM_PROMPT_MINIMAL = `You parse Tripletex accounting prompts into JSON: tasks array (each with taskType and entities), and prompt language.
 Known task types: create_employee, update_employee, create_customer, update_customer, create_product, create_department, create_invoice, send_invoice, create_payment, create_credit_note, create_order, create_travel_expense, delete_travel_expense, create_project, create_voucher, create_supplier, unknown.
-Return one entity per distinct object (e.g. each department separately).`;
+Return one entity per distinct object (e.g. each department separately). For multi-step operations, return multiple tasks in dependency order.`;
 
 export const SYSTEM_PROMPT_VARIANTS = {
   default: SYSTEM_PROMPT,
@@ -96,11 +102,39 @@ function resolveSystemPrompt(variant?: string): string {
   return SYSTEM_PROMPT_VARIANTS[key] ?? SYSTEM_PROMPT_VARIANTS.default;
 }
 
+const TASK_PRIORITY: Record<string, number> = {
+  create_department: 0,
+  create_employee: 1,
+  create_customer: 1,
+  create_supplier: 1,
+  update_employee: 2,
+  update_customer: 2,
+  create_product: 2,
+  create_order: 3,
+  create_project: 3,
+  create_voucher: 3,
+  create_travel_expense: 3,
+  create_invoice: 4,
+  send_invoice: 4,
+  delete_travel_expense: 4,
+  create_payment: 5,
+  create_credit_note: 5,
+  unknown: 99,
+};
+
+function sortByDependency(tasks: ParsedTask[]): ParsedTask[] {
+  return [...tasks].sort((a, b) => {
+    const pa = TASK_PRIORITY[a.taskType] ?? 50;
+    const pb = TASK_PRIORITY[b.taskType] ?? 50;
+    return pa - pb;
+  });
+}
+
 export async function parsePrompt(
   prompt: string,
   files: FileAttachment[] = [],
   options?: ParsePromptOptions,
-): Promise<ParsedTask> {
+): Promise<ParsedTaskSequence> {
   const userContent = buildUserMessage(prompt, files);
   const modelId = options?.model ?? config.openrouter.model;
   const system = resolveSystemPrompt(options?.systemPromptVariant);
@@ -108,19 +142,28 @@ export async function parsePrompt(
   const start = performance.now();
   const { object } = await generateObject({
     model: openrouter(modelId),
-    schema: ParsedTaskSchema,
+    schema: ParsedResponseSchema,
     system,
     prompt: userContent,
   });
   const durationMs = Math.round(performance.now() - start);
 
+  const tasks: ParsedTask[] = object.tasks.map((t) => ({
+    taskType: t.taskType as TaskType,
+    entities: t.entities,
+    language: object.language,
+    rawPrompt: prompt,
+  }));
+
+  const sorted = sortByDependency(tasks);
+
+  const taskTypes = sorted.map((t) => t.taskType).join(" → ");
   console.log(
-    `[LLM] Parsed task: ${object.taskType} (${object.language}) in ${durationMs}ms`,
+    `[LLM] Parsed ${sorted.length} task(s): ${taskTypes} (${object.language}) in ${durationMs}ms`,
   );
 
   return {
-    taskType: object.taskType as TaskType,
-    entities: object.entities,
+    tasks: sorted,
     language: object.language,
     rawPrompt: prompt,
   };

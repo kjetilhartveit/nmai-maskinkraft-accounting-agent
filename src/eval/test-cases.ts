@@ -104,4 +104,56 @@ export const testCases: TestCase[] = [
     ],
     expectedApiCalls: { max: 12, maxErrors: 0 },
   },
+
+  // Multi-task test cases
+  {
+    id: "multi-customer-invoice-no",
+    prompt:
+      'Opprett kunden Nordbyen AS med organisasjonsnummer 923456789 og e-post post@nordbyen.no. Deretter, lag og send en faktura til dem for "Konsulenttjenester" på 15000 NOK eks. mva.',
+    language: "no",
+    tier: 3,
+    taskType: "create_customer",
+    expectedEntities: [
+      {
+        name: "Nordbyen AS",
+        organizationNumber: "923456789",
+        email: "post@nordbyen.no",
+      },
+    ],
+    expectedTaskSequence: [
+      {
+        taskType: "create_customer",
+        entities: [{ name: "Nordbyen AS", organizationNumber: "923456789" }],
+      },
+      {
+        taskType: "send_invoice",
+        entities: [{ customerName: "Nordbyen AS" }],
+      },
+    ],
+    expectedApiCalls: { max: 50, maxErrors: 2 },
+    notes: "Multi-task: create customer then send invoice. Tests dependency ordering.",
+  },
+  {
+    id: "multi-dept-employee-en",
+    prompt:
+      'Create a department called "Engineering" and then hire employee Lars Olsen (lars.olsen@example.com) into it.',
+    language: "en",
+    tier: 2,
+    taskType: "create_department",
+    expectedEntities: [
+      { name: "Engineering" },
+    ],
+    expectedTaskSequence: [
+      {
+        taskType: "create_department",
+        entities: [{ name: "Engineering" }],
+      },
+      {
+        taskType: "create_employee",
+        entities: [{ firstName: "Lars", lastName: "Olsen" }],
+      },
+    ],
+    expectedApiCalls: { max: 15, maxErrors: 0 },
+    notes: "Multi-task: create department, then create employee.",
+  },
 ];

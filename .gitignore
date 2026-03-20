@@ -3,6 +3,7 @@ node_modules/
 dist/
 docs/reports/tripletex-openapi.json
 data/captures/
+data/eval-candidates/
 data/solve-logs/
 
 # Claude

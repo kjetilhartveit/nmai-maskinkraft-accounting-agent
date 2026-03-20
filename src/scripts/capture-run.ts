@@ -1,6 +1,7 @@
 import "dotenv/config";
-import { writeFileSync, existsSync, readFileSync, mkdirSync } from "fs";
+import { writeFileSync, existsSync, mkdirSync } from "fs";
 import { join } from "path";
+import type { ParsedTaskSequence } from "../types/index.js";
 
 const SERVER_URL = process.env.SERVER_URL || "http://localhost:3000";
 const CAPTURES_DIR = join(import.meta.dirname, "../../data/captures");
@@ -10,11 +11,7 @@ interface CaptureResult {
   prompt: string;
   timestamp: string;
   model: string;
-  parsedTask?: {
-    taskType: string;
-    entities: Record<string, unknown>[];
-    language: string;
-  };
+  parsedSequence?: ParsedTaskSequence;
   apiCalls: {
     total: number;
     errors: number;
@@ -62,7 +59,7 @@ async function captureRun(
     prompt,
     timestamp: new Date().toISOString(),
     model: process.env.OPENROUTER_MODEL || "anthropic/claude-sonnet-4.6",
-    parsedTask: body.parsedTask as CaptureResult["parsedTask"],
+    parsedSequence: body.parsedSequence as ParsedTaskSequence | undefined,
     apiCalls: (body.apiCallStats as CaptureResult["apiCalls"]) ?? {
       total: 0,
       errors: 0,
@@ -82,7 +79,7 @@ async function main() {
   const prompt = process.argv.slice(2).filter((a) => a !== "--").join(" ");
   if (!prompt) {
     console.log("Usage: pnpm capture \"<prompt>\"");
-    console.log("  Captures the full solve result (parsed task + API calls) for review.");
+    console.log("  Captures the full solve result (parsed task sequence + API calls) for review.");
     console.log("  Results are saved to data/captures/ as JSONL.");
     process.exit(1);
   }
@@ -97,10 +94,13 @@ async function main() {
 
   writeFileSync(outFile, line, { flag: "a" });
 
+  const tasks = result.parsedSequence?.tasks ?? [];
   console.log(`\nResult:`);
-  console.log(`  Task type: ${result.parsedTask?.taskType ?? "?"}`);
-  console.log(`  Language: ${result.parsedTask?.language ?? "?"}`);
-  console.log(`  Entities: ${JSON.stringify(result.parsedTask?.entities ?? [], null, 2)}`);
+  console.log(`  Tasks: ${tasks.length}`);
+  for (const t of tasks) {
+    console.log(`    - ${t.taskType}: ${JSON.stringify(t.entities)}`);
+  }
+  console.log(`  Language: ${result.parsedSequence?.language ?? "?"}`);
   console.log(`  API calls: ${result.apiCalls.total} (${result.apiCalls.errors} errors)`);
   console.log(`  Success: ${result.success}`);
   if (result.error) console.log(`  Error: ${result.error}`);

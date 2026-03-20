@@ -1,4 +1,4 @@
-import type { ParsedTask, TaskType } from "../types/index.js";
+import type { ParsedTaskSequence, TaskType } from "../types/index.js";
 import type { TestCase } from "./types.js";
 
 function norm(v: unknown): string {
@@ -74,9 +74,28 @@ export function allowedTaskTypes(tc: TestCase): TaskType[] {
   return [...new Set(base)];
 }
 
-export function taskTypeMatches(tc: TestCase, task: ParsedTask | undefined): boolean {
-  if (!task) return false;
-  return allowedTaskTypes(tc).includes(task.taskType);
+export function taskTypeMatches(tc: TestCase, sequence: ParsedTaskSequence | undefined): boolean {
+  if (!sequence || sequence.tasks.length === 0) return false;
+
+  if (tc.expectedTaskSequence) {
+    return sequenceTaskTypesMatch(tc, sequence);
+  }
+
+  const allowed = allowedTaskTypes(tc);
+  return sequence.tasks.some((t) => allowed.includes(t.taskType));
+}
+
+function sequenceTaskTypesMatch(tc: TestCase, sequence: ParsedTaskSequence): boolean {
+  const expected = tc.expectedTaskSequence!;
+  if (sequence.tasks.length < expected.length) return false;
+
+  for (let i = 0; i < expected.length; i++) {
+    const matchIdx = sequence.tasks.findIndex(
+      (t, j) => j >= i && t.taskType === expected[i].taskType,
+    );
+    if (matchIdx === -1) return false;
+  }
+  return true;
 }
 
 const LANGUAGE_ALIASES: Record<string, string[]> = {
@@ -96,9 +115,27 @@ function normalizeLanguage(lang: string): string {
   return l;
 }
 
-export function languageMatches(tc: TestCase, task: ParsedTask | undefined): boolean {
-  if (!task) return false;
-  return normalizeLanguage(task.language) === normalizeLanguage(tc.language);
+export function languageMatches(tc: TestCase, sequence: ParsedTaskSequence | undefined): boolean {
+  if (!sequence) return false;
+  return normalizeLanguage(sequence.language) === normalizeLanguage(tc.language);
+}
+
+export function sequenceEntitiesMatch(tc: TestCase, sequence: ParsedTaskSequence | undefined): boolean {
+  if (!sequence) return false;
+
+  if (tc.expectedTaskSequence) {
+    for (const expectedTask of tc.expectedTaskSequence) {
+      const matchingTask = sequence.tasks.find((t) => t.taskType === expectedTask.taskType);
+      if (!matchingTask) return false;
+      if (!entitiesMatch(matchingTask.entities as Record<string, unknown>[], expectedTask.entities)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  const allEntities = sequence.tasks.flatMap((t) => t.entities as Record<string, unknown>[]);
+  return entitiesMatch(allEntities, tc.expectedEntities);
 }
 
 export function apiBoundsSatisfied(
