@@ -1,0 +1,31 @@
+src/handlers/create-project.ts
+  337de63860b9f879 56-57,62-63,66-69
+src/routes/solve.ts
+  337de63860b9f879 8-9,56-57
+src/handlers/create-travel-expense.ts
+  337de63860b9f879 13-16,44,53-54,57
+src/handlers/create-payment.ts
+  337de63860b9f879 63-64,66,71-74,78-79,85,111-114,116-119,128-129
+src/handlers/create-order.ts
+  337de63860b9f879 88-97,99-101,104
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.15",
+  "base_commit_sha": "8435b67f477bf8871c51b5e356ee3e21a39d549c",
+  "prompts": {
+    "337de63860b9f879": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "60fea3ea-ce92-4f94-9618-02d2df3eb3db",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Kjetil Hårtveit <kjetil_runescape@hotmail.com>",
+      "messages": [],
+      "total_additions": 67,
+      "total_deletions": 28,
+      "accepted_lines": 56,
+      "overriden_lines": 0
+    }
+  }
+}
