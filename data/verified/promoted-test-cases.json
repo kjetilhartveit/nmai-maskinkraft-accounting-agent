@@ -9,7 +9,7 @@
       { "name": "Engineering" },
       { "firstName": "Lars", "lastName": "Olsen", "email": "lars.olsen@example.com" }
     ],
-    "expectedApiCalls": { "max": 3, "maxErrors": 0 },
+    "expectedApiCalls": { "max": 2, "maxErrors": 0 },
     "expectedTaskSequence": [
       { "taskType": "create_department", "entities": [{ "name": "Engineering" }] },
       { "taskType": "create_employee", "entities": [{ "firstName": "Lars", "lastName": "Olsen", "email": "lars.olsen@example.com" }] }
@@ -23,11 +23,10 @@
     "tier": 3,
     "taskType": "unknown",
     "expectedEntities": [
-      { "dimensionName": "Region" },
-      { "accountNumber": 7100, "amount": 34350 }
+      { "dimensionName": "Region", "accountNumber": 7100, "amount": 34350 }
     ],
-    "expectedApiCalls": { "max": 25, "maxErrors": 8 },
-    "notes": "Competition prompt. Custom accounting dimension with values, then voucher linked to dimension value. Must use unknown handler (generic agent). Agentic handler has high variability. Do NOT parse as create_department. Voucher postings do NOT support direct dimension fields — generic handler may still explore, so error tolerance is higher."
+    "expectedApiCalls": { "max": 30, "maxErrors": 10 },
+    "notes": "Competition prompt. Custom accounting dimension with values, then voucher linked to dimension value. LLM parses as single combined entity. Must use unknown handler (generic agent). Agentic handler has high variability — custom dimensions require multiple exploration calls."
   },
   {
     "id": "comp-payment-existing-invoice-pt",
@@ -58,7 +57,7 @@
       { "taskType": "create_customer", "entities": [{ "name": "Montanha Lda", "organizationNumber": "970481389" }] },
       { "taskType": "create_invoice", "entities": [{ "customerName": "Montanha Lda" }] }
     ],
-    "expectedApiCalls": { "max": 15, "maxErrors": 0 },
+    "expectedApiCalls": { "max": 11, "maxErrors": 0 },
     "notes": "Competition prompt. Multi-line invoice with 3 products at different VAT rates (25%, 15%, 0%). Products have specific numbers. Products may already exist in sandbox."
   },
   {

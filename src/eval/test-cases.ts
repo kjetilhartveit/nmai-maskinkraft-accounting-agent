@@ -171,7 +171,7 @@ const manualTestCases: TestCase[] = [
         entities: [{ firstName: "Lars", lastName: "Olsen" }],
       },
     ],
-    expectedApiCalls: { max: 3, maxErrors: 0 },
+    expectedApiCalls: { max: 2, maxErrors: 0 },
     notes: "Multi-task: create department, then create employee. Fresh sandbox: POST dept + GET employee (dedup) + POST employee = 3. Dirty sandbox: 2 (employee already exists).",
   },
 ];
