@@ -114,7 +114,11 @@
     - System prompt: added amount field extraction for invoice tasks
     - Eval system: tests pass when parse matches and errors are within expected bounds
     - Test cases: use `expectedTaskSequence` for proper multi-task entity matching
-  - **Sandbox limitations documented:** Invoice creation requires company bank account; project creation requires employee with project manager entitlements. Test cases allow 1 error for these cases.
+  - **Root causes identified and resolved:**
+    - Invoice creation: Required configured bank account on ledger account 1920. Added `ensureBankAccountConfigured` helper that automatically sets up valid Norwegian bank number (MOD11 validated).
+    - Invoice send: `sendType` was being sent as body param instead of query param. Fixed.
+    - Project creation: Project manager must have special entitlements. Added `getProjectManagerEmployeeId` helper that uses first employee (sandbox admin) who has the rights.
+  - **Result: 10/10 tests pass with 0 API errors.**
 
 ### Execution of plan
 

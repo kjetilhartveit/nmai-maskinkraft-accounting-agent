@@ -56,8 +56,8 @@ const manualTestCases: TestCase[] = [
       { taskType: "create_customer", entities: [{ name: "Porto Alegre Lda", organizationNumber: "842889154" }] },
       { taskType: "send_invoice", entities: [{ customerName: "Porto Alegre Lda", amount: 11200 }] },
     ],
-    expectedApiCalls: { max: 40, maxErrors: 1 },
-    notes: "Invoice may fail if sandbox lacks bank account. Dev sandbox limitation.",
+    expectedApiCalls: { max: 40, maxErrors: 0 },
+    notes: "Multi-task: create customer then send invoice.",
   },
   {
     id: "project-de-wind",
@@ -75,8 +75,8 @@ const manualTestCases: TestCase[] = [
       { taskType: "create_employee", entities: [{ firstName: "Finn", lastName: "Richter" }] },
       { taskType: "create_project", entities: [{ name: "Analyse Windkraft", customerName: "Windkraft GmbH" }] },
     ],
-    expectedApiCalls: { max: 40, maxErrors: 1 },
-    notes: "Project may fail if employee lacks project manager entitlements. Dev sandbox limitation.",
+    expectedApiCalls: { max: 40, maxErrors: 0 },
+    notes: "Multi-task: create customer + employee, then project. Uses sandbox admin as project manager.",
   },
   {
     id: "invoice-de-waldstein",
@@ -94,8 +94,8 @@ const manualTestCases: TestCase[] = [
       { taskType: "create_customer", entities: [{ name: "Waldstein GmbH", organizationNumber: "925346519" }] },
       { taskType: "send_invoice", entities: [{ customerName: "Waldstein GmbH", amount: 25100 }] },
     ],
-    expectedApiCalls: { max: 40, maxErrors: 1 },
-    notes: "Invoice may fail if sandbox lacks bank account. Dev sandbox limitation.",
+    expectedApiCalls: { max: 40, maxErrors: 0 },
+    notes: "Multi-task: create customer then send invoice.",
   },
   {
     id: "dept-no-triple",
