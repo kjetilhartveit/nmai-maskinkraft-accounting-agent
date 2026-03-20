@@ -165,13 +165,14 @@ export async function handleCreatePayment(
   // Get payment type
   const paymentTypeId = await getPaymentTypeId(client);
 
-  // Determine payment amount
+  // For full payment, use the invoice's outstanding amount (includes VAT)
+  // The prompt amount is typically ex-VAT, but we need to pay the full balance
   const paidAmount =
-    rawAmount ||
     invoice.amountOutstanding ||
     invoice.amountCurrencyOutstanding ||
     invoice.amount ||
-    invoice.amountCurrency;
+    invoice.amountCurrency ||
+    rawAmount;
 
   console.log(
     `[Handler] Registering payment: invoice=${invoice.id}, amount=${paidAmount}, date=${paymentDate}, paymentType=${paymentTypeId}`,
