@@ -1,0 +1,27 @@
+src/scripts/sync-prompts.ts
+  d91601c1fe501d80 1-170
+package.json
+  d91601c1fe501d80 21-22
+docs/plans/2-fine-tuning/PLAN.md
+  d91601c1fe501d80 59-60
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.15",
+  "base_commit_sha": "bd846600e624be2a6b75e077d055e283293384e6",
+  "prompts": {
+    "d91601c1fe501d80": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "63581a81-3d65-4a75-ae43-17f770ae8bc8",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Kjetil Hårtveit <kjetil_runescape@hotmail.com>",
+      "messages": [],
+      "total_additions": 216,
+      "total_deletions": 44,
+      "accepted_lines": 174,
+      "overriden_lines": 0
+    }
+  }
+}
