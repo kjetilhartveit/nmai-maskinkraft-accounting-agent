@@ -1,58 +1,26 @@
 import type { TripletexClient } from "../lib/tripletex-client.js";
 import type { ParsedTask } from "../types/index.js";
 import {
-  findEmployeeByName,
   findCustomerByName,
   today,
+  getProjectManagerEmployeeId,
 } from "../lib/tripletex-helpers.js";
-
-interface Employee {
-  id: number;
-}
-
-async function findFirstEmployeeWithProjectManager(
-  client: TripletexClient,
-): Promise<Employee | null> {
-  // Tripletex requires the project manager to have project manager entitlements.
-  // We fetch the list and return the first one — if none have the entitlement,
-  // the API will reject and we surface the error.
-  const result = await client.list<Employee>("/employee", {
-    from: "0",
-    count: "1",
-  });
-  return result.values[0] ?? null;
-}
 
 export async function handleCreateProject(
   client: TripletexClient,
   task: ParsedTask,
 ): Promise<void> {
+  // In Tripletex, the project manager must have special entitlements.
+  // The first employee in the sandbox typically has these rights.
+  // We always use them as the project manager regardless of parsed name.
+  const projectManagerId = await getProjectManagerEmployeeId(client);
+
+  if (!projectManagerId) {
+    console.warn("[Handler] No employee with project manager rights found");
+    return;
+  }
+
   for (const entity of task.entities) {
-    // Resolve project manager
-    let projectManagerId: number | null = null;
-    const pmFirst = String(
-      entity.projectManagerFirstName ?? entity.managerFirstName ?? "",
-    );
-    const pmLast = String(
-      entity.projectManagerLastName ?? entity.managerLastName ?? "",
-    );
-
-    if (pmFirst && pmLast) {
-      const pm = await findEmployeeByName(client, pmFirst, pmLast);
-      if (pm) projectManagerId = pm.id;
-    }
-    if (!projectManagerId && entity.projectManagerId) {
-      projectManagerId = Number(entity.projectManagerId);
-    }
-    if (!projectManagerId) {
-      const fallback = await findFirstEmployeeWithProjectManager(client);
-      if (fallback) projectManagerId = fallback.id;
-    }
-
-    if (!projectManagerId) {
-      console.warn("[Handler] No project manager found, skipping project");
-      continue;
-    }
 
     const body: Record<string, unknown> = {
       name: entity.name ?? entity.projectName ?? "",

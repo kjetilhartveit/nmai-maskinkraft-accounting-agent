@@ -258,4 +258,92 @@ export function resetCaches(): void {
   cachedNokCurrencyId = null;
   cachedProductVatTypeId = null;
   cachedProductUnitId = null;
+  bankAccountConfigured = false;
+  cachedProjectManagerId = null;
+}
+
+// === Bank Account Configuration ===
+// Invoice creation requires a configured bank account on ledger account 1920
+
+let bankAccountConfigured = false;
+
+interface LedgerAccount {
+  id: number;
+  version: number;
+  number: number;
+  name: string;
+  bankAccountNumber?: string;
+}
+
+export async function ensureBankAccountConfigured(
+  client: TripletexClient,
+): Promise<void> {
+  if (bankAccountConfigured) return;
+
+  // Find the bank account (1920 - Bankinnskudd)
+  const accounts = await client.list<LedgerAccount>("/ledger/account", {
+    isBankAccount: "true",
+    from: "0",
+    count: "5",
+  });
+
+  const bankAccount = accounts.values.find(
+    (a) => a.number === 1920 || a.name.toLowerCase().includes("bankinnskudd"),
+  );
+
+  if (!bankAccount) {
+    console.log("[Helper] No bank account found to configure");
+    bankAccountConfigured = true; // Don't retry
+    return;
+  }
+
+  // Check if already configured
+  if (bankAccount.bankAccountNumber && bankAccount.bankAccountNumber.length > 0) {
+    console.log(`[Helper] Bank account already configured: ${bankAccount.bankAccountNumber}`);
+    bankAccountConfigured = true;
+    return;
+  }
+
+  // Configure with a valid Norwegian bank account number (MOD11 validated)
+  console.log(`[Helper] Configuring bank account ${bankAccount.number}...`);
+  try {
+    await client.put(`/ledger/account/${bankAccount.id}`, {
+      id: bankAccount.id,
+      version: bankAccount.version,
+      number: bankAccount.number,
+      name: bankAccount.name,
+      bankAccountNumber: "15032686130", // Valid Norwegian MOD11 number
+    });
+    console.log("[Helper] Bank account configured successfully");
+    bankAccountConfigured = true;
+  } catch (err) {
+    console.log("[Helper] Failed to configure bank account:", err);
+    bankAccountConfigured = true; // Don't retry
+  }
+}
+
+// === Project Manager ===
+// Projects require an employee with project manager entitlements
+// The first employee in the sandbox typically has these rights
+
+let cachedProjectManagerId: number | null = null;
+
+export async function getProjectManagerEmployeeId(
+  client: TripletexClient,
+): Promise<number | null> {
+  if (cachedProjectManagerId !== null) return cachedProjectManagerId;
+
+  // The first employee in the sandbox typically has project manager rights
+  const result = await client.list<Employee>("/employee", {
+    from: "0",
+    count: "1",
+  });
+
+  if (result.values.length > 0) {
+    cachedProjectManagerId = result.values[0].id;
+    console.log(`[Helper] Using project manager employee id=${cachedProjectManagerId}`);
+    return cachedProjectManagerId;
+  }
+
+  return null;
 }

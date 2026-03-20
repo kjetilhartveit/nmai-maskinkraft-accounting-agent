@@ -5,6 +5,7 @@ import {
   daysFromNow,
   findCustomerByName,
   findOrCreateProduct,
+  ensureBankAccountConfigured,
 } from "../lib/tripletex-helpers.js";
 
 interface Order {
@@ -83,6 +84,9 @@ export async function handleCreateInvoice(
   task: ParsedTask,
   sendAfterCreate = false,
 ): Promise<void> {
+  // Ensure bank account is configured (required for invoice creation)
+  await ensureBankAccountConfigured(client);
+
   const entity = task.entities[0] ?? {};
 
   const invoiceDate = String(entity.invoiceDate ?? entity.date ?? today());
@@ -142,9 +146,8 @@ export async function handleCreateInvoice(
   console.log(`[Handler] Created invoice: id=${invoiceId}`);
 
   if (sendAfterCreate) {
-    await client.put(`/invoice/${invoiceId}/:send`, {
-      sendType: "EMAIL",
-    });
+    // sendType is a query parameter, not body
+    await client.put(`/invoice/${invoiceId}/:send?sendType=EMAIL`, {});
     console.log(`[Handler] Sent invoice: id=${invoiceId}`);
   }
 }
