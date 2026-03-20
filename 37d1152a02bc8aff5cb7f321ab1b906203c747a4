@@ -1,0 +1,29 @@
+src/lib/llm.ts
+  337de63860b9f879 55-56
+src/handlers/update-employee.ts
+  337de63860b9f879 33-38,41
+src/handlers/create-employee.ts
+  337de63860b9f879 22-27,30
+src/handlers/create-project.ts
+  337de63860b9f879 6-7,12-49,56
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.15",
+  "base_commit_sha": "37d1152a02bc8aff5cb7f321ab1b906203c747a4",
+  "prompts": {
+    "337de63860b9f879": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "60fea3ea-ce92-4f94-9618-02d2df3eb3db",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Kjetil Hårtveit <kjetil_runescape@hotmail.com>",
+      "messages": [],
+      "total_additions": 258,
+      "total_deletions": 206,
+      "accepted_lines": 88,
+      "overriden_lines": 0
+    }
+  }
+}
