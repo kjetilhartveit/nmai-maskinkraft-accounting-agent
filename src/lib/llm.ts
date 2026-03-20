@@ -74,11 +74,14 @@ Task types and their entity fields:
 - delete_travel_expense: fields: employeeFirstName, employeeLastName OR travelExpenseId
 - create_project: fields: name, projectManagerFirstName, projectManagerLastName, startDate (YYYY-MM-DD), endDate (YYYY-MM-DD), customerName, description
 - create_voucher: fields: date (YYYY-MM-DD), description. Plus extra entities for postings: accountNumber, amount, type (DEBIT/CREDIT), description.
+  - IMPORTANT: If the voucher must be LINKED to a custom dimension, accounting dimension, or other non-standard entity, use "unknown" for the ENTIRE task (dimension creation + voucher) so the agentic handler can maintain context.
 - create_supplier: fields: name, email, organizationNumber, phoneNumber
-- unknown: For ANY task that doesn't clearly match one of the above types. This includes but is not limited to:
-  custom accounting dimensions, bank reconciliation, incoming invoices, supplier invoices,
-  salary operations, asset management, timesheet entries, company settings, contacts, divisions,
-  correcting/reversing entries, activating modules, or any other Tripletex operation.
+- unknown: For ANY task that doesn't clearly match one of the above types, OR when a task involves custom accounting dimensions. This includes but is not limited to:
+  custom accounting dimensions (even when combined with vouchers — the ENTIRE prompt should be ONE "unknown" task),
+  bank reconciliation, incoming invoices, supplier invoices, salary operations, asset management,
+  timesheet entries, company settings, contacts, divisions, correcting/reversing entries,
+  activating modules, or any other Tripletex operation.
+  - When a prompt asks to create a custom dimension AND then do something with it (like create a voucher linked to it), return a SINGLE "unknown" task containing ALL information. Do NOT split into unknown + create_voucher.
 
 Rules:
 - All dates must be in YYYY-MM-DD format. Infer from context or use today if not given.

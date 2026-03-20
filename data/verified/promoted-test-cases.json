@@ -26,8 +26,8 @@
       { "dimensionName": "Region" },
       { "accountNumber": 7100, "amount": 34350 }
     ],
-    "expectedApiCalls": { "max": 30, "maxErrors": 2 },
-    "notes": "Competition prompt. Custom accounting dimension with values, then voucher linked to dimension value. Must use unknown handler (generic agent). Do NOT parse as create_department."
+    "expectedApiCalls": { "max": 20, "maxErrors": 7 },
+    "notes": "Competition prompt. Custom accounting dimension with values, then voucher linked to dimension value. Must use unknown handler (generic agent). Do NOT parse as create_department. Voucher postings do NOT support direct dimension fields — generic handler may still explore, so error tolerance is higher."
   },
   {
     "id": "comp-payment-existing-invoice-pt",

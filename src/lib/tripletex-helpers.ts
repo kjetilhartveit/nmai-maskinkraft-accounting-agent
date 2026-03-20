@@ -298,25 +298,31 @@ export async function findOrCreateProduct(
     getDefaultProductUnitId(client),
   ]);
 
-  const resolvedVatTypeId = vatTypeId ?? await getDefaultProductVatTypeId(client);
-
   const body: Record<string, unknown> = {
     name,
     priceExcludingVatCurrency: unitPriceExcVat,
-    vatType: { id: resolvedVatTypeId },
     department: { id: departmentId },
     productUnit: { id: unitId },
   };
+
+  if (vatTypeId) {
+    body.vatType = { id: vatTypeId };
+  }
 
   try {
     const created = await client.post<Product>("/product", body);
     console.log(`[Helper] Created product: ${name} (id=${created.value.id})`);
     return created.value;
   } catch {
-    // Retry without VAT type in case it causes issues
-    delete body.vatType;
+    // If VAT type was specified, retry without it; otherwise try default VAT
+    if (vatTypeId) {
+      delete body.vatType;
+    } else {
+      const defaultVatTypeId = await getDefaultProductVatTypeId(client);
+      body.vatType = { id: defaultVatTypeId };
+    }
     const created = await client.post<Product>("/product", body);
-    console.log(`[Helper] Created product (no VAT): ${name} (id=${created.value.id})`);
+    console.log(`[Helper] Created product (fallback): ${name} (id=${created.value.id})`);
     return created.value;
   }
 }

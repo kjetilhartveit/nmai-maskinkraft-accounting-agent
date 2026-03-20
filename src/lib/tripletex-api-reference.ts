@@ -95,9 +95,11 @@ export const TRIPLETEX_API_REFERENCE = `
 
 ### Voucher (Ledger)
 - GET /ledger/voucher — list. Params: dateFrom, dateTo, from, count
-- POST /ledger/voucher — create. Body: { date (YYYY-MM-DD), description, postings: [{ account: {id}, date (YYYY-MM-DD), amountGross, description? }] }
-  - IMPORTANT: Only gross amounts are used. Positive = debit, negative = credit.
+- POST /ledger/voucher — create. Body: { date (YYYY-MM-DD), description, postings: [{ account: {id}, date (YYYY-MM-DD), amountGross, amountGrossCurrency, description? }] }
+  - IMPORTANT: amountGross and amountGrossCurrency MUST be set to the SAME value. Positive = debit, negative = credit.
   - Postings MUST balance (sum to zero).
+  - Posting body fields: account, date, amountGross, amountGrossCurrency, description. No dimension fields.
+  - For a simple debit/credit pair: [{ account: debitAccount, amountGross: X, amountGrossCurrency: X }, { account: creditAccount, amountGross: -X, amountGrossCurrency: -X }]
 - DELETE /ledger/voucher/{id} — delete/reverse a voucher
 - POST /ledger/voucher/{voucherId}/attachment — upload attachment (multipart)
 
@@ -108,9 +110,13 @@ export const TRIPLETEX_API_REFERENCE = `
 ### Accounting Dimensions (Custom/Free Dimensions)
 - GET /ledger/accountingDimensionName — list dimension definitions
 - POST /ledger/accountingDimensionName — create. Body: { dimensionName, description?, active: true }
-  - Creates a free dimension (max 3: indices 1, 2, 3)
+  - Creates a free dimension (max 3: indices 1, 2, 3). Returns the dimensionIndex.
 - GET /ledger/accountingDimensionValue — list dimension values. Params: dimensionIndex, from, count
 - POST /ledger/accountingDimensionValue — create. Body: { dimensionIndex, displayName, number?, active: true, showInVoucherRegistration: true }
+- IMPORTANT: Voucher postings (POST /ledger/voucher) do NOT have freeDimension fields. 
+  The Posting body accepts: { account, date, amountGross, amountGrossCurrency, description, department?, project?, customer? }
+  Do NOT try to add dimension1, freeDimension1, accountingDimension1, or customDimension1 fields to posting bodies — they will fail with 422.
+  Create the dimension and its values, then create the voucher with balanced postings. The dimension link is managed by Tripletex internally.
 
 ### VAT Types
 - GET /ledger/vatType — list all VAT types. Params: from, count

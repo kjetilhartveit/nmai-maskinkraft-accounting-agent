@@ -66,10 +66,12 @@ export async function handleCreateVoucher(
     const amount = Number(posting.amount ?? 0);
     const type = String(posting.type ?? posting.debitCredit ?? "DEBIT").toUpperCase();
 
+    const gross = type === "DEBIT" ? Math.abs(amount) : -Math.abs(amount);
     postings.push({
       account: { id: account.id },
       date: voucherDate,
-      amountGross: type === "DEBIT" ? Math.abs(amount) : -Math.abs(amount),
+      amountGross: gross,
+      amountGrossCurrency: gross,
       description: String(posting.description ?? description),
     });
   }
