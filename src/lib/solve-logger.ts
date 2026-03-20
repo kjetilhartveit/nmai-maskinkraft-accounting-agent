@@ -1,8 +1,5 @@
-import { writeFileSync, mkdirSync, existsSync } from "fs";
-import { join } from "path";
+import db from "./db.js";
 import type { ApiCallLog, ParsedTaskSequence } from "../types/index.js";
-
-const LOGS_DIR = join(import.meta.dirname, "../../data/solve-logs");
 
 export interface RawRequestLogEntry {
   id: string;
@@ -13,9 +10,15 @@ export interface RawRequestLogEntry {
 
 export function logRawRequest(entry: RawRequestLogEntry): void {
   try {
-    ensureLogsDir();
-    const file = join(LOGS_DIR, "raw-requests.jsonl");
-    writeFileSync(file, JSON.stringify(entry) + "\n", { flag: "a" });
+    db.prepare(
+      `INSERT OR IGNORE INTO raw_requests (id, timestamp, headers, body)
+       VALUES (?, ?, ?, ?)`,
+    ).run(
+      entry.id,
+      entry.timestamp,
+      JSON.stringify(entry.headers),
+      JSON.stringify(entry.body),
+    );
   } catch (err) {
     console.error("[Logger] Failed to write raw request log:", err);
   }
@@ -36,36 +39,31 @@ export interface SolveLogEntry {
   source: "competition" | "eval" | "manual";
 }
 
-function ensureLogsDir() {
-  if (!existsSync(LOGS_DIR)) {
-    mkdirSync(LOGS_DIR, { recursive: true });
-  }
-}
-
 export function logSolveRequest(entry: SolveLogEntry): void {
   try {
-    ensureLogsDir();
+    db.prepare(
+      `INSERT OR IGNORE INTO solves
+       (id, timestamp, prompt, files_count, base_url, parsed_sequence, api_calls,
+        api_call_total, api_call_errors, api_call_duration, elapsed_ms, success, error, source)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      entry.id,
+      entry.timestamp,
+      entry.prompt,
+      entry.filesCount,
+      entry.baseUrl,
+      entry.parsedSequence ? JSON.stringify(entry.parsedSequence) : null,
+      JSON.stringify(entry.apiCalls),
+      entry.apiCallStats.total,
+      entry.apiCallStats.errors,
+      entry.apiCallStats.totalDuration,
+      entry.elapsedMs,
+      entry.success ? 1 : 0,
+      entry.error ?? null,
+      entry.source,
+    );
 
-    const logFile = join(LOGS_DIR, "solves.jsonl");
-    const line = JSON.stringify(entry) + "\n";
-    writeFileSync(logFile, line, { flag: "a" });
-
-    const promptFile = join(LOGS_DIR, "prompts.jsonl");
-    const tasks = entry.parsedSequence?.tasks ?? [];
-    const promptEntry = {
-      id: entry.id,
-      timestamp: entry.timestamp,
-      prompt: entry.prompt,
-      taskTypes: tasks.map((t) => t.taskType),
-      taskCount: tasks.length,
-      language: entry.parsedSequence?.language ?? "unknown",
-      entities: tasks.flatMap((t) => t.entities),
-      success: entry.success,
-      source: entry.source,
-    };
-    writeFileSync(promptFile, JSON.stringify(promptEntry) + "\n", { flag: "a" });
-
-    console.log(`[Logger] Saved solve log ${entry.id} → ${logFile}`);
+    console.log(`[Logger] Saved solve log ${entry.id}`);
   } catch (err) {
     console.error("[Logger] Failed to write solve log:", err);
   }

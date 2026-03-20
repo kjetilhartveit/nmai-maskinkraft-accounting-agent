@@ -1,21 +1,19 @@
-import { readFileSync, writeFileSync, existsSync } from "fs";
+import { writeFileSync, readFileSync, existsSync } from "fs";
 import { join, resolve } from "path";
+import db from "../lib/db.js";
 
-const SOLVES_FILE = join(import.meta.dirname, "../../data/solve-logs/solves.jsonl");
 const PROJECT_ROOT = join(import.meta.dirname, "../..");
 const DEFAULT_TARGET_REPO = resolve(PROJECT_ROOT, "../nmai-maskinkraft");
 const TARGET_FILE = "tripletex/shared-prompts.json";
 
-interface SolveEntry {
+interface SolveRow {
   id: string;
   timestamp: string;
   prompt: string;
-  parsedSequence?: {
-    tasks: { taskType: string; entities: Record<string, unknown>[] }[];
-    language: string;
-  };
-  apiCallStats: { total: number; errors: number; totalDuration: number };
-  success: boolean;
+  parsed_sequence: string | null;
+  api_call_total: number;
+  api_call_errors: number;
+  success: number;
   source: string;
 }
 
@@ -29,15 +27,6 @@ interface SharedPrompt {
   bestErrors: number;
   successCount: number;
   attemptCount: number;
-}
-
-function loadJsonl<T>(file: string): T[] {
-  if (!existsSync(file)) return [];
-  return readFileSync(file, "utf-8")
-    .trim()
-    .split("\n")
-    .filter(Boolean)
-    .map((l) => JSON.parse(l) as T);
 }
 
 function normalizePrompt(prompt: string): string {
@@ -57,15 +46,11 @@ function main() {
     process.exit(1);
   }
 
-  if (!existsSync(SOLVES_FILE)) {
-    console.log("No solves.jsonl found — nothing to sync.");
-    return;
-  }
+  const solves = db.prepare(
+    "SELECT id, timestamp, prompt, parsed_sequence, api_call_total, api_call_errors, success, source FROM solves ORDER BY timestamp",
+  ).all() as SolveRow[];
+  console.log(`Loaded ${solves.length} solve entries from database`);
 
-  const solves = loadJsonl<SolveEntry>(SOLVES_FILE);
-  console.log(`Loaded ${solves.length} solve entries from solves.jsonl`);
-
-  // Group by normalized prompt, aggregate stats
   const promptMap = new Map<string, SharedPrompt>();
   for (const s of solves) {
     if (!s.prompt || s.prompt.trim().length === 0) continue;
@@ -73,14 +58,16 @@ function main() {
     const key = normalizePrompt(s.prompt);
     const existing = promptMap.get(key);
 
-    const taskTypes = s.parsedSequence?.tasks?.map((t) => t.taskType) ?? [];
-    const language = s.parsedSequence?.language ?? "unknown";
-    const apiCalls = s.apiCallStats?.total ?? 0;
-    const apiErrors = s.apiCallStats?.errors ?? 0;
+    const seq = s.parsed_sequence ? JSON.parse(s.parsed_sequence) : null;
+    const taskTypes = seq?.tasks?.map((t: { taskType: string }) => t.taskType) ?? [];
+    const language = seq?.language ?? "unknown";
+    const apiCalls = s.api_call_total ?? 0;
+    const apiErrors = s.api_call_errors ?? 0;
+    const success = s.success === 1;
 
     if (existing) {
       existing.attemptCount++;
-      if (s.success) {
+      if (success) {
         existing.successCount++;
         if (apiCalls > 0 && (existing.bestApiCalls === 0 || apiCalls < existing.bestApiCalls || (apiCalls === existing.bestApiCalls && apiErrors < existing.bestErrors))) {
           existing.bestApiCalls = apiCalls;
@@ -100,15 +87,14 @@ function main() {
         taskTypes,
         source: s.source,
         firstSeen: s.timestamp,
-        bestApiCalls: s.success && apiCalls > 0 ? apiCalls : 0,
-        bestErrors: s.success ? apiErrors : 0,
-        successCount: s.success ? 1 : 0,
+        bestApiCalls: success && apiCalls > 0 ? apiCalls : 0,
+        bestErrors: success ? apiErrors : 0,
+        successCount: success ? 1 : 0,
         attemptCount: 1,
       });
     }
   }
 
-  // Load existing shared prompts from target
   let existingShared: SharedPrompt[] = [];
   if (existsSync(targetPath)) {
     try {
@@ -119,9 +105,6 @@ function main() {
     }
   }
 
-  const existingKeys = new Set(existingShared.map((p) => normalizePrompt(p.prompt)));
-
-  // Merge: add new unique prompts, update existing ones with better stats
   let added = 0;
   let updated = 0;
 
@@ -131,7 +114,7 @@ function main() {
       const ex = existingShared[existingIdx];
       let changed = false;
 
-      if (entry.bestApiCalls < ex.bestApiCalls || (entry.bestApiCalls === ex.bestApiCalls && entry.bestErrors < ex.bestErrors)) {
+      if (entry.bestApiCalls > 0 && (ex.bestApiCalls === 0 || entry.bestApiCalls < ex.bestApiCalls || (entry.bestApiCalls === ex.bestApiCalls && entry.bestErrors < ex.bestErrors))) {
         ex.bestApiCalls = entry.bestApiCalls;
         ex.bestErrors = entry.bestErrors;
         changed = true;

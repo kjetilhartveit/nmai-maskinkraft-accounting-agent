@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
+import { writeFileSync, existsSync, mkdirSync } from "fs";
 import { join } from "path";
 import { createOpenAI } from "@ai-sdk/openai";
 import { generateObject } from "ai";
@@ -7,6 +7,7 @@ import { z } from "zod";
 import { config } from "../lib/config.js";
 import type { TestCase } from "../eval/types.js";
 import { testCases as existingCases } from "../eval/test-cases.js";
+import db from "../lib/db.js";
 
 const openrouter = createOpenAI({
   baseURL: "https://openrouter.ai/api/v1",
@@ -14,7 +15,6 @@ const openrouter = createOpenAI({
   compatibility: "compatible",
 });
 
-const PROMPTS_FILE = join(import.meta.dirname, "../../data/solve-logs/prompts.jsonl");
 const CANDIDATES_DIR = join(import.meta.dirname, "../../data/eval-candidates");
 
 interface LoggedPrompt {
@@ -88,15 +88,25 @@ async function analyzePrompt(
 }
 
 function loadLoggedPrompts(): LoggedPrompt[] {
-  if (!existsSync(PROMPTS_FILE)) {
-    console.log(`No prompts file found at ${PROMPTS_FILE}`);
-    return [];
-  }
-  const lines = readFileSync(PROMPTS_FILE, "utf-8")
-    .trim()
-    .split("\n")
-    .filter(Boolean);
-  return lines.map((line) => JSON.parse(line) as LoggedPrompt);
+  const rows = db.prepare(
+    "SELECT id, timestamp, prompt, parsed_sequence, success, source FROM solves ORDER BY timestamp",
+  ).all() as { id: string; timestamp: string; prompt: string; parsed_sequence: string | null; success: number; source: string }[];
+
+  return rows.map((row) => {
+    const seq = row.parsed_sequence ? JSON.parse(row.parsed_sequence) : null;
+    const tasks = seq?.tasks ?? [];
+    return {
+      id: row.id,
+      timestamp: row.timestamp,
+      prompt: row.prompt,
+      taskTypes: tasks.map((t: { taskType: string }) => t.taskType),
+      taskCount: tasks.length,
+      language: seq?.language ?? "unknown",
+      entities: tasks.flatMap((t: { entities: Record<string, unknown>[] }) => t.entities),
+      success: row.success === 1,
+      source: row.source,
+    };
+  });
 }
 
 function isAlreadyCovered(prompt: string): boolean {

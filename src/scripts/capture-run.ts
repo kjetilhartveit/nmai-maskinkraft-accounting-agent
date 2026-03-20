@@ -1,10 +1,8 @@
 import "dotenv/config";
-import { writeFileSync, existsSync, mkdirSync } from "fs";
-import { join } from "path";
 import type { ParsedTaskSequence } from "../types/index.js";
+import db from "../lib/db.js";
 
 const SERVER_URL = process.env.SERVER_URL || "http://localhost:3000";
-const CAPTURES_DIR = join(import.meta.dirname, "../../data/captures");
 
 interface CaptureResult {
   id: string;
@@ -72,15 +70,11 @@ async function captureRun(
 }
 
 async function main() {
-  if (!existsSync(CAPTURES_DIR)) {
-    mkdirSync(CAPTURES_DIR, { recursive: true });
-  }
-
   const prompt = process.argv.slice(2).filter((a) => a !== "--").join(" ");
   if (!prompt) {
     console.log("Usage: pnpm capture \"<prompt>\"");
     console.log("  Captures the full solve result (parsed task sequence + API calls) for review.");
-    console.log("  Results are saved to data/captures/ as JSONL.");
+    console.log("  Results are saved to the database.");
     process.exit(1);
   }
 
@@ -89,10 +83,23 @@ async function main() {
 
   const result = await captureRun(prompt, id);
 
-  const outFile = join(CAPTURES_DIR, "runs.jsonl");
-  const line = JSON.stringify(result) + "\n";
-
-  writeFileSync(outFile, line, { flag: "a" });
+  db.prepare(
+    `INSERT OR IGNORE INTO captures
+     (id, prompt, timestamp, model, parsed_sequence, api_call_total, api_call_errors, api_call_details, elapsed_ms, success, error)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).run(
+    result.id,
+    result.prompt,
+    result.timestamp,
+    result.model,
+    result.parsedSequence ? JSON.stringify(result.parsedSequence) : null,
+    result.apiCalls.total,
+    result.apiCalls.errors,
+    JSON.stringify(result.apiCalls.details),
+    result.elapsedMs,
+    result.success ? 1 : 0,
+    result.error ?? null,
+  );
 
   const tasks = result.parsedSequence?.tasks ?? [];
   console.log(`\nResult:`);
@@ -104,7 +111,7 @@ async function main() {
   console.log(`  API calls: ${result.apiCalls.total} (${result.apiCalls.errors} errors)`);
   console.log(`  Success: ${result.success}`);
   if (result.error) console.log(`  Error: ${result.error}`);
-  console.log(`\nSaved to ${outFile}`);
+  console.log(`\nSaved to database`);
 }
 
 main().catch(console.error);

@@ -5,6 +5,9 @@ docs/tripletex-openapi.json
 data/captures/
 data/eval-candidates/
 data/solve-logs/
+data/*.db
+data/*.db-shm
+data/*.db-wal
 
 # Claude
 /.claude/settings.local.json

@@ -98,8 +98,7 @@ function printSubmissionInstructions(tunnelUrl?: string): void {
   console.log("  - Send a random task to your /solve endpoint");
   console.log("  - Verify results and score your submission");
   console.log();
-  console.log("  All requests are logged to: data/solve-logs/solves.jsonl");
-  console.log("  Prompts are logged to: data/solve-logs/prompts.jsonl");
+  console.log("  All requests are logged to: data/agent.db (SQLite)");
   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
 }
 

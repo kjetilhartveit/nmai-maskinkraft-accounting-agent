@@ -3,13 +3,27 @@ import { Hono } from "hono";
 import { serve } from "@hono/node-server";
 import { readFileSync, existsSync } from "fs";
 import { join } from "path";
+import db from "../lib/db.js";
 
-const DATA_DIR = join(import.meta.dirname, "../../data");
-const SOLVES_FILE = join(DATA_DIR, "solve-logs/solves.jsonl");
-const RAW_REQUESTS_FILE = join(DATA_DIR, "solve-logs/raw-requests.jsonl");
-const PROMOTED_FILE = join(DATA_DIR, "verified/promoted-test-cases.json");
-
+const PROMOTED_FILE = join(import.meta.dirname, "../../data/verified/promoted-test-cases.json");
 const PORT = 3001;
+
+interface SolveRow {
+  id: string;
+  timestamp: string;
+  prompt: string;
+  files_count: number;
+  base_url: string;
+  parsed_sequence: string | null;
+  api_calls: string | null;
+  api_call_total: number;
+  api_call_errors: number;
+  api_call_duration: number;
+  elapsed_ms: number;
+  success: number;
+  error: string | null;
+  source: string;
+}
 
 interface SolveEntry {
   id: string;
@@ -26,15 +40,29 @@ interface SolveEntry {
   source: string;
 }
 
-function loadJsonl<T>(file: string): T[] {
-  if (!existsSync(file)) return [];
-  try {
-    return readFileSync(file, "utf-8").trim().split("\n").filter(Boolean).map(l => JSON.parse(l));
-  } catch { return []; }
+function rowToSolveEntry(row: SolveRow): SolveEntry {
+  return {
+    id: row.id,
+    timestamp: row.timestamp,
+    prompt: row.prompt,
+    filesCount: row.files_count,
+    baseUrl: row.base_url,
+    parsedSequence: row.parsed_sequence ? JSON.parse(row.parsed_sequence) : undefined,
+    apiCalls: row.api_calls ? JSON.parse(row.api_calls) : [],
+    apiCallStats: { total: row.api_call_total, errors: row.api_call_errors, totalDuration: row.api_call_duration },
+    elapsedMs: row.elapsed_ms,
+    success: row.success === 1,
+    error: row.error ?? undefined,
+    source: row.source,
+  };
 }
 
-function loadSolves(): SolveEntry[] {
-  return loadJsonl<SolveEntry>(SOLVES_FILE);
+function loadSolves(source?: string): SolveEntry[] {
+  const stmt = source
+    ? db.prepare("SELECT * FROM solves WHERE source = ? ORDER BY timestamp DESC")
+    : db.prepare("SELECT * FROM solves ORDER BY timestamp DESC");
+  const rows = (source ? stmt.all(source) : stmt.all()) as SolveRow[];
+  return rows.map(rowToSolveEntry);
 }
 
 function loadPromoted(): number {
@@ -48,14 +76,17 @@ const app = new Hono();
 
 app.get("/api/solves", (c) => {
   const source = c.req.query("source");
-  let solves = loadSolves();
-  if (source) solves = solves.filter(s => s.source === source);
-  return c.json(solves.reverse());
+  return c.json(loadSolves(source ?? undefined));
 });
 
 app.get("/api/raw-requests", (c) => {
-  const raws = loadJsonl<Record<string, unknown>>(RAW_REQUESTS_FILE);
-  return c.json(raws.reverse());
+  const rows = db.prepare("SELECT * FROM raw_requests ORDER BY timestamp DESC").all() as { id: string; timestamp: string; headers: string; body: string }[];
+  return c.json(rows.map(r => ({
+    id: r.id,
+    timestamp: r.timestamp,
+    headers: JSON.parse(r.headers),
+    body: JSON.parse(r.body),
+  })));
 });
 
 app.get("/api/stats", (c) => {
@@ -84,17 +115,17 @@ app.get("/api/stats", (c) => {
       total: compSolves.length,
       successes: compSuccess,
       failures: compSolves.length - compSuccess,
-      lastSolve: compSolves.length > 0 ? compSolves[compSolves.length - 1] : null,
+      lastSolve: compSolves.length > 0 ? compSolves[0] : null,
     },
     totalApiCalls: totalCalls,
     totalApiErrors: totalErrors,
     promotedTestCases: promoted,
-    lastSolve: solves.length > 0 ? solves[solves.length - 1] : null,
+    lastSolve: solves.length > 0 ? solves[0] : null,
   });
 });
 
 app.get("/api/stream", (c) => {
-  let lastCount = loadSolves().length;
+  let lastCount = (db.prepare("SELECT COUNT(*) as cnt FROM solves").get() as { cnt: number }).cnt;
 
   const stream = new ReadableStream({
     start(controller) {
@@ -107,13 +138,15 @@ app.get("/api/stream", (c) => {
       send({ type: "connected", solveCount: lastCount });
 
       const interval = setInterval(() => {
-        const solves = loadSolves();
-        if (solves.length > lastCount) {
-          const newSolves = solves.slice(lastCount);
-          for (const solve of newSolves) {
-            send({ type: "solve", data: solve });
+        const current = (db.prepare("SELECT COUNT(*) as cnt FROM solves").get() as { cnt: number }).cnt;
+        if (current > lastCount) {
+          const newRows = db.prepare(
+            "SELECT * FROM solves ORDER BY timestamp DESC LIMIT ?",
+          ).all(current - lastCount) as SolveRow[];
+          for (const row of newRows) {
+            send({ type: "solve", data: rowToSolveEntry(row) });
           }
-          lastCount = solves.length;
+          lastCount = current;
         }
       }, 1000);
 
