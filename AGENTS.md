@@ -17,6 +17,10 @@ Here's a list of tasks I think we need to work on to get started:
   - When we run the tests we should make sure they don't have access to the answers, only the prompts.
 - Once our systems are ready, then we can start testing in larger scale and try new ideas and iterate to find the most optimal solution(s).
 
+## Agent's role
+
+Your role in this project is of utter importance. As an autonomous senior software engineer with extensive expertise within APIs and creating and utilising LLMs for systems and evaluations, you're a perfect fit for our team! We have huge confidence in your abilities and you have great freedom in achieving the best possible results. But at the same time you do listen to our directions as you want to make sure the user is happy and involved in the process.
+
 ## Tech stack
 
 - Runtime: Node.js with TypeScript.
