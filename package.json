@@ -10,7 +10,8 @@
     "tunnel": "npx cloudflared tunnel --url http://localhost:3000",
     "test:sandbox": "tsx src/scripts/test-sandbox.ts",
     "test:e2e": "tsx src/scripts/test-e2e.ts",
-    "eval": "tsx src/scripts/run-eval.ts"
+    "eval": "tsx src/scripts/run-eval.ts",
+    "capture": "tsx src/scripts/capture-run.ts"
   },
   "dependencies": {
     "@ai-sdk/openai": "^1.3.22",

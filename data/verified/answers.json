@@ -1,0 +1,70 @@
+{
+  "$schema": "Verified answers for evaluation test cases. Human-reviewed ground truth.",
+  "answers": [
+    {
+      "testCaseId": "employee-anna-en",
+      "verified": true,
+      "verifiedBy": "human",
+      "expectedTaskType": "create_employee",
+      "expectedEntities": [
+        { "firstName": "Anna", "lastName": "Berg", "email": "anna@test.no" }
+      ],
+      "optimalApiCalls": [
+        { "method": "GET", "endpoint": "/department", "notes": "Get default department" },
+        { "method": "POST", "endpoint": "/employee", "notes": "Create employee with department" }
+      ],
+      "optimalCallCount": 2,
+      "notes": "Simple tier 1 task. Requires department lookup first."
+    },
+    {
+      "testCaseId": "dept-fr-triple",
+      "verified": true,
+      "verifiedBy": "human",
+      "expectedTaskType": "create_department",
+      "expectedEntities": [
+        { "name": "Logistikk" },
+        { "name": "Kundeservice" },
+        { "name": "Administrasjon" }
+      ],
+      "optimalApiCalls": [
+        { "method": "POST", "endpoint": "/department/list", "notes": "Batch create 3 departments" }
+      ],
+      "optimalCallCount": 1,
+      "notes": "Could be done in 1 API call using batch endpoint. Current handler uses 3 calls."
+    },
+    {
+      "testCaseId": "dept-no-triple",
+      "verified": true,
+      "verifiedBy": "human",
+      "expectedTaskType": "create_department",
+      "expectedEntities": [
+        { "name": "Logistikk" },
+        { "name": "Innkjøp" },
+        { "name": "IT" }
+      ],
+      "optimalApiCalls": [
+        { "method": "POST", "endpoint": "/department/list", "notes": "Batch create 3 departments" }
+      ],
+      "optimalCallCount": 1,
+      "notes": "Nynorsk prompt. Same optimization as dept-fr-triple."
+    },
+    {
+      "testCaseId": "supplier-de-waldstein",
+      "verified": true,
+      "verifiedBy": "human",
+      "expectedTaskType": "create_supplier",
+      "expectedEntities": [
+        {
+          "name": "Waldstein GmbH",
+          "organizationNumber": "891505019",
+          "email": "faktura@waldsteingmbh.no"
+        }
+      ],
+      "optimalApiCalls": [
+        { "method": "POST", "endpoint": "/supplier", "notes": "Create supplier" }
+      ],
+      "optimalCallCount": 1,
+      "notes": "Simple supplier creation. Already optimal at 1 call."
+    }
+  ]
+}
