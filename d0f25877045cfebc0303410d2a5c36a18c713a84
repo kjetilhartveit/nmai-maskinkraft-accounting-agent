@@ -1,0 +1,25 @@
+src/handlers/create-voucher.ts
+  6154d316e7bc28d6 23-30,38,72,88
+src/handlers/index.ts
+  6154d316e7bc28d6 65,70-79
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.15",
+  "base_commit_sha": "d0f25877045cfebc0303410d2a5c36a18c713a84",
+  "prompts": {
+    "6154d316e7bc28d6": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "fdd69bba-ba62-46e9-95fe-14b80d214166",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Kjetil Hårtveit <kjetil_runescape@hotmail.com>",
+      "messages": [],
+      "total_additions": 22,
+      "total_deletions": 3,
+      "accepted_lines": 22,
+      "overriden_lines": 0
+    }
+  }
+}
