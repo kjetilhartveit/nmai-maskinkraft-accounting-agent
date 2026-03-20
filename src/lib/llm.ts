@@ -55,11 +55,14 @@ Task types and their entity fields:
 - update_employee: fields: firstName, lastName (to find) + any updated fields
 - create_customer: fields: name, email, organizationNumber, phoneNumber, postalAddress
 - update_customer: fields: name (to find) + any updated fields
-- create_product: fields: name, unitPrice, number, description
+- create_product: fields: name, unitPrice, number, description, vatRate (percentage: 25, 15, 0, etc. — optional, defaults to 25%)
 - create_department: fields: name, departmentNumber
 - create_order: ONE entity with: customerName, orderDate (YYYY-MM-DD), deliveryDate (YYYY-MM-DD), ourReference, yourReference. Plus extra entities for products: name, quantity, unitPrice.
-- create_invoice: fields: customerName, orderId, invoiceDate (YYYY-MM-DD), dueDate (YYYY-MM-DD), comment, amount (total excluding VAT), productName or description (what the invoice is for)
-- send_invoice: same as create_invoice — creates and sends immediately. Always extract the amount and product/service description.
+- create_invoice: First entity is invoice metadata: customerName, invoiceDate (YYYY-MM-DD), dueDate (YYYY-MM-DD), comment.
+  For a SINGLE product line: include productName, amount (excluding VAT) directly in the first entity.
+  For MULTIPLE product lines (different items, different VAT rates): add additional entities after the first, each with: productName, unitPrice (excluding VAT), quantity (default 1), vatRate (percentage: 25, 15, 12, 0, etc.)
+  Example with 3 lines: [{ customerName: "Acme" }, { productName: "Widget A", unitPrice: 1000, quantity: 2, vatRate: 25 }, { productName: "Widget B", unitPrice: 500, quantity: 1, vatRate: 15 }, { productName: "Widget C", unitPrice: 300, quantity: 1, vatRate: 0 }]
+- send_invoice: same as create_invoice — creates and sends immediately. Always extract the amount and product/service description. Supports multiple product lines.
 - create_payment: fields: customerName, organizationNumber, amount, paymentDate (YYYY-MM-DD), description/service (what the invoice is for)
   - IMPORTANT: If the prompt says the client "has" a pending/outstanding invoice, the invoice ALREADY EXISTS in the sandbox. Return ONLY create_payment, NOT create_invoice + create_payment. The handler will find the existing invoice.
 - create_credit_note: fields: invoiceId, comment

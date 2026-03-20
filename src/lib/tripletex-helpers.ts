@@ -25,7 +25,10 @@ interface VatType {
   id: number;
   name: string;
   number: string;
+  percentage?: number;
 }
+
+let cachedVatTypes: VatType[] | null = null;
 
 interface ProductUnit {
   id: number;
@@ -85,29 +88,32 @@ export async function getDefaultCurrencyId(
   return cachedNokCurrencyId;
 }
 
+async function loadVatTypes(client: TripletexClient): Promise<VatType[]> {
+  if (cachedVatTypes !== null) return cachedVatTypes;
+  const result = await client.list<VatType>("/ledger/vatType", {
+    from: "0",
+    count: "100",
+  });
+  cachedVatTypes = result.values;
+  return cachedVatTypes;
+}
+
 export async function getDefaultProductVatTypeId(
   client: TripletexClient,
 ): Promise<number> {
   if (cachedProductVatTypeId !== null) return cachedProductVatTypeId;
 
-  // Fetch all VAT types
-  const result = await client.list<VatType>("/ledger/vatType", {
-    from: "0",
-    count: "100",
-  });
+  const vatTypes = await loadVatTypes(client);
 
-  if (result.values.length > 0) {
-    // Priority order for finding valid product VAT type:
-    // 1. VAT code "3" (utgående mva høy sats 25%) - standard for product sales
-    const code3 = result.values.find((v) => v.number === "3");
+  if (vatTypes.length > 0) {
+    const code3 = vatTypes.find((v) => v.number === "3");
     if (code3) {
       cachedProductVatTypeId = code3.id;
       console.log(`[Helper] Using VAT type id=${code3.id} (code 3)`);
       return cachedProductVatTypeId;
     }
 
-    // 2. Look for "utgående" (outgoing) and "høy" (high) in name
-    const outgoingHigh = result.values.find(
+    const outgoingHigh = vatTypes.find(
       (v) =>
         v.name?.toLowerCase().includes("utgående") &&
         v.name?.toLowerCase().includes("høy"),
@@ -118,8 +124,7 @@ export async function getDefaultProductVatTypeId(
       return cachedProductVatTypeId;
     }
 
-    // 3. Any outgoing VAT
-    const anyOutgoing = result.values.find((v) =>
+    const anyOutgoing = vatTypes.find((v) =>
       v.name?.toLowerCase().includes("utgående"),
     );
     if (anyOutgoing) {
@@ -128,17 +133,71 @@ export async function getDefaultProductVatTypeId(
       return cachedProductVatTypeId;
     }
 
-    // 4. Log available types for debugging and try first one
     console.log(
-      `[Helper] Available VAT types: ${result.values.map((v) => `${v.id}:${v.number}:${v.name}`).join(", ")}`,
+      `[Helper] Available VAT types: ${vatTypes.map((v) => `${v.id}:${v.number}:${v.name}`).join(", ")}`,
     );
-    cachedProductVatTypeId = result.values[0].id;
+    cachedProductVatTypeId = vatTypes[0].id;
     return cachedProductVatTypeId;
   }
 
   console.warn("[Helper] No VAT types found, defaulting to id=3");
   cachedProductVatTypeId = 3;
   return cachedProductVatTypeId;
+}
+
+/**
+ * Find a VAT type ID by percentage rate. Falls back to the default 25% VAT type.
+ * Matches "utgående" (outgoing/sales) VAT types by looking at the name and percentage.
+ */
+export async function findVatTypeIdByRate(
+  client: TripletexClient,
+  ratePercent: number,
+): Promise<number> {
+  const vatTypes = await loadVatTypes(client);
+
+  if (ratePercent === 0) {
+    const exempt = vatTypes.find(
+      (v) =>
+        v.percentage === 0 ||
+        v.name?.toLowerCase().includes("fritatt") ||
+        v.name?.toLowerCase().includes("avgiftsfri") ||
+        v.number === "6",
+    );
+    if (exempt) {
+      console.log(`[Helper] VAT 0%: id=${exempt.id} (${exempt.name})`);
+      return exempt.id;
+    }
+  }
+
+  if (ratePercent === 15 || ratePercent === 12) {
+    const medium = vatTypes.find(
+      (v) =>
+        (v.percentage === ratePercent ||
+          v.name?.toLowerCase().includes("middels") ||
+          v.name?.toLowerCase().includes("lav")) &&
+        v.name?.toLowerCase().includes("utgående"),
+    );
+    if (medium) {
+      console.log(`[Helper] VAT ${ratePercent}%: id=${medium.id} (${medium.name})`);
+      return medium.id;
+    }
+  }
+
+  if (ratePercent === 25) {
+    return getDefaultProductVatTypeId(client);
+  }
+
+  // Try percentage match on any outgoing type
+  const match = vatTypes.find(
+    (v) => v.percentage === ratePercent && v.name?.toLowerCase().includes("utgående"),
+  );
+  if (match) {
+    console.log(`[Helper] VAT ${ratePercent}%: id=${match.id} (${match.name})`);
+    return match.id;
+  }
+
+  console.log(`[Helper] No VAT type found for ${ratePercent}%, falling back to default`);
+  return getDefaultProductVatTypeId(client);
 }
 
 export async function getDefaultProductUnitId(
@@ -198,45 +257,66 @@ export async function findCustomerByName(
   return result.values[0] ?? null;
 }
 
-export async function findOrCreateProduct(
+export async function findProductByNumber(
+  client: TripletexClient,
+  productNumber: string | number,
+): Promise<Product | null> {
+  const result = await client.list<Product>("/product", {
+    number: String(productNumber),
+    from: "0",
+    count: "1",
+  });
+  return result.values[0] ?? null;
+}
+
+export async function findProductByName(
   client: TripletexClient,
   name: string,
-  unitPriceExcVat: number,
-): Promise<Product> {
-  // Check if product already exists
+): Promise<Product | null> {
   const result = await client.list<Product>("/product", {
     name,
     from: "0",
     count: "1",
   });
-  if (result.values.length > 0) return result.values[0];
+  return result.values[0] ?? null;
+}
 
-  // Create it - try without VAT type first, then with if needed
+export async function findOrCreateProduct(
+  client: TripletexClient,
+  name: string,
+  unitPriceExcVat: number,
+  vatTypeId?: number,
+): Promise<Product> {
+  const existing = await findProductByName(client, name);
+  if (existing) {
+    console.log(`[Helper] Found existing product: ${name} (id=${existing.id})`);
+    return existing;
+  }
+
   const [departmentId, unitId] = await Promise.all([
     getDefaultDepartmentId(client),
     getDefaultProductUnitId(client),
   ]);
 
-  // First attempt: minimal fields (no VAT type)
+  const resolvedVatTypeId = vatTypeId ?? await getDefaultProductVatTypeId(client);
+
+  const body: Record<string, unknown> = {
+    name,
+    priceExcludingVatCurrency: unitPriceExcVat,
+    vatType: { id: resolvedVatTypeId },
+    department: { id: departmentId },
+    productUnit: { id: unitId },
+  };
+
   try {
-    const created = await client.post<Product>("/product", {
-      name,
-      priceExcludingVatCurrency: unitPriceExcVat,
-      department: { id: departmentId },
-      productUnit: { id: unitId },
-    });
+    const created = await client.post<Product>("/product", body);
+    console.log(`[Helper] Created product: ${name} (id=${created.value.id})`);
     return created.value;
-  } catch (err) {
-    console.log("[Helper] Product creation without VAT failed, trying with VAT type");
-    // Second attempt: with VAT type
-    const vatTypeId = await getDefaultProductVatTypeId(client);
-    const created = await client.post<Product>("/product", {
-      name,
-      priceExcludingVatCurrency: unitPriceExcVat,
-      vatType: { id: vatTypeId },
-      department: { id: departmentId },
-      productUnit: { id: unitId },
-    });
+  } catch {
+    // Retry without VAT type in case it causes issues
+    delete body.vatType;
+    const created = await client.post<Product>("/product", body);
+    console.log(`[Helper] Created product (no VAT): ${name} (id=${created.value.id})`);
     return created.value;
   }
 }
@@ -258,6 +338,7 @@ export function resetCaches(): void {
   cachedNokCurrencyId = null;
   cachedProductVatTypeId = null;
   cachedProductUnitId = null;
+  cachedVatTypes = null;
   bankAccountConfigured = false;
   cachedProjectManagerId = null;
 }

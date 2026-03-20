@@ -6,6 +6,7 @@ import {
   daysFromNow,
   findCustomerByName,
   findOrCreateProduct,
+  findVatTypeIdByRate,
   ensureBankAccountConfigured,
 } from "../lib/tripletex-helpers.js";
 
@@ -18,11 +19,17 @@ interface Customer {
   name: string;
 }
 
+interface ProductLine {
+  productName: string;
+  unitPrice: number;
+  quantity: number;
+  vatRate?: number;
+}
+
 async function findOrderByCustomerName(
   client: TripletexClient,
   customerName: string,
 ): Promise<Order | null> {
-  // Order endpoint requires date range - search last 2 years
   const now = new Date();
   const twoYearsAgo = new Date(now);
   twoYearsAgo.setFullYear(now.getFullYear() - 2);
@@ -49,16 +56,64 @@ async function findOrderById(
   }
 }
 
+function extractProductLines(task: ParsedTask): ProductLine[] {
+  const entities = task.entities;
+  if (entities.length === 0) return [];
+
+  const first = entities[0];
+
+  // Check if there's a productLines array in the first entity
+  if (Array.isArray(first.productLines) && first.productLines.length > 0) {
+    return (first.productLines as Record<string, unknown>[]).map((line) => ({
+      productName: String(line.productName ?? line.name ?? line.description ?? "Produkt"),
+      unitPrice: Number(line.unitPrice ?? line.amount ?? line.price ?? 0),
+      quantity: Number(line.quantity ?? line.count ?? 1),
+      vatRate: line.vatRate !== undefined ? Number(line.vatRate) : undefined,
+    }));
+  }
+
+  // Check if additional entities (index 1+) are product lines
+  if (entities.length > 1) {
+    const hasProductEntities = entities.slice(1).some(
+      (e) => e.productName || e.unitPrice || e.vatRate !== undefined,
+    );
+
+    if (hasProductEntities) {
+      return entities.slice(1).map((e) => ({
+        productName: String(e.productName ?? e.name ?? e.description ?? "Produkt"),
+        unitPrice: Number(e.unitPrice ?? e.amount ?? e.price ?? 0),
+        quantity: Number(e.quantity ?? e.count ?? 1),
+        vatRate: e.vatRate !== undefined ? Number(e.vatRate) : undefined,
+      }));
+    }
+  }
+
+  // Single product line from the first entity (backward compatibility)
+  const productName = String(
+    first.productName ?? first.product ?? first.description ?? "Tjeneste",
+  );
+  const amount = Number(first.amount ?? first.total ?? first.unitPrice ?? 0);
+
+  if (amount > 0) {
+    return [{
+      productName,
+      unitPrice: amount,
+      quantity: 1,
+      vatRate: first.vatRate !== undefined ? Number(first.vatRate) : undefined,
+    }];
+  }
+
+  return [];
+}
+
 async function createOrderForInvoice(
   client: TripletexClient,
   customerId: number,
-  productName: string,
-  amount: number,
+  productLines: ProductLine[],
 ): Promise<Order> {
   const orderDate = today();
   const deliveryDate = daysFromNow(14);
 
-  // Create order
   const orderResult = await client.post<Order>("/order", {
     customer: { id: customerId },
     orderDate,
@@ -67,15 +122,30 @@ async function createOrderForInvoice(
   const orderId = orderResult.value.id;
   console.log(`[Handler] Created order for invoice: id=${orderId}`);
 
-  // Create product and add order line
-  const product = await findOrCreateProduct(client, productName, amount);
-  await client.post("/order/orderline", {
-    order: { id: orderId },
-    product: { id: product.id },
-    count: 1,
-    unitPriceExcludingVatCurrency: amount,
-  });
-  console.log(`[Handler] Added order line with product ${product.id}`);
+  for (const line of productLines) {
+    let vatTypeId: number | undefined;
+    if (line.vatRate !== undefined) {
+      vatTypeId = await findVatTypeIdByRate(client, line.vatRate);
+    }
+
+    const product = await findOrCreateProduct(
+      client,
+      line.productName,
+      line.unitPrice,
+      vatTypeId,
+    );
+
+    await client.post("/order/orderline", {
+      order: { id: orderId },
+      product: { id: product.id },
+      count: line.quantity,
+      unitPriceExcludingVatCurrency: line.unitPrice,
+    });
+    console.log(
+      `[Handler] Added order line: ${line.productName} x${line.quantity} @ ${line.unitPrice}` +
+        (line.vatRate !== undefined ? ` (VAT ${line.vatRate}%)` : ""),
+    );
+  }
 
   return orderResult.value;
 }
@@ -86,7 +156,6 @@ export async function handleCreateInvoice(
   ctxOrSend?: SequenceContext | boolean,
   maybeSend?: boolean,
 ): Promise<void> {
-  // Support both (client, task, ctx) and legacy (client, task, sendAfterCreate) signatures
   let ctx: SequenceContext | undefined;
   let sendAfterCreate = false;
   if (typeof ctxOrSend === "boolean") {
@@ -96,7 +165,6 @@ export async function handleCreateInvoice(
     sendAfterCreate = maybeSend ?? false;
   }
 
-  // Ensure bank account is configured (required for invoice creation)
   await ensureBankAccountConfigured(client);
 
   const entity = task.entities[0] ?? {};
@@ -110,7 +178,6 @@ export async function handleCreateInvoice(
     entity.customerName ?? entity.customer ?? "",
   );
 
-  // Resolve order
   let order: Order | null = null;
   if (entity.orderId) {
     order = await findOrderById(client, Number(entity.orderId));
@@ -119,9 +186,7 @@ export async function handleCreateInvoice(
     order = await findOrderByCustomerName(client, customerName);
   }
 
-  // If no order exists, create one with the customer and product/amount
   if (!order && customerName) {
-    // Try context first to avoid a lookup API call
     let customerId = ctx?.getCustomerId(customerName);
     let customer: Customer | null = null;
     if (customerId) {
@@ -132,17 +197,13 @@ export async function handleCreateInvoice(
     }
 
     if (customer) {
-      const productName = String(
-        entity.productName ?? entity.product ?? entity.description ?? "Tjeneste",
-      );
-      const amount = Number(entity.amount ?? entity.total ?? entity.unitPrice ?? 0);
+      const productLines = extractProductLines(task);
 
-      if (amount > 0) {
+      if (productLines.length > 0) {
         order = await createOrderForInvoice(
           client,
           customer.id,
-          productName,
-          amount,
+          productLines,
         );
       }
     }
@@ -166,7 +227,6 @@ export async function handleCreateInvoice(
   console.log(`[Handler] Created invoice: id=${invoiceId}`);
 
   if (sendAfterCreate) {
-    // sendType is a query parameter, not body
     await client.put(`/invoice/${invoiceId}/:send?sendType=EMAIL`, {});
     console.log(`[Handler] Sent invoice: id=${invoiceId}`);
   }

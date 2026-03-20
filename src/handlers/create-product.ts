@@ -5,7 +5,15 @@ import {
   getDefaultDepartmentId,
   getDefaultProductVatTypeId,
   getDefaultProductUnitId,
+  findProductByName,
+  findProductByNumber,
+  findVatTypeIdByRate,
 } from "../lib/tripletex-helpers.js";
+
+interface Product {
+  id: number;
+  name: string;
+}
 
 function buildProductBody(
   entity: Record<string, unknown>,
@@ -38,21 +46,50 @@ export async function handleCreateProduct(
   task: ParsedTask,
   _ctx: SequenceContext,
 ): Promise<void> {
-  const [departmentId, vatTypeId, unitId] = await Promise.all([
+  const [departmentId, defaultVatTypeId, unitId] = await Promise.all([
     getDefaultDepartmentId(client),
     getDefaultProductVatTypeId(client),
     getDefaultProductUnitId(client),
   ]);
 
-  const bodies = task.entities.map((e) =>
-    buildProductBody(e, departmentId, vatTypeId, unitId),
-  );
+  const toCreate: Record<string, unknown>[] = [];
 
-  if (bodies.length === 1) {
-    const result = await client.post<{ id: number }>("/product", bodies[0]);
+  for (const entity of task.entities) {
+    // Search for existing product by number first, then by name
+    const productNumber = entity.number ?? entity.productNumber;
+    const productName = String(entity.name ?? "");
+
+    let existing: Product | null = null;
+    if (productNumber) {
+      existing = await findProductByNumber(client, String(productNumber));
+    }
+    if (!existing && productName) {
+      existing = await findProductByName(client, productName);
+    }
+
+    if (existing) {
+      console.log(`[Handler] Product already exists: ${productName} (id=${existing.id})`);
+      continue;
+    }
+
+    let vatTypeId = defaultVatTypeId;
+    if (entity.vatRate !== undefined) {
+      vatTypeId = await findVatTypeIdByRate(client, Number(entity.vatRate));
+    }
+
+    toCreate.push(buildProductBody(entity, departmentId, vatTypeId, unitId));
+  }
+
+  if (toCreate.length === 0) {
+    console.log("[Handler] All products already exist, nothing to create");
+    return;
+  }
+
+  if (toCreate.length === 1) {
+    const result = await client.post<Product>("/product", toCreate[0]);
     console.log(`[Handler] Created product: id=${result.value.id}`);
   } else {
-    const result = await client.postList<{ id: number }>("/product/list", bodies);
+    const result = await client.postList<Product>("/product/list", toCreate);
     console.log(`[Handler] Created ${result.values.length} products`);
   }
 }
