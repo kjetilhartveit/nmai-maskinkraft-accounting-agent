@@ -44,9 +44,7 @@ We have set up the project, but we must fine-tune our solution, fix bugs and set
   - Department batch: 1 call (using /department/list)
   - Dimension+voucher: 20 calls, 7 errors (complex agentic task, voucher postings don't support dimension fields)
 - [ ] Continue testing against our sandbox and making iterative improvements. ~~Continue submitting and iterating based on competition results~~
-  - We have reached the daily limit, so we should continue against our sandbox and improving our evals.
-  - OpenRouter credit limit reached during eval, need to continue when replenished.
-- [ ] For later it would be useful if we could differentiate our runs with runs from other team members. Perhaps by date (in the UI) or other identifiers. Note that when we submit we also get GET requests (with path submissions) continuously which gives us information about the API calls made.
+- [ ] For later it would be useful if we could differentiate our runs with runs from other team members. Perhaps by timetamp/date (in the UI) or other identifiers. Note that when we submit we also get GET requests (with path submissions) continuously which gives us information about the API calls made.
 - [x] Consider adding previous solutions as inspiration in our system prompt.
   - Added few-shot examples for payment, customer+invoice, custom dimension+voucher, and admin role tasks
 - [x] Could we add a tool for the LLM to retrieve API information? This could be helpful for the LLM, especially if we don't have a handler for it.
