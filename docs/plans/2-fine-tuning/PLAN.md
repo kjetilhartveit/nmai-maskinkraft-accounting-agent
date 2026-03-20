@@ -21,15 +21,31 @@ We have set up the project, but we must fine-tune our solution, fix bugs and set
 - [x] Created dedicated `create_payment` handler for invoice payment registration
   - Uses `PUT /invoice/{id}/:payment` with query parameters (not body)
   - Searches for existing invoices before creating new ones
-- [ ] Fix create_invoice handler to support multiple product lines with different VAT types
-- [ ] Fix create_product handler to search for existing products before creating
-- [ ] I've noticed you write something about retrieving existing data in our solver - we can do this but only for data we have created in the current run as we should expect the sandbox to be empty. Just check that we're doing this correctly.
-- [ ] Are we also detecting information accurately in the prompts? Because that's part of the scoring I think, and we might get points based on that? Can you just check with the official documentation regarding this and our implementation and whether we should make changes to it?
-- [ ] We should update our eval test cases to include cases from the actual competition.
-- [ ] We'll try solving the test cases to the best of our abilities and update the "expected values" accordingly if we find better solutions.
-  - For new test cases we run them in the solver, see errors, and try to iteratively improve on them until we achieve the task without errors and hopefully with less API calls.
+- [x] Fix create_invoice handler to support multiple product lines with different VAT types
+  - Added `extractProductLines()` to parse multiple product entities with per-line VAT rates
+  - Added `findVatTypeIdByRate()` helper to resolve VAT types by percentage (0%, 12%, 15%, 25%)
+  - Updated LLM prompt to output multi-line invoice entities with vatRate per product
+- [x] Fix create_product handler to search for existing products before creating
+  - Added `findProductByName()` and `findProductByNumber()` helpers
+  - Products are now searched before creation to avoid duplicates
+- [x] I've noticed you write something about retrieving existing data in our solver - we can do this but only for data we have created in the current run as we should expect the sandbox to be empty. Just check that we're doing this correctly.
+  - Verified: all handlers use search-before-create pattern for deduplication; SequenceContext passes IDs between tasks; payment handler correctly handles pre-existing invoices from competition
+- [x] Are we also detecting information accurately in the prompts? Because that's part of the scoring I think, and we might get points based on that? Can you just check with the official documentation regarding this and our implementation and whether we should make changes to it?
+  - Scoring: field-by-field checks (correctness 0-1) × tier multiplier × efficiency bonus (only at 100%)
+  - Fixed: ADMINISTRATOR userType was invalid API value — now uses entitlements (POST /employee/entitlement)
+  - Fixed: project manager now gets PROJECT_MANAGER entitlement before assignment
+  - Fixed: LLM prompt now explicitly describes admin role detection across all 7 languages
+- [x] We should update our eval test cases to include cases from the actual competition.
+  - Added 7 new test cases from competition: dimension+voucher (ES), payment (PT), multi-line invoice (PT), admin role (EN/NO), project manager (DE)
+- [x] We'll try solving the test cases to the best of our abilities and update the "expected values" accordingly if we find better solutions.
+  - Eval results: 11/16 passed. Updated baselines for 10 test cases with significantly fewer API calls.
+  - Multi-line invoice: 12 calls, 0 errors (was untested before)
+  - Payment: 4 calls, 0 errors
+  - Department batch: 1 call (using /department/list)
+  - Dimension+voucher: 20 calls, 7 errors (complex agentic task, voucher postings don't support dimension fields)
 - [ ] Continue testing against our sandbox and making iterative improvements. ~~Continue submitting and iterating based on competition results~~
   - We have reached the daily limit, so we should continue against our sandbox and improving our evals.
+  - OpenRouter credit limit reached during eval, need to continue when replenished.
 - [ ] For later it would be useful if we could differentiate our runs with runs from other team members. Perhaps by date (in the UI) or other identifiers. Note that when we submit we also get GET requests (with path submissions) continuously which gives us information about the API calls made.
 - [ ] Consider adding previous solutions as inspiration in our system prompt.
 - [ ] Could we add a tool for the LLM to retrieve API information? This could be helpful for the LLM, especially if we don't have a handler for it.

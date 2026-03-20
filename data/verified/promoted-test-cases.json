@@ -9,7 +9,7 @@
       { "name": "Engineering" },
       { "firstName": "Lars", "lastName": "Olsen", "email": "lars.olsen@example.com" }
     ],
-    "expectedApiCalls": { "max": 8, "maxErrors": 0 },
+    "expectedApiCalls": { "max": 3, "maxErrors": 0 },
     "expectedTaskSequence": [
       { "taskType": "create_department", "entities": [{ "name": "Engineering" }] },
       { "taskType": "create_employee", "entities": [{ "firstName": "Lars", "lastName": "Olsen", "email": "lars.olsen@example.com" }] }
@@ -38,7 +38,7 @@
     "expectedEntities": [
       { "customerName": "Estrela Lda", "amount": 13650 }
     ],
-    "expectedApiCalls": { "max": 20, "maxErrors": 1 },
+    "expectedApiCalls": { "max": 5, "maxErrors": 0 },
     "notes": "Competition prompt. Invoice ALREADY EXISTS in sandbox ('tem uma fatura pendente' = has a pending invoice). Must NOT create a new invoice. Only register payment."
   },
   {
@@ -58,7 +58,7 @@
       { "taskType": "create_customer", "entities": [{ "name": "Montanha Lda", "organizationNumber": "970481389" }] },
       { "taskType": "create_invoice", "entities": [{ "customerName": "Montanha Lda" }] }
     ],
-    "expectedApiCalls": { "max": 40, "maxErrors": 2 },
+    "expectedApiCalls": { "max": 15, "maxErrors": 0 },
     "notes": "Competition prompt. Multi-line invoice with 3 products at different VAT rates (25%, 15%, 0%). Products have specific numbers. Products may already exist in sandbox."
   },
   {
