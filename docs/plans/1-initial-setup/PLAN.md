@@ -70,6 +70,13 @@
   - [x] Created `pnpm eval:compare` script that runs multiple model/prompt configurations side-by-side and prints a comparison table with pass rate, API call count, errors, and latency.
   - [x] Context pollution prevented: each eval request sends `X-Eval-Mode: true` which resets all cached lookups (department, currency, VAT type, product unit) so each test case runs against a clean state.
   - You are given much freedom and should also communicate to us what you are doing and what you are thinking.
+- [ ] Our Tripletex sandbox API must be empty on each run, because this is how it will work in the competition. Can you make sure we clear the sandbox before each run? This includes both submits and evals.
+- [ ] I ran a submit and it seems like the server is working and doing something, however all checks failed. I also don't see any records of the attempt in the folders `solve-logs`, `answers` or `eval-candidates`. What is going on? Please investigate this.
+  - It would be nice if you had access to the checks and communication with the server so we can see what is going on. If needed check the official documentation, perhaps it contains something useful.
+  - We do have the browser tool in Cursor which you can use to trigger a submit - combine that with looking at the logs coming in via the tunnel and/or the dev server and then perhaps we can get a view of what's going on? If not, can we fix the logging and the terminal output so we can see what's going on?
+- [ ] It's not entirely clear to me what I'm supposed to do with the `eval-candidates`, I know you want me to verify manually but it's not so easy to do. I think we must use LLMs to verify answers which we later can use in our evals.
+- [ ] We need to come up with a feedback loop and a way to improve the eval system continuously with data we gather from submissions. Can you help me make a feedback loop and give me an overview of how the flow and how it works?
+- [ ] I want to see and understand the entire process and loop. Perhaps you can create a dashboard/visualizer, so if we start a submit or eval I can monitor what is going on, what is called, what data is coming in, and so on.
 
 ### Execution of plan
 
