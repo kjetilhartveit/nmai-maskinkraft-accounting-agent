@@ -1,0 +1,23 @@
+docs/plans/2-fine-tuning/PLAN.md
+  6154d316e7bc28d6 16-26,47-58
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.15",
+  "base_commit_sha": "abd334840b53fe6a87b30cd6d830a849cd6692d3",
+  "prompts": {
+    "6154d316e7bc28d6": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "fdd69bba-ba62-46e9-95fe-14b80d214166",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Kjetil Hårtveit <kjetil_runescape@hotmail.com>",
+      "messages": [],
+      "total_additions": 23,
+      "total_deletions": 2,
+      "accepted_lines": 23,
+      "overriden_lines": 0
+    }
+  }
+}
