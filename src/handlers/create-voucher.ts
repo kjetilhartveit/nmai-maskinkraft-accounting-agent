@@ -20,6 +20,14 @@ async function findAccountByNumber(
   return result.values[0] ?? null;
 }
 
+function ensureDateFormat(value: unknown): string {
+  const s = String(value ?? "");
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const parsed = new Date(s);
+  if (!isNaN(parsed.getTime())) return parsed.toISOString().slice(0, 10);
+  return today();
+}
+
 export async function handleCreateVoucher(
   client: TripletexClient,
   task: ParsedTask,
@@ -27,7 +35,7 @@ export async function handleCreateVoucher(
 ): Promise<void> {
   const entity = task.entities[0] ?? {};
 
-  const voucherDate = String(entity.date ?? entity.voucherDate ?? today());
+  const voucherDate = ensureDateFormat(entity.date ?? entity.voucherDate ?? today());
   const description = String(entity.description ?? entity.comment ?? "");
 
   // Build postings from entity
@@ -61,7 +69,7 @@ export async function handleCreateVoucher(
     postings.push({
       account: { id: account.id },
       date: voucherDate,
-      amount: type === "DEBIT" ? Math.abs(amount) : -Math.abs(amount),
+      amountGross: type === "DEBIT" ? Math.abs(amount) : -Math.abs(amount),
       description: String(posting.description ?? description),
     });
   }
@@ -77,6 +85,7 @@ export async function handleCreateVoucher(
     postings,
   };
 
+  console.log(`[Handler] Creating voucher with date=${voucherDate}, ${postings.length} posting(s)`);
   const result = await client.post<{ id: number }>("/ledger/voucher", body);
   console.log(`[Handler] Created voucher: id=${result.value.id}`);
 }

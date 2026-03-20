@@ -62,10 +62,20 @@ export async function executeTaskSequence(
   sequence: ParsedTaskSequence,
 ): Promise<void> {
   const ctx = new SequenceContext();
+  const errors: string[] = [];
   console.log(`[Handler] Executing sequence of ${sequence.tasks.length} task(s)`);
   for (let i = 0; i < sequence.tasks.length; i++) {
     const task = sequence.tasks[i];
     console.log(`[Handler] Task ${i + 1}/${sequence.tasks.length}: ${task.taskType}`);
-    await executeTask(client, task, ctx);
+    try {
+      await executeTask(client, task, ctx);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[Handler] Task ${i + 1} (${task.taskType}) failed: ${msg}`);
+      errors.push(`${task.taskType}: ${msg}`);
+    }
+  }
+  if (errors.length > 0) {
+    console.warn(`[Handler] ${errors.length}/${sequence.tasks.length} task(s) had errors`);
   }
 }
