@@ -1,0 +1,55 @@
+src/scripts/eval-compare.ts
+  dadac8617c88c8a7 1-133
+src/eval/reporter.ts
+  dadac8617c88c8a7 21,26-27
+src/handlers/index.ts
+  dadac8617c88c8a7 2,56-65
+src/eval/runner.ts
+  dadac8617c88c8a7 2,8,79,84-86,95,108,111,113-117,122,131,137
+src/eval/types.ts
+  dadac8617c88c8a7 1,9,17-18,33
+src/scripts/ingest-prompts.ts
+  dadac8617c88c8a7 1-187
+docs/plans/1-initial-setup/PLAN.md
+  dadac8617c88c8a7 52-58,60-71
+src/lib/solve-logger.ts
+  dadac8617c88c8a7 3,13,37,42-45
+src/eval/match.ts
+  dadac8617c88c8a7 1,77-98,118-138
+src/scripts/run-eval.ts
+  dadac8617c88c8a7 13-14,27-30,48-55,57-61,64,66
+src/eval/test-cases.ts
+  dadac8617c88c8a7 107-158
+src/scripts/capture-run.ts
+  dadac8617c88c8a7 2,4,14,62,82,97,99-103
+src/types/index.ts
+  dadac8617c88c8a7 54-59
+.gitignore
+  dadac8617c88c8a7 6
+package.json
+  dadac8617c88c8a7 14,16
+src/lib/llm.ts
+  dadac8617c88c8a7 5,33,36-39,47-48,50,74,77-79,81,83,105-130,132,137,145,151-160,162,166
+src/routes/solve.ts
+  dadac8617c88c8a7 3,6,15,39,71-73,75,90,102,128,141
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.15",
+  "base_commit_sha": "5bef20c7277bb46546315f9cd8d197158a37f0a9",
+  "prompts": {
+    "dadac8617c88c8a7": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "ad22a5a2-fd07-458c-b3cb-af5650955c33",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Kjetil Hårtveit <kjetil_runescape@hotmail.com>",
+      "messages": [],
+      "total_additions": 1452,
+      "total_deletions": 936,
+      "accepted_lines": 711,
+      "overriden_lines": 0
+    }
+  }
+}
