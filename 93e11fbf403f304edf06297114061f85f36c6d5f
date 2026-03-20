@@ -1,0 +1,67 @@
+src/scripts/run-eval.ts
+  6154d316e7bc28d6 2-3,7,10-11,19,36-37,43-60,62,97-106
+src/handlers/create-travel-expense.ts
+  6154d316e7bc28d6 3,40,97
+src/handlers/create-order.ts
+  6154d316e7bc28d6 3,22,26,32-37,39
+src/handlers/create-project.ts
+  6154d316e7bc28d6 3,13,32,35-40,42
+src/handlers/create-voucher.ts
+  6154d316e7bc28d6 3,26
+src/types/index.ts
+  6154d316e7bc28d6 78
+src/lib/tripletex-client.ts
+  6154d316e7bc28d6 63,65,141
+src/lib/sequence-context.ts
+  6154d316e7bc28d6 1-43
+src/lib/solve-logger.ts
+  6154d316e7bc28d6 7-23
+src/eval/runner.ts
+  6154d316e7bc28d6 75
+src/scripts/feedback-loop.ts
+  6154d316e7bc28d6 88
+src/routes/solve.ts
+  6154d316e7bc28d6 8,58-63,66-74
+src/handlers/create-product.ts
+  6154d316e7bc28d6 3,39
+src/handlers/index.ts
+  6154d316e7bc28d6 3,23,46,52,64,69
+src/handlers/create-invoice.ts
+  6154d316e7bc28d6 3,86-87,89-98,124-130,132-133,178,180
+src/scripts/dashboard.ts
+  6154d316e7bc28d6 4,9,21,29-30,32,36-37,50-52,56-58,74-76,83-88,143,145,148,150,158-167,183-186,188-191,193,195-204,214-219,221-232,237-244,246,250-252,258-260,264,272,276,278-279,281,283-285,288-312,315-317,319-322,324-325,330-332,334-340,351-364,366-387,389-407,411-418,426-427,429-432,437
+src/handlers/create-department.ts
+  6154d316e7bc28d6 3,8,20-21,25-28
+src/handlers/create-employee.ts
+  6154d316e7bc28d6 3,37,39-46,59,73,78-83,86-88
+src/handlers/update-customer.ts
+  6154d316e7bc28d6 3,9
+src/handlers/update-employee.ts
+  6154d316e7bc28d6 3,9
+src/handlers/create-supplier.ts
+  6154d316e7bc28d6 3,20,26-27,31-34
+src/handlers/create-customer.ts
+  6154d316e7bc28d6 3,21,27-28,32-35
+src/eval/reporter.ts
+  6154d316e7bc28d6 1,13,30,44-92
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.15",
+  "base_commit_sha": "93e11fbf403f304edf06297114061f85f36c6d5f",
+  "prompts": {
+    "6154d316e7bc28d6": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "fdd69bba-ba62-46e9-95fe-14b80d214166",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Kjetil Hårtveit <kjetil_runescape@hotmail.com>",
+      "messages": [],
+      "total_additions": 905,
+      "total_deletions": 488,
+      "accepted_lines": 558,
+      "overriden_lines": 0
+    }
+  }
+}
