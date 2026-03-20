@@ -92,7 +92,29 @@ export async function handleCreateProject(
       body.customer = { id: Number(entity.customerId) };
     }
 
-    const result = await client.post<{ id: number }>("/project", body);
-    console.log(`[Handler] Created project: id=${result.value.id}`);
+    try {
+      const result = await client.post<{ id: number }>("/project", body);
+      console.log(`[Handler] Created project: id=${result.value.id}`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes("prosjektleder") || msg.includes("project manager")) {
+        // PM entitlement failed — try with the default first employee
+        const fallbackPM = await getProjectManagerEmployeeId(client);
+        if (fallbackPM && fallbackPM !== projectManagerId) {
+          console.log(`[Handler] PM entitlement failed, retrying with fallback PM id=${fallbackPM}`);
+          if (!grantedPMs.has(fallbackPM)) {
+            await grantProjectManagerEntitlement(client, fallbackPM, false);
+            grantedPMs.add(fallbackPM);
+          }
+          body.projectManager = { id: fallbackPM };
+          const result = await client.post<{ id: number }>("/project", body);
+          console.log(`[Handler] Created project (fallback PM): id=${result.value.id}`);
+        } else {
+          throw err;
+        }
+      } else {
+        throw err;
+      }
+    }
   }
 }

@@ -123,12 +123,9 @@ async function createOrderForInvoice(
   const orderId = orderResult.value.id;
   console.log(`[Handler] Created order for invoice: id=${orderId}`);
 
+  // Resolve all product IDs
+  const resolvedLines: { productId: number; line: ProductLine }[] = [];
   for (const line of productLines) {
-    let vatTypeId: number | undefined;
-    if (line.vatRate !== undefined) {
-      vatTypeId = await findVatTypeIdByRate(client, line.vatRate);
-    }
-
     const cachedId = ctx?.getProductId(line.productName);
     let productId: number;
     if (cachedId) {
@@ -139,21 +136,30 @@ async function createOrderForInvoice(
         client,
         line.productName,
         line.unitPrice,
-        vatTypeId,
       );
       productId = product.id;
     }
+    resolvedLines.push({ productId, line });
+  }
 
-    await client.post("/order/orderline", {
-      order: { id: orderId },
-      product: { id: productId },
-      count: line.quantity,
-      unitPriceExcludingVatCurrency: line.unitPrice,
-    });
+  // Batch create order lines
+  const orderLineBodies = resolvedLines.map(({ productId, line }) => ({
+    order: { id: orderId },
+    product: { id: productId },
+    count: line.quantity,
+    unitPriceExcludingVatCurrency: line.unitPrice,
+  }));
+
+  if (orderLineBodies.length === 1) {
+    await client.post("/order/orderline", orderLineBodies[0]);
+    const { line } = resolvedLines[0];
     console.log(
       `[Handler] Added order line: ${line.productName} x${line.quantity} @ ${line.unitPrice}` +
         (line.vatRate !== undefined ? ` (VAT ${line.vatRate}%)` : ""),
     );
+  } else {
+    await client.postList("/order/orderline/list", orderLineBodies);
+    console.log(`[Handler] Added ${orderLineBodies.length} order lines (batch)`);
   }
 
   return orderResult.value;

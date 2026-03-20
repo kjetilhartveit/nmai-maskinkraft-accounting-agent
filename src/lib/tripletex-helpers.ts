@@ -306,7 +306,7 @@ export async function findOrCreateProduct(
   client: TripletexClient,
   name: string,
   unitPriceExcVat: number,
-  vatTypeId?: number,
+  _vatTypeId?: number,
 ): Promise<Product> {
   const existing = await findProductByName(client, name);
   if (existing) {
@@ -326,22 +326,13 @@ export async function findOrCreateProduct(
     productUnit: { id: unitId },
   };
 
-  if (vatTypeId) {
-    body.vatType = { id: vatTypeId };
-  }
-
   try {
     const created = await client.post<Product>("/product", body);
     console.log(`[Helper] Created product: ${name} (id=${created.value.id})`);
     return created.value;
   } catch {
-    // If VAT type was specified, retry without it; otherwise try default VAT
-    if (vatTypeId) {
-      delete body.vatType;
-    } else {
-      const defaultVatTypeId = await getDefaultProductVatTypeId(client);
-      body.vatType = { id: defaultVatTypeId };
-    }
+    const defaultVatTypeId = await getDefaultProductVatTypeId(client);
+    body.vatType = { id: defaultVatTypeId };
     const created = await client.post<Product>("/product", body);
     console.log(`[Helper] Created product (fallback): ${name} (id=${created.value.id})`);
     return created.value;
