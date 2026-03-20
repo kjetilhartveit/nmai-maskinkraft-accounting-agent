@@ -107,6 +107,13 @@ export class TripletexClient {
     return this.request("POST", endpoint, { body });
   }
 
+  async postList<T>(
+    endpoint: string,
+    body: unknown,
+  ): Promise<TripletexListResponse<T>> {
+    return this.request("POST", endpoint, { body });
+  }
+
   async put<T>(
     endpoint: string,
     body: unknown,

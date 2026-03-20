@@ -5,15 +5,19 @@ export async function handleCreateDepartment(
   client: TripletexClient,
   task: ParsedTask,
 ): Promise<void> {
-  for (const entity of task.entities) {
+  const bodies = task.entities.map((entity) => {
     const body: Record<string, unknown> = {
       name: entity.name ?? entity.departmentName ?? "",
     };
+    if (entity.departmentNumber) body.departmentNumber = entity.departmentNumber;
+    return body;
+  });
 
-    if (entity.departmentNumber)
-      body.departmentNumber = entity.departmentNumber;
-
-    const result = await client.post<{ id: number }>("/department", body);
+  if (bodies.length === 1) {
+    const result = await client.post<{ id: number }>("/department", bodies[0]);
     console.log(`[Handler] Created department: id=${result.value.id}`);
+  } else {
+    const result = await client.postList<{ id: number }>("/department/list", bodies);
+    console.log(`[Handler] Created ${result.values.length} departments`);
   }
 }

@@ -1,24 +1,30 @@
 import type { TripletexClient } from "../lib/tripletex-client.js";
 import type { ParsedTask } from "../types/index.js";
 
+function buildCustomerBody(entity: Record<string, unknown>): Record<string, unknown> {
+  const body: Record<string, unknown> = {
+    name: entity.name ?? "",
+    isCustomer: true,
+  };
+  if (entity.email) body.email = entity.email;
+  if (entity.organizationNumber) body.organizationNumber = entity.organizationNumber;
+  if (entity.phoneNumber) body.phoneNumber = entity.phoneNumber;
+  if (entity.phoneNumberMobile) body.phoneNumberMobile = entity.phoneNumberMobile;
+  if (entity.postalAddress) body.postalAddress = entity.postalAddress;
+  return body;
+}
+
 export async function handleCreateCustomer(
   client: TripletexClient,
   task: ParsedTask,
 ): Promise<void> {
-  for (const entity of task.entities) {
-    const body: Record<string, unknown> = {
-      name: entity.name ?? "",
-      isCustomer: true,
-    };
+  const bodies = task.entities.map(buildCustomerBody);
 
-    if (entity.email) body.email = entity.email;
-    if (entity.organizationNumber)
-      body.organizationNumber = entity.organizationNumber;
-    if (entity.phoneNumber) body.phoneNumber = entity.phoneNumber;
-    if (entity.phoneNumberMobile)
-      body.phoneNumberMobile = entity.phoneNumberMobile;
-
-    const result = await client.post<{ id: number }>("/customer", body);
+  if (bodies.length === 1) {
+    const result = await client.post<{ id: number }>("/customer", bodies[0]);
     console.log(`[Handler] Created customer: id=${result.value.id}`);
+  } else {
+    const result = await client.postList<{ id: number }>("/customer/list", bodies);
+    console.log(`[Handler] Created ${result.values.length} customers`);
   }
 }

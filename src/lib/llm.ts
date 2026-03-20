@@ -44,37 +44,32 @@ Your job is to:
 2. Extract all entities and their field values mentioned in the prompt.
 3. Detect the language of the prompt.
 
-Task types:
-- create_employee: Create a new employee (fields: firstName, lastName, email, phoneNumber, etc.)
-- update_employee: Modify an existing employee
-- create_customer: Register a new customer (fields: name, email, organizationNumber, isCustomer, etc.)
-- update_customer: Modify an existing customer
-- create_product: Add a product (fields: name, number, unitPrice, vatType, etc.)
-- create_department: Create department(s) (fields: name, departmentNumber)
-- create_invoice: Create an invoice (may need customer + product + order first)
-- send_invoice: Create and send an invoice
-- create_payment: Register a payment on an invoice
-- create_credit_note: Issue a credit note
-- create_order: Create an order
-- create_travel_expense: Register a travel expense report
-- delete_travel_expense: Delete a travel expense
-- create_project: Create a project (fields: name, projectManager, customer, etc.)
-- create_voucher: Create a ledger voucher
-- create_supplier: Register a supplier (fields: name, organizationNumber, email, isSupplier, etc.)
+Task types and their entity fields:
+
+- create_employee: fields: firstName, lastName, email, phoneNumber, phoneNumberMobile, dateOfBirth, employeeNumber, userType
+- update_employee: fields: firstName, lastName (to find) + any updated fields
+- create_customer: fields: name, email, organizationNumber, phoneNumber, postalAddress
+- update_customer: fields: name (to find) + any updated fields
+- create_product: fields: name, unitPrice, number, description
+- create_department: fields: name, departmentNumber
+- create_order: ONE entity with: customerName, orderDate (YYYY-MM-DD), deliveryDate (YYYY-MM-DD), ourReference, yourReference. Plus extra entities for products: name, quantity, unitPrice.
+- create_invoice: fields: customerName, orderId, invoiceDate (YYYY-MM-DD), dueDate (YYYY-MM-DD), comment
+- send_invoice: same as create_invoice — creates and sends immediately
+- create_payment: fields: invoiceId, amount, paymentDate (YYYY-MM-DD)
+- create_credit_note: fields: invoiceId, comment
+- create_travel_expense: fields: employeeFirstName, employeeLastName, date (YYYY-MM-DD), amount, description, paymentType (COMPANY_CARD or EMPLOYEE_PAID)
+- delete_travel_expense: fields: employeeFirstName, employeeLastName OR travelExpenseId
+- create_project: fields: name, projectManagerFirstName, projectManagerLastName, startDate (YYYY-MM-DD), endDate (YYYY-MM-DD), customerName, description
+- create_voucher: fields: date (YYYY-MM-DD), description. Plus extra entities for postings: accountNumber, amount, type (DEBIT/CREDIT), description.
+- create_supplier: fields: name, email, organizationNumber, phoneNumber
 - unknown: If the task doesn't match any known type
 
-For entities, extract ALL field values mentioned in the prompt. Use English field names.
-Common fields:
-- Names: firstName, lastName, name
-- Contact: email, phoneNumber, phoneNumberMobile
-- Organization: organizationNumber
-- Financial: amount, unitPrice, vatType, currency
-- Dates: date, dueDate, invoiceDate
-- Roles: isAdmin, isCustomer, isSupplier
-- References: customerName, projectName, departmentName
-
-When creating invoices, also extract the product/service description and customer details.
-For multiple entities (e.g., "create three departments"), return each as a separate entity in the array.`;
+Rules:
+- All dates must be in YYYY-MM-DD format. Infer from context or use today if not given.
+- For multiple entities (e.g. "create three departments"), return each as a separate entity in the array.
+- For orders: first entity = order metadata, additional entities = product lines.
+- For vouchers: first entity = voucher metadata, additional entities = posting lines.
+- Extract ALL field values mentioned. Use English field names.`;
 
 /** Optional shorter system prompt for A/B testing prompt variants. */
 const SYSTEM_PROMPT_MINIMAL = `You parse Tripletex accounting prompts into JSON: task type, entities (English field names), and prompt language.
