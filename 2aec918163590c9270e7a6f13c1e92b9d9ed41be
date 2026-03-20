@@ -1,0 +1,33 @@
+src/scripts/capture-run.ts
+  dc005ff5010b2747 1-110
+data/verified/README.md
+  dc005ff5010b2747 1-15
+data/verified/answers.json
+  dc005ff5010b2747 1-70
+package.json
+  dc005ff5010b2747 13-14
+.gitignore
+  dc005ff5010b2747 5
+docs/plans/1-initial-setup/PLAN.md
+  dc005ff5010b2747 27,29,32-39
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.15",
+  "base_commit_sha": "2aec918163590c9270e7a6f13c1e92b9d9ed41be",
+  "prompts": {
+    "dc005ff5010b2747": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "5672a6a0-1631-4064-bb48-97af30ba945f",
+        "model": "claude-4.6-opus-high-thinking"
+      },
+      "human_author": "Kjetil Hårtveit <kjetil_runescape@hotmail.com>",
+      "messages": [],
+      "total_additions": 279,
+      "total_deletions": 76,
+      "accepted_lines": 216,
+      "overriden_lines": 0
+    }
+  }
+}
