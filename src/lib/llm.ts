@@ -76,17 +76,45 @@ Common fields:
 When creating invoices, also extract the product/service description and customer details.
 For multiple entities (e.g., "create three departments"), return each as a separate entity in the array.`;
 
+/** Optional shorter system prompt for A/B testing prompt variants. */
+const SYSTEM_PROMPT_MINIMAL = `You parse Tripletex accounting prompts into JSON: task type, entities (English field names), and prompt language.
+Known task types: create_employee, update_employee, create_customer, update_customer, create_product, create_department, create_invoice, send_invoice, create_payment, create_credit_note, create_order, create_travel_expense, delete_travel_expense, create_project, create_voucher, create_supplier, unknown.
+Return one entity per distinct object (e.g. each department separately).`;
+
+export const SYSTEM_PROMPT_VARIANTS = {
+  default: SYSTEM_PROMPT,
+  minimal: SYSTEM_PROMPT_MINIMAL,
+} as const;
+
+export type SystemPromptVariant = keyof typeof SYSTEM_PROMPT_VARIANTS;
+
+export interface ParsePromptOptions {
+  /** OpenRouter model id, e.g. anthropic/claude-sonnet-4.6 */
+  model?: string;
+  /** Named system prompt variant (default | minimal). Unknown keys fall back to default. */
+  systemPromptVariant?: string;
+}
+
+function resolveSystemPrompt(variant?: string): string {
+  if (!variant) return SYSTEM_PROMPT_VARIANTS.default;
+  const key = variant as keyof typeof SYSTEM_PROMPT_VARIANTS;
+  return SYSTEM_PROMPT_VARIANTS[key] ?? SYSTEM_PROMPT_VARIANTS.default;
+}
+
 export async function parsePrompt(
   prompt: string,
   files: FileAttachment[] = [],
+  options?: ParsePromptOptions,
 ): Promise<ParsedTask> {
   const userContent = buildUserMessage(prompt, files);
+  const modelId = options?.model ?? config.openrouter.model;
+  const system = resolveSystemPrompt(options?.systemPromptVariant);
 
   const start = performance.now();
   const { object } = await generateObject({
-    model: openrouter(config.openrouter.model),
+    model: openrouter(modelId),
     schema: ParsedTaskSchema,
-    system: SYSTEM_PROMPT,
+    system,
     prompt: userContent,
   });
   const durationMs = Math.round(performance.now() - start);
