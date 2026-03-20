@@ -16,6 +16,7 @@ import { handleCreateProject } from "./create-project.js";
 import { handleCreateVoucher } from "./create-voucher.js";
 import { handleUpdateEmployee } from "./update-employee.js";
 import { handleUpdateCustomer } from "./update-customer.js";
+import { handleGenericTask } from "./generic-handler.js";
 
 export type TaskHandler = (
   client: TripletexClient,
@@ -51,9 +52,10 @@ export async function executeTask(
     console.log(`[Handler] Executing ${task.taskType} handler`);
     await handler(client, task, ctx);
   } else {
-    console.warn(
-      `[Handler] No dedicated handler for task type: ${task.taskType}. Skipping execution.`,
+    console.log(
+      `[Handler] No dedicated handler for "${task.taskType}" — using generic agentic handler`,
     );
+    await handleGenericTask(client, task, ctx);
   }
 }
 

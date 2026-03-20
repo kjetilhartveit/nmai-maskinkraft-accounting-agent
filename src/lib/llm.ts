@@ -67,7 +67,10 @@ Task types and their entity fields:
 - create_project: fields: name, projectManagerFirstName, projectManagerLastName, startDate (YYYY-MM-DD), endDate (YYYY-MM-DD), customerName, description
 - create_voucher: fields: date (YYYY-MM-DD), description. Plus extra entities for postings: accountNumber, amount, type (DEBIT/CREDIT), description.
 - create_supplier: fields: name, email, organizationNumber, phoneNumber
-- unknown: If the task doesn't match any known type
+- unknown: For ANY task that doesn't clearly match one of the above types. This includes but is not limited to:
+  custom accounting dimensions, bank reconciliation, incoming invoices, supplier invoices,
+  salary operations, asset management, timesheet entries, company settings, contacts, divisions,
+  correcting/reversing entries, activating modules, or any other Tripletex operation.
 
 Rules:
 - All dates must be in YYYY-MM-DD format. Infer from context or use today if not given.
@@ -76,11 +79,14 @@ Rules:
 - For vouchers: first entity = voucher metadata, additional entities = posting lines.
 - Extract ALL field values mentioned. Use English field names.
 - If the prompt involves a chain of operations (e.g. "create a customer and send them an invoice"), return multiple tasks in the correct execution order.
-- IMPORTANT: Reuse references between tasks. If you create a customer "Acme Ltd" and then create an invoice for them, use the same customerName "Acme Ltd" in both tasks.`;
+- IMPORTANT: Reuse references between tasks. If you create a customer "Acme Ltd" and then create an invoice for them, use the same customerName "Acme Ltd" in both tasks.
+- CRITICAL: Do NOT force tasks into a wrong type. If the prompt asks to create a "custom accounting dimension" or "regnskapsdimensjon", do NOT map it to create_department. Use "unknown" instead. The "unknown" handler is a full agentic system that can execute ANY Tripletex API operation.
+- For "unknown" tasks: extract ALL information from the prompt into the entities array — names, values, numbers, dates, amounts, descriptions, account numbers, dimension names, etc. Put everything you can extract in the entity fields using descriptive field names.`;
 
 const SYSTEM_PROMPT_MINIMAL = `You parse Tripletex accounting prompts into JSON: tasks array (each with taskType and entities), and prompt language.
 Known task types: create_employee, update_employee, create_customer, update_customer, create_product, create_department, create_invoice, send_invoice, create_payment, create_credit_note, create_order, create_travel_expense, delete_travel_expense, create_project, create_voucher, create_supplier, unknown.
-Return one entity per distinct object (e.g. each department separately). For multi-step operations, return multiple tasks in dependency order.`;
+Return one entity per distinct object (e.g. each department separately). For multi-step operations, return multiple tasks in dependency order.
+Use "unknown" for any operation not in the list above (accounting dimensions, bank reconciliation, salary, assets, etc.). Do NOT force into a wrong type. For unknown, extract all data into entities.`;
 
 export const SYSTEM_PROMPT_VARIANTS = {
   default: SYSTEM_PROMPT,
@@ -104,22 +110,22 @@ function resolveSystemPrompt(variant?: string): string {
 
 const TASK_PRIORITY: Record<string, number> = {
   create_department: 0,
-  create_employee: 1,
-  create_customer: 1,
-  create_supplier: 1,
-  update_employee: 2,
-  update_customer: 2,
-  create_product: 2,
-  create_order: 3,
-  create_project: 3,
-  create_voucher: 3,
-  create_travel_expense: 3,
-  create_invoice: 4,
-  send_invoice: 4,
-  delete_travel_expense: 4,
-  create_payment: 5,
-  create_credit_note: 5,
-  unknown: 99,
+  unknown: 1, // unknown tasks often create prerequisites (dimensions, contacts, etc.)
+  create_employee: 2,
+  create_customer: 2,
+  create_supplier: 2,
+  update_employee: 3,
+  update_customer: 3,
+  create_product: 3,
+  create_order: 4,
+  create_project: 4,
+  create_voucher: 4,
+  create_travel_expense: 4,
+  create_invoice: 5,
+  send_invoice: 5,
+  delete_travel_expense: 5,
+  create_payment: 6,
+  create_credit_note: 6,
 };
 
 function sortByDependency(tasks: ParsedTask[]): ParsedTask[] {
