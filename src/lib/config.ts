@@ -1,5 +1,7 @@
 import "dotenv/config";
 
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+
 function required(key: string): string {
   const value = process.env[key];
   if (!value) {
@@ -17,7 +19,7 @@ export const config = {
 
   openrouter: {
     apiKey: required("OPENROUTER_API_KEY"),
-    model: optional("OPENROUTER_MODEL", "anthropic/claude-sonnet-4"),
+    model: optional("OPENROUTER_MODEL", "anthropic/claude-sonnet-4.6"),
   },
 
   sandbox: {

@@ -15,8 +15,10 @@ export async function handleCreateSupplier(
     if (entity.organizationNumber)
       body.organizationNumber = entity.organizationNumber;
     if (entity.phoneNumber) body.phoneNumber = entity.phoneNumber;
+    if (entity.phoneNumberMobile)
+      body.phoneNumberMobile = entity.phoneNumberMobile;
 
-    const result = await client.post<{ id: number }>("/customer", body);
+    const result = await client.post<{ id: number }>("/supplier", body);
     console.log(`[Handler] Created supplier: id=${result.value.id}`);
   }
 }

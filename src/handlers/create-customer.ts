@@ -15,6 +15,8 @@ export async function handleCreateCustomer(
     if (entity.organizationNumber)
       body.organizationNumber = entity.organizationNumber;
     if (entity.phoneNumber) body.phoneNumber = entity.phoneNumber;
+    if (entity.phoneNumberMobile)
+      body.phoneNumberMobile = entity.phoneNumberMobile;
 
     const result = await client.post<{ id: number }>("/customer", body);
     console.log(`[Handler] Created customer: id=${result.value.id}`);

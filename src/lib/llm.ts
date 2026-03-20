@@ -7,6 +7,7 @@ import type { FileAttachment, ParsedTask, TaskType } from "../types/index.js";
 const openrouter = createOpenAI({
   baseURL: "https://openrouter.ai/api/v1",
   apiKey: config.openrouter.apiKey,
+  compatibility: "compatible",
 });
 
 const TASK_TYPES: TaskType[] = [
