@@ -1,0 +1,33 @@
+.gitignore
+  dc005ff5010b2747 4
+scripts/extract-tripletex-openapi-report.mjs
+  dc005ff5010b2747 1-274
+scripts/tripletex-schema-summarize.mjs
+  dc005ff5010b2747 1-153
+docs/TRIPLETEX_API_AGENT_REPORT.md
+  dc005ff5010b2747 1-487
+scripts/parse-tripletex-openapi.mjs
+  dc005ff5010b2747 1-180
+docs/reports/TRIPLETEX-API.md
+  dc005ff5010b2747 1-286
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.15",
+  "base_commit_sha": "87059589dba418a62436995aa1a3810968b4a889",
+  "prompts": {
+    "dc005ff5010b2747": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "5672a6a0-1631-4064-bb48-97af30ba945f",
+        "model": "claude-4.6-opus-high-thinking"
+      },
+      "human_author": "Kjetil Hårtveit <kjetil_runescape@hotmail.com>",
+      "messages": [],
+      "total_additions": 1388,
+      "total_deletions": 7,
+      "accepted_lines": 1382,
+      "overriden_lines": 0
+    }
+  }
+}
