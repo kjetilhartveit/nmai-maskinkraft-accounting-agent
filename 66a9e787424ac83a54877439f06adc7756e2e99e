@@ -1,0 +1,23 @@
+src/scripts/sync-prompts.ts
+  1f117eb5d5cd4714 80,82-83
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.15",
+  "base_commit_sha": "66a9e787424ac83a54877439f06adc7756e2e99e",
+  "prompts": {
+    "1f117eb5d5cd4714": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8011c0a9-af34-42ae-93af-183ad195dc4c",
+        "model": "claude-opus-4-5-20251101"
+      },
+      "human_author": "Kjetil Hårtveit <kjetil_runescape@hotmail.com>",
+      "messages": [],
+      "total_additions": 3,
+      "total_deletions": 70,
+      "accepted_lines": 3,
+      "overriden_lines": 0
+    }
+  }
+}
