@@ -104,6 +104,9 @@
   - [x] Dashboard shows: success rate, solve count by source, API call stats, test case count, and a live table of recent solves.
   - [x] Each solve row shows: timestamp, source (competition/eval/manual), status, prompt preview, task types, API calls, errors, duration, and expandable details (individual API calls, full prompt, error messages).
   - [x] Uses Server-Sent Events for real-time updates — new solves appear instantly with a highlight animation.
+- [ ] Our LLM/solver must be able to learn from validation errors and adapt and learn how to make sure they don't happen again.
+  - Sometimes the message is cut-off like "Det finnes alle", we should explore how we can handle this and make sure the LLM/solver doesn't get stuck.
+  - [ ] Make sure all evals pass.
 
 ### Execution of plan
 
