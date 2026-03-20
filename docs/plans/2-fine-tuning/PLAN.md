@@ -62,7 +62,8 @@ We have set up the project, but we must fine-tune our solution, fix bugs and set
   - Migrated to SQLite (`data/agent.db`) using `better-sqlite3`. Schema: `solves`, `raw_requests`, `captures` tables with indexes on timestamp/source/prompt. Updated all consumers: solve-logger, dashboard, ingest-prompts, feedback-loop, capture-run, sync-prompts. Created `pnpm migrate` script to import existing JSONL data (246 solves, 118 raw requests imported).
 - [x] Should we utilise the [tripletex-openapi.json](../../../docs/reports/tripletex-openapi.json) seeing as it's the truth of source of what's possible with the API? This could be helpful for the LLM, especially if we don't have a handler for it. Consider whether we can hook the handlers up or replace the handlers entirely with the openapi?
   - Created `openapi-index.ts` module that loads a pre-built API index (295KB, 800 endpoints from 546 paths). Added `api_search` and `api_endpoint_detail` tools to the generic handler so the LLM can look up unfamiliar endpoints at runtime. Pre-build with `pnpm build-api-index`. Keeps curated manual reference in system prompt + OpenAPI-backed lookup for the full API surface.
-- [ ] Keep working on the tests against the sandbox. Remember the goal is not 100% pass rate, because LLMs are non-deterministic. The goal is to create a solid and robust solution and then figure out which solution is the most consistently good.
+- [x] Keep working on the tests against the sandbox. Remember the goal is not 100% pass rate, because LLMs are non-deterministic. The goal is to create a solid and robust solution and then figure out which solution is the most consistently good.
+  - **16/16 eval cases passing** (100% pass rate on single run). Fixed comp-dimension-voucher-es entity matching. Updated baselines: multi-dept-employee-en 3→2, dept-engineering-employee-lars-en 3→2, comp-multiline-invoice-pt 15→11. Total: 79 API calls, 4 errors across all 16 cases.
 
 ### Execution of plan
 
