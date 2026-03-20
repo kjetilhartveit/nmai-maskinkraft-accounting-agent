@@ -60,19 +60,29 @@ async function findInvoiceForPayment(
   return unpaid[0] ?? result.values[0];
 }
 
+let cachedPaymentTypeId: number | null = null;
+
 async function getPaymentTypeId(client: TripletexClient): Promise<number> {
+  if (cachedPaymentTypeId) return cachedPaymentTypeId;
   const result = await client.list<PaymentType>("/invoice/paymentType", {
     from: "0",
     count: "20",
   });
-  if (result.values.length > 0) return result.values[0].id;
+  if (result.values.length > 0) {
+    cachedPaymentTypeId = result.values[0].id;
+    return cachedPaymentTypeId;
+  }
   throw new Error("No payment types available");
+}
+
+export function resetPaymentCache(): void {
+  cachedPaymentTypeId = null;
 }
 
 export async function handleCreatePayment(
   client: TripletexClient,
   task: ParsedTask,
-  _ctx: SequenceContext,
+  ctx: SequenceContext,
 ): Promise<void> {
   const entity = task.entities[0] ?? {};
 
@@ -96,21 +106,27 @@ export async function handleCreatePayment(
     // If no invoice found, we might need to create the whole chain
     console.log("[Handler] No existing invoice found — creating invoice chain");
 
-    // Create customer if needed
     let customerId: number;
     if (customerName) {
-      const existing = await findCustomerByName(client, customerName);
-      if (existing) {
-        customerId = existing.id;
+      const ctxId = ctx.getCustomerId(customerName);
+      if (ctxId) {
+        console.log(`[Handler] Using customer from context: ${customerName} → id=${ctxId}`);
+        customerId = ctxId;
       } else {
-        const orgNumber = String(entity.organizationNumber ?? entity.orgNumber ?? "");
-        const body: Record<string, unknown> = {
-          name: customerName,
-          isCustomer: true,
-        };
-        if (orgNumber) body.organizationNumber = orgNumber;
-        const created = await client.post<{ id: number }>("/customer", body);
-        customerId = created.value.id;
+        const existing = await findCustomerByName(client, customerName);
+        if (existing) {
+          customerId = existing.id;
+        } else {
+          const orgNumber = String(entity.organizationNumber ?? entity.orgNumber ?? "");
+          const body: Record<string, unknown> = {
+            name: customerName,
+            isCustomer: true,
+          };
+          if (orgNumber) body.organizationNumber = orgNumber;
+          const created = await client.post<{ id: number }>("/customer", body);
+          customerId = created.value.id;
+          ctx.registerCustomer(customerName, customerId);
+        }
       }
     } else {
       throw new Error("Cannot create invoice chain: no customer name provided");

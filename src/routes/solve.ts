@@ -5,6 +5,8 @@ import { TripletexClient } from "../lib/tripletex-client.js";
 import { parsePrompt, type ParsePromptOptions } from "../lib/llm.js";
 import { executeTaskSequence } from "../handlers/index.js";
 import { resetCaches } from "../lib/tripletex-helpers.js";
+import { resetPaymentCache } from "../handlers/create-payment.js";
+import { resetTravelExpenseCache } from "../handlers/create-travel-expense.js";
 import { logSolveRequest, logRawRequest, type SolveLogEntry } from "../lib/solve-logger.js";
 import { config } from "../lib/config.js";
 
@@ -50,8 +52,9 @@ solveRouter.post("/solve", async (c) => {
   let filesCount = 0;
   let baseUrl = "";
 
-  // Always reset caches — competition sandboxes are always fresh
   resetCaches();
+  resetPaymentCache();
+  resetTravelExpenseCache();
 
   try {
     const rawBody = await c.req.json();

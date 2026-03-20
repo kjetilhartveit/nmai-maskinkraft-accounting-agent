@@ -10,6 +10,10 @@ interface PaymentType {
 
 let cachedPaymentTypeId: number | null = null;
 
+export function resetTravelExpenseCache(): void {
+  cachedPaymentTypeId = null;
+}
+
 async function getDefaultPaymentTypeId(client: TripletexClient): Promise<number> {
   if (cachedPaymentTypeId !== null) return cachedPaymentTypeId;
 
@@ -37,7 +41,7 @@ async function getDefaultPaymentTypeId(client: TripletexClient): Promise<number>
 export async function handleCreateTravelExpense(
   client: TripletexClient,
   task: ParsedTask,
-  _ctx: SequenceContext,
+  ctx: SequenceContext,
 ): Promise<void> {
   const entity = task.entities[0] ?? {};
 
@@ -46,8 +50,11 @@ export async function handleCreateTravelExpense(
 
   let employeeId: number | null = null;
   if (firstName && lastName) {
-    const employee = await findEmployeeByName(client, firstName, lastName);
-    if (employee) employeeId = employee.id;
+    employeeId = ctx.getEmployeeId(`${firstName} ${lastName}`) ?? null;
+    if (!employeeId) {
+      const employee = await findEmployeeByName(client, firstName, lastName);
+      if (employee) employeeId = employee.id;
+    }
   }
   if (!employeeId && entity.employeeId) employeeId = Number(entity.employeeId);
 

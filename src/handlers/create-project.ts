@@ -53,16 +53,20 @@ export async function handleCreateProject(
   task: ParsedTask,
   ctx: SequenceContext,
 ): Promise<void> {
+  const grantedPMs = new Set<number>();
+
   for (const entity of task.entities) {
     const projectManagerId = await resolveProjectManagerId(client, entity, ctx);
 
     if (!projectManagerId) {
-      console.warn("[Handler] No employee with project manager rights found");
-      return;
+      console.warn("[Handler] No employee with project manager rights found, skipping entity");
+      continue;
     }
 
-    // Grant PROJECT_MANAGER entitlement before assigning
-    await grantProjectManagerEntitlement(client, projectManagerId);
+    if (!grantedPMs.has(projectManagerId)) {
+      await grantProjectManagerEntitlement(client, projectManagerId);
+      grantedPMs.add(projectManagerId);
+    }
 
     const body: Record<string, unknown> = {
       name: entity.name ?? entity.projectName ?? "",

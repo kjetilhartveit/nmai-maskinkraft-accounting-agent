@@ -85,14 +85,23 @@ export async function handleCreateOrder(
   if (products.length > 0) {
     const orderLines = await Promise.all(
       products.map(async (p) => {
-        const product = await findOrCreateProduct(
-          client,
-          String(p.name ?? "Produkt"),
-          Number(p.unitPrice ?? p.price ?? 0),
-        );
+        const productName = String(p.name ?? "Produkt");
+        const cachedId = ctx.getProductId(productName);
+        let productId: number;
+        if (cachedId) {
+          console.log(`[Handler] Using product from context: ${productName} → id=${cachedId}`);
+          productId = cachedId;
+        } else {
+          const product = await findOrCreateProduct(
+            client,
+            productName,
+            Number(p.unitPrice ?? p.price ?? 0),
+          );
+          productId = product.id;
+        }
         return {
           order: { id: orderId },
-          product: { id: product.id },
+          product: { id: productId },
           count: Number(p.quantity ?? p.count ?? 1),
           unitPriceExcludingVatCurrency: Number(p.unitPrice ?? p.price ?? 0),
         };
