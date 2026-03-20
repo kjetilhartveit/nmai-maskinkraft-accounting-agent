@@ -1,0 +1,31 @@
+src/handlers/generic-handler.ts
+  6154d316e7bc28d6 27,30,32,36-41,57,64-65,88,93,107-110,152,179-207
+src/lib/tripletex-api-reference.ts
+  6154d316e7bc28d6 57-59,66-73,76-78,159-164,166-167
+src/handlers/index.ts
+  6154d316e7bc28d6 19,43
+src/lib/llm.ts
+  6154d316e7bc28d6 63-64
+src/handlers/create-payment.ts
+  6154d316e7bc28d6 1-173
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.15",
+  "base_commit_sha": "73ea80773c6e3eb88d54c7dbe4734184fb23c713",
+  "prompts": {
+    "6154d316e7bc28d6": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "fdd69bba-ba62-46e9-95fe-14b80d214166",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Kjetil Hårtveit <kjetil_runescape@hotmail.com>",
+      "messages": [],
+      "total_additions": 454,
+      "total_deletions": 216,
+      "accepted_lines": 282,
+      "overriden_lines": 0
+    }
+  }
+}
