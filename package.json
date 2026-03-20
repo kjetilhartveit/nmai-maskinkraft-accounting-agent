@@ -18,7 +18,8 @@
     "reset-sandbox": "tsx src/scripts/reset-sandbox.ts",
     "verify": "tsx src/scripts/verify-candidates.ts",
     "feedback": "tsx src/scripts/feedback-loop.ts",
-    "dashboard": "tsx src/scripts/dashboard.ts"
+    "dashboard": "tsx src/scripts/dashboard.ts",
+    "sync-prompts": "tsx src/scripts/sync-prompts.ts"
   },
   "dependencies": {
     "@ai-sdk/openai": "^1.3.22",
