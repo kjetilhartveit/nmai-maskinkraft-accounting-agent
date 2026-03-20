@@ -1,14 +1,16 @@
-import { createOpenAI } from "@ai-sdk/openai";
-import { generateObject } from "ai";
+// Archived: OpenRouter + Vercel AI SDK
+// import { createOpenAI } from "@ai-sdk/openai";
+// import { generateObject } from "ai";
+// const openrouter = createOpenAI({
+//   baseURL: "https://openrouter.ai/api/v1",
+//   apiKey: config.openrouter.apiKey,
+//   compatibility: "compatible",
+// });
+
 import { z } from "zod";
 import { config } from "./config.js";
+import { geminiGenerateStructured } from "./gemini.js";
 import type { FileAttachment, ParsedTask, ParsedTaskSequence, TaskType } from "../types/index.js";
-
-const openrouter = createOpenAI({
-  baseURL: "https://openrouter.ai/api/v1",
-  apiKey: config.openrouter.apiKey,
-  compatibility: "compatible",
-});
 
 const TASK_TYPES: TaskType[] = [
   "create_employee",
@@ -127,7 +129,7 @@ export const SYSTEM_PROMPT_VARIANTS = {
 export type SystemPromptVariant = keyof typeof SYSTEM_PROMPT_VARIANTS;
 
 export interface ParsePromptOptions {
-  /** OpenRouter model id, e.g. anthropic/claude-sonnet-4.6 */
+  /** Gemini model id, e.g. gemini-2.5-flash */
   model?: string;
   /** Named system prompt variant (default | minimal). Unknown keys fall back to default. */
   systemPromptVariant?: string;
@@ -173,18 +175,19 @@ export async function parsePrompt(
   options?: ParsePromptOptions,
 ): Promise<ParsedTaskSequence> {
   const userContent = buildUserMessage(prompt, files);
-  const modelId = options?.model ?? config.openrouter.model;
+  const modelId = options?.model ?? config.google.model;
   const system = resolveSystemPrompt(options?.systemPromptVariant);
 
-  const start = performance.now();
-  const { object } = await generateObject({
-    model: openrouter(modelId),
-    schema: ParsedResponseSchema,
-    system,
+  const formatInstruction = `\n\nRespond with valid JSON matching this exact structure:
+{"tasks": [{"taskType": "<type>", "entities": [{...}]}], "language": "<lang_code>"}`;
+
+  const { object, durationMs } = await geminiGenerateStructured({
+    model: modelId,
+    system: system + formatInstruction,
     prompt: userContent,
+    schema: ParsedResponseSchema,
     maxTokens: 4096,
   });
-  const durationMs = Math.round(performance.now() - start);
 
   const tasks: ParsedTask[] = object.tasks.map((t) => ({
     taskType: t.taskType as TaskType,

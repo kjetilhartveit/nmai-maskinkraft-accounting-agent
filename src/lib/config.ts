@@ -17,10 +17,16 @@ function optional(key: string, fallback: string): string {
 export const config = {
   port: parseInt(optional("PORT", "3000"), 10),
 
-  openrouter: {
-    apiKey: required("OPENROUTER_API_KEY"),
-    model: optional("OPENROUTER_MODEL", "anthropic/claude-sonnet-4.6"),
+  google: {
+    apiKey: required("GOOGLE_API_KEY"),
+    model: optional("GOOGLE_MODEL", "gemini-3.1-pro-preview"),
   },
+
+  // Archived: OpenRouter config (switch back by uncommenting and updating llm.ts / generic-handler.ts)
+  // openrouter: {
+  //   apiKey: required("OPENROUTER_API_KEY"),
+  //   model: optional("OPENROUTER_MODEL", "anthropic/claude-sonnet-4.6"),
+  // },
 
   sandbox: {
     apiUrl: optional("SANDBOX_API_URL", ""),
