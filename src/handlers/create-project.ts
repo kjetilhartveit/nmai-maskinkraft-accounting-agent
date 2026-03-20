@@ -8,6 +8,7 @@ import {
   today,
   getProjectManagerEmployeeId,
 } from "../lib/tripletex-helpers.js";
+import { grantProjectManagerEntitlement } from "./create-employee.js";
 
 async function resolveProjectManagerId(
   client: TripletexClient,
@@ -59,6 +60,9 @@ export async function handleCreateProject(
       console.warn("[Handler] No employee with project manager rights found");
       return;
     }
+
+    // Grant PROJECT_MANAGER entitlement before assigning
+    await grantProjectManagerEntitlement(client, projectManagerId);
 
     const body: Record<string, unknown> = {
       name: entity.name ?? entity.projectName ?? "",
