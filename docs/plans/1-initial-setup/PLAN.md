@@ -5,10 +5,25 @@
 - [x] Thoroughly examine the task and the docs. Learn the ins and outs of the task. Identify the biggest hurdles and blockers.
   - [x] Explain the most technical aspects in a more easy to understand manner. Teach me as you go. Create a report with your findings. → [FINDINGS.md](docs/reports/FINDINGS.md)
   - [x] Come up with recommendations with a solution. Be thorough and aim to win the prize by making the best solution. Create a report with your recommendations. → [RECOMMENDATIONS.md](docs/reports/RECOMMENDATIONS.md)
-- [ ] Look at the next steps and think about my plan specifically in order to achieve the best possible results. What do you think is missing? Feel free to add steps/sub-steps to the plan. You may ask for clarifying questions in [QA.md](QA.md) if needed.
+- [x] Look at the next steps and think about my plan specifically in order to achieve the best possible results. What do you think is missing? Feel free to add steps/sub-steps to the plan. You may ask for clarifying questions in [QA.md](QA.md) if needed.
   - Questions has been answered earlier in the [QA.md](QA.md) file, please use them accordingly.
-- [ ] Create the initial framework for the system using TypeScript.
+  - Added sub-steps below to make the framework and submission steps more concrete.
+- [x] Create the initial framework for the system using TypeScript.
+  - [x] Install dependencies with pnpm and lock versions.
+  - [x] Create project structure: `src/` with `types/`, `lib/`, `routes/`, `handlers/`, `scripts/`.
+  - [x] `src/types/index.ts` — Request/response types matching the `/solve` endpoint spec.
+  - [x] `src/lib/config.ts` — Environment variable loading and validation.
+  - [x] `src/lib/tripletex-client.ts` — Tripletex API client (Basic Auth, call tracking for efficiency, error logging, typed responses).
+  - [x] `src/lib/llm.ts` — OpenRouter integration via Vercel AI SDK for prompt parsing.
+  - [x] `src/routes/solve.ts` — POST `/solve` handler: parse request → LLM extraction → task routing → execution → response.
+  - [x] `src/index.ts` — Hono server entry point on port 3000.
+  - [x] `src/scripts/test-sandbox.ts` — Script to verify sandbox connectivity and list available endpoints.
+  - [x] `src/handlers/` — Initial task handlers for create_employee, create_customer, create_department, create_supplier.
 - [ ] Get us up and running and submit against the endpoint. Our system should be deterministic (apart from the LLM of course) and easy to run (also for humans). Automate submittions and session tokens etc. as much as possible.
+  - [x] Verify `pnpm dev` starts the server and `/solve` accepts POST requests.
+  - [ ] Test against the sandbox with a sample prompt end-to-end.
+  - [ ] Set up Cloudflare Tunnel (`pnpm tunnel`) for HTTPS exposure.
+  - [ ] Submit the endpoint URL to the competition platform.
 - [ ] We will thoroughly examine the Tripletex API and learn the ins and outs of it. Some key details are exploring the possibilities, especially in terms of how we can use as few API calls as possible to do operations. We should batch when we can and be smart about it. Sometimes we must create things in advance to avoid errors, because in real attempts the sandbox is empty - and this is what we should simulate.
   - [ ] Create a report with your findings in a new report regarding the Tripletex API.
 - [ ] **Create a testing framework:** Although we will create helpful tools for the LLM (like skills perhaps and documentation in the AGENTS.md), what is perhaps even more important is creating an evaluation system which we can use to rate setups. What we'll do is use sample prompts (including those we gain from submitting tasks) and add the answers to it (e.g. the data to identify and the most efficient API calls). We can use this data to evaluate systems and see what works and what doesn't, which LLMs perform the best and so on. We could even rate setups based on properties per prompt, e.g. the complexitity, the language and so on. And we must be able to run evaluation tests a reasonable number of times to increase our confidence in the results.
