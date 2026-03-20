@@ -6,39 +6,103 @@
     "tier": 2,
     "taskType": "create_employee",
     "expectedEntities": [
-      {
-        "name": "Engineering"
-      },
-      {
-        "firstName": "Lars",
-        "lastName": "Olsen",
-        "email": "lars.olsen@example.com"
-      }
+      { "name": "Engineering" },
+      { "firstName": "Lars", "lastName": "Olsen", "email": "lars.olsen@example.com" }
     ],
-    "expectedApiCalls": {
-      "max": 8,
-      "maxErrors": 0
-    },
+    "expectedApiCalls": { "max": 8, "maxErrors": 0 },
     "expectedTaskSequence": [
-      {
-        "taskType": "create_department",
-        "entities": [
-          {
-            "name": "Engineering"
-          }
-        ]
-      },
-      {
-        "taskType": "create_employee",
-        "entities": [
-          {
-            "firstName": "Lars",
-            "lastName": "Olsen",
-            "email": "lars.olsen@example.com"
-          }
-        ]
-      }
+      { "taskType": "create_department", "entities": [{ "name": "Engineering" }] },
+      { "taskType": "create_employee", "entities": [{ "firstName": "Lars", "lastName": "Olsen", "email": "lars.olsen@example.com" }] }
     ],
-    "notes": "Strict sequencing is required: the department must be created before the employee so that the department ID is available to attach to the employee record."
+    "notes": "Strict sequencing: department before employee."
+  },
+  {
+    "id": "comp-dimension-voucher-es",
+    "prompt": "Cree una dimensión contable personalizada \"Region\" con los valores \"Nord-Norge\" y \"Vestlandet\". Luego registre un asiento en la cuenta 7100 por 34350 NOK, vinculado al valor de dimensión \"Nord-Norge\".",
+    "language": "es",
+    "tier": 3,
+    "taskType": "unknown",
+    "expectedEntities": [
+      { "dimensionName": "Region" },
+      { "accountNumber": 7100, "amount": 34350 }
+    ],
+    "expectedApiCalls": { "max": 30, "maxErrors": 2 },
+    "notes": "Competition prompt. Custom accounting dimension with values, then voucher linked to dimension value. Must use unknown handler (generic agent). Do NOT parse as create_department."
+  },
+  {
+    "id": "comp-payment-existing-invoice-pt",
+    "prompt": "O cliente Estrela Lda (org. nº 977023211) tem uma fatura pendente de 13650 NOK sem IVA por \"Design web\". Registe o pagamento total desta fatura.",
+    "language": "pt",
+    "tier": 2,
+    "taskType": "create_payment",
+    "expectedEntities": [
+      { "customerName": "Estrela Lda", "amount": 13650 }
+    ],
+    "expectedApiCalls": { "max": 20, "maxErrors": 1 },
+    "notes": "Competition prompt. Invoice ALREADY EXISTS in sandbox ('tem uma fatura pendente' = has a pending invoice). Must NOT create a new invoice. Only register payment."
+  },
+  {
+    "id": "comp-multiline-invoice-pt",
+    "prompt": "Crie uma fatura para o cliente Montanha Lda (org. nº 970481389) com três linhas de produto: Horas de consultoria (8659) a 21850 NOK com 25 % IVA, Relatório de análise (2341) a 11250 NOK com 15 % IVA (alimentos), e Manutenção (1043) a 9250 NOK com 0 % IVA (isento).",
+    "language": "pt",
+    "tier": 3,
+    "taskType": "create_invoice",
+    "taskTypeAlternatives": ["create_customer", "create_product", "create_invoice"],
+    "expectedEntities": [
+      { "name": "Montanha Lda", "organizationNumber": "970481389" },
+      { "unitPrice": 21850, "vatRate": 25 },
+      { "unitPrice": 11250, "vatRate": 15 },
+      { "unitPrice": 9250, "vatRate": 0 }
+    ],
+    "expectedTaskSequence": [
+      { "taskType": "create_customer", "entities": [{ "name": "Montanha Lda", "organizationNumber": "970481389" }] },
+      { "taskType": "create_invoice", "entities": [{ "customerName": "Montanha Lda" }] }
+    ],
+    "expectedApiCalls": { "max": 40, "maxErrors": 2 },
+    "notes": "Competition prompt. Multi-line invoice with 3 products at different VAT rates (25%, 15%, 0%). Products have specific numbers. Products may already exist in sandbox."
+  },
+  {
+    "id": "employee-admin-role-en",
+    "prompt": "Create employee Maria Svensson (maria.svensson@example.com) as an administrator in Tripletex.",
+    "language": "en",
+    "tier": 1,
+    "taskType": "create_employee",
+    "expectedEntities": [
+      { "firstName": "Maria", "lastName": "Svensson", "email": "maria.svensson@example.com", "userType": "ADMINISTRATOR" }
+    ],
+    "expectedApiCalls": { "max": 8, "maxErrors": 0 },
+    "notes": "Tests admin role detection. Administrator role is worth 50% of employee check score."
+  },
+  {
+    "id": "employee-admin-role-no",
+    "prompt": "Opprett ansatt Erik Hansen (erik.hansen@example.com) med administratorrettigheter.",
+    "language": "no",
+    "tier": 1,
+    "taskType": "create_employee",
+    "expectedEntities": [
+      { "firstName": "Erik", "lastName": "Hansen", "email": "erik.hansen@example.com", "userType": "ADMINISTRATOR" }
+    ],
+    "expectedApiCalls": { "max": 8, "maxErrors": 0 },
+    "notes": "Norwegian admin role detection test."
+  },
+  {
+    "id": "project-with-manager-de",
+    "prompt": "Erstellen Sie das Projekt \"Analyse Windkraft\" verknüpft mit dem Kunden Windkraft GmbH (Org.-Nr. 897356171). Projektleiter ist Finn Richter (finn.richter@example.org).",
+    "language": "de",
+    "tier": 3,
+    "taskType": "create_project",
+    "taskTypeAlternatives": ["create_customer", "create_employee", "create_project"],
+    "expectedEntities": [
+      { "name": "Windkraft GmbH", "organizationNumber": "897356171" },
+      { "firstName": "Finn", "lastName": "Richter", "email": "finn.richter@example.org" },
+      { "name": "Analyse Windkraft", "projectManagerFirstName": "Finn", "projectManagerLastName": "Richter" }
+    ],
+    "expectedTaskSequence": [
+      { "taskType": "create_customer", "entities": [{ "name": "Windkraft GmbH" }] },
+      { "taskType": "create_employee", "entities": [{ "firstName": "Finn", "lastName": "Richter" }] },
+      { "taskType": "create_project", "entities": [{ "name": "Analyse Windkraft" }] }
+    ],
+    "expectedApiCalls": { "max": 30, "maxErrors": 0 },
+    "notes": "Tests project manager resolution from created employee."
   }
 ]

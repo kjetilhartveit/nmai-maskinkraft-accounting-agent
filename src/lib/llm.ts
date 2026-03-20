@@ -67,6 +67,8 @@ Task types and their entity fields:
 - send_invoice: same as create_invoice — creates and sends immediately. Always extract the amount and product/service description. Supports multiple product lines.
 - create_payment: fields: customerName, organizationNumber, amount, paymentDate (YYYY-MM-DD), description/service (what the invoice is for)
   - IMPORTANT: If the prompt says the client "has" a pending/outstanding invoice, the invoice ALREADY EXISTS in the sandbox. Return ONLY create_payment, NOT create_invoice + create_payment. The handler will find the existing invoice.
+  - Keywords indicating existing invoice: "has a pending invoice", "tem uma fatura pendente", "tiene una factura pendiente", "hat eine ausstehende Rechnung", "har en utestående faktura", "a une facture en attente"
+  - When the task is ONLY about registering/recording a payment on an existing invoice, use ONLY create_payment.
 - create_credit_note: fields: invoiceId, comment
 - create_travel_expense: fields: employeeFirstName, employeeLastName, date (YYYY-MM-DD), amount, description, paymentType (COMPANY_CARD or EMPLOYEE_PAID)
 - delete_travel_expense: fields: employeeFirstName, employeeLastName OR travelExpenseId
