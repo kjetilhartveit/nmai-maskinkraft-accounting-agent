@@ -1,0 +1,25 @@
+.gitignore
+  c1a82a8c76733292 2-3
+AGENTS.md
+  c1a82a8c76733292 22-23,26
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.15",
+  "base_commit_sha": "696863a0ab1fe0d3fbd93085c5212a3192d83d95",
+  "prompts": {
+    "c1a82a8c76733292": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "f3018976-d5db-467c-a5fe-14e5537aa195",
+        "model": "claude-4.6-opus-high-thinking"
+      },
+      "human_author": "Kjetil Hårtveit <kjetil_runescape@hotmail.com>",
+      "messages": [],
+      "total_additions": 117,
+      "total_deletions": 70,
+      "accepted_lines": 75,
+      "overriden_lines": 0
+    }
+  }
+}
