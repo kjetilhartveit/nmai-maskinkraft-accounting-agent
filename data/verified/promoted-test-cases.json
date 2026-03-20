@@ -1,107 +1,1494 @@
 [
   {
-    "id": "dept-engineering-employee-lars-en",
-    "prompt": "Create a department called Engineering and then hire employee Lars Olsen (lars.olsen@example.com) into it.",
-    "language": "en",
-    "tier": 2,
-    "taskType": "create_employee",
+    "id": "payment-fr-cascade",
+    "prompt": "Le client Cascade SARL (nº org. 839016778) a une facture impayée de 45450 NOK hors TVA pour \"Design web\". Enregistrez le paiement intégral de cette facture.",
+    "language": "fr",
+    "tier": 3,
+    "taskType": "create_payment",
     "expectedEntities": [
-      { "name": "Engineering" },
-      { "firstName": "Lars", "lastName": "Olsen", "email": "lars.olsen@example.com" }
+      {
+        "customerName": "Le client Cascade SARL",
+        "amount": 45450
+      }
     ],
-    "expectedApiCalls": { "max": 2, "maxErrors": 0 },
-    "expectedTaskSequence": [
-      { "taskType": "create_department", "entities": [{ "name": "Engineering" }] },
-      { "taskType": "create_employee", "entities": [{ "firstName": "Lars", "lastName": "Olsen", "email": "lars.olsen@example.com" }] }
-    ],
-    "notes": "Strict sequencing: department before employee. Fresh sandbox: POST dept + GET employee (dedup) + POST employee = 3. Dirty sandbox: 2 (employee already exists)."
+    "expectedApiCalls": {
+      "max": 17,
+      "maxErrors": 5
+    }
   },
   {
-    "id": "comp-dimension-voucher-es",
-    "prompt": "Cree una dimensión contable personalizada \"Region\" con los valores \"Nord-Norge\" y \"Vestlandet\". Luego registre un asiento en la cuenta 7100 por 34350 NOK, vinculado al valor de dimensión \"Nord-Norge\".",
+    "id": "unknown-es-oficina",
+    "prompt": "Hemos recibido la factura INV-2026-9187 del proveedor Montaña SL (org. nº 884646979) por 19500 NOK con IVA incluido. El importe corresponde a servicios de oficina (cuenta 7300). Registre la factura del proveedor con el IVA soportado correcto (25 %).",
+    "language": "es",
+    "tier": 3,
+    "taskType": "unknown",
+    "taskTypeAlternatives": [
+      "create_supplier"
+    ],
+    "expectedEntities": [
+      {
+        "amount": 19500
+      }
+    ],
+    "expectedTaskSequence": [
+      {
+        "taskType": "create_supplier",
+        "entities": [
+          {}
+        ]
+      },
+      {
+        "taskType": "unknown",
+        "entities": [
+          {}
+        ]
+      }
+    ],
+    "expectedApiCalls": {
+      "max": 11,
+      "maxErrors": 5
+    }
+  },
+  {
+    "id": "payment-en-brightstone",
+    "prompt": "Create an order for the customer Brightstone Ltd (org no. 971948981) with the products Data Advisory (4083) at 4050 NOK and Training Session (7105) at 12150 NOK. Convert the order to an invoice and register full payment.",
+    "language": "en",
+    "tier": 3,
+    "taskType": "create_payment",
+    "taskTypeAlternatives": [
+      "create_order",
+      "create_invoice"
+    ],
+    "expectedEntities": [
+      {
+        "customerName": "Create an order for the customer Brightstone Ltd",
+        "amount": 4050
+      }
+    ],
+    "expectedTaskSequence": [
+      {
+        "taskType": "create_order",
+        "entities": [
+          {}
+        ]
+      },
+      {
+        "taskType": "create_invoice",
+        "entities": [
+          {}
+        ]
+      },
+      {
+        "taskType": "create_payment",
+        "entities": [
+          {}
+        ]
+      }
+    ],
+    "expectedApiCalls": {
+      "max": 20,
+      "maxErrors": 2
+    }
+  },
+  {
+    "id": "travel_expense-es-gastos",
+    "prompt": "Registre una nota de gastos de viaje para Pablo Rodríguez (pablo.rodriguez@example.org) por \"Conferencia Ålesund\". El viaje duró 5 días con dietas (tarifa diaria 800 NOK). Gastos: billete de avión 2750 NOK y taxi 700 NOK.",
+    "language": "es",
+    "tier": 3,
+    "taskType": "create_travel_expense",
+    "expectedEntities": [
+      {
+        "employeeFirstName": "gastos",
+        "employeeLastName": "de"
+      }
+    ],
+    "expectedApiCalls": {
+      "max": 27,
+      "maxErrors": 5
+    }
+  },
+  {
+    "id": "send-invoice-en-ridgepoint",
+    "prompt": "Create and send an invoice to the customer Ridgepoint Ltd (org no. 985190631) for 32650 NOK excluding VAT. The invoice is for Analysis Report.",
+    "language": "en",
+    "tier": 3,
+    "taskType": "send_invoice",
+    "taskTypeAlternatives": [
+      "create_customer",
+      "create_order",
+      "create_invoice"
+    ],
+    "expectedEntities": [
+      {
+        "name": "Create and send an invoice to the customer Ridgepoint Ltd"
+      },
+      {
+        "amount": 32650
+      }
+    ],
+    "expectedTaskSequence": [
+      {
+        "taskType": "create_customer",
+        "entities": [
+          {
+            "name": "Create and send an invoice to the customer Ridgepoint Ltd",
+            "organizationNumber": "985190631"
+          }
+        ]
+      },
+      {
+        "taskType": "send_invoice",
+        "entities": [
+          {
+            "customerName": "Create and send an invoice to the customer Ridgepoint Ltd"
+          }
+        ]
+      }
+    ],
+    "expectedApiCalls": {
+      "max": 20,
+      "maxErrors": 2
+    }
+  },
+  {
+    "id": "product-en-orangejuice",
+    "prompt": "Create the product \"Orange Juice\" with product number 1043. The price is 40400 NOK excluding VAT, using the 15% food and beverage VAT rate.",
+    "language": "en",
+    "tier": 2,
+    "taskType": "create_product",
+    "expectedEntities": [
+      {
+        "name": "Orange Juice",
+        "number": 1043
+      }
+    ],
+    "expectedApiCalls": {
+      "max": 12,
+      "maxErrors": 5
+    }
+  },
+  {
+    "id": "employee-pt-chamado",
+    "prompt": "Temos um novo funcionário chamado João Martins, nascido em 13. September 1993. Crie-o como funcionário com o e-mail joao.martins@example.org e data de início 19. May 2026.",
+    "language": "pt",
+    "tier": 1,
+    "taskType": "create_employee",
+    "expectedEntities": [
+      {
+        "firstName": "chamado",
+        "lastName": "Jo",
+        "email": "joao.martins@example.org"
+      }
+    ],
+    "expectedApiCalls": {
+      "max": 5,
+      "maxErrors": 2
+    }
+  },
+  {
+    "id": "unknown-no-elvdal",
+    "prompt": "Registrer leverandøren Elvdal AS med organisasjonsnummer 994963309. E-post: faktura@elvdal.no.",
+    "language": "no",
+    "tier": 3,
+    "taskType": "unknown",
+    "taskTypeAlternatives": [
+      "create_supplier"
+    ],
+    "expectedEntities": [
+      {}
+    ],
+    "expectedApiCalls": {
+      "max": 9,
+      "maxErrors": 4
+    }
+  },
+  {
+    "id": "unknown-no-havbris",
+    "prompt": "Registrer leverandøren Havbris AS med organisasjonsnummer 846635408. E-post: faktura@havbris.no.",
+    "language": "no",
+    "tier": 3,
+    "taskType": "unknown",
+    "taskTypeAlternatives": [
+      "create_supplier"
+    ],
+    "expectedEntities": [
+      {}
+    ],
+    "expectedApiCalls": {
+      "max": 5,
+      "maxErrors": 2
+    }
+  },
+  {
+    "id": "unknown-fr-jules",
+    "prompt": "Exécutez la paie de Jules Leroy (jules.leroy@example.org) pour ce mois. Le salaire de base est de 56950 NOK. Ajoutez une prime unique de 9350 NOK en plus du salaire de base.",
+    "language": "fr",
+    "tier": 3,
+    "taskType": "unknown",
+    "expectedEntities": [
+      {
+        "amount": 56950
+      }
+    ],
+    "expectedApiCalls": {
+      "max": 14,
+      "maxErrors": 2
+    }
+  },
+  {
+    "id": "unknown-de-kostsenter",
+    "prompt": "Erstellen Sie eine benutzerdefinierte Buchhaltungsdimension \"Kostsenter\" mit den Werten \"IT\" und \"Innkjøp\". Buchen Sie dann einen Beleg auf Konto 7000 über 19450 NOK, verknüpft mit dem Dimensionswert \"IT\".",
+    "language": "de",
+    "tier": 3,
+    "taskType": "unknown",
+    "taskTypeAlternatives": [
+      "create_department",
+      "create_voucher"
+    ],
+    "expectedEntities": [
+      {
+        "name": "Kostsenter"
+      },
+      {
+        "name": "IT"
+      },
+      {
+        "name": "Innkjøp"
+      },
+      {
+        "name": "IT"
+      },
+      {
+        "amount": 19450
+      }
+    ],
+    "expectedTaskSequence": [
+      {
+        "taskType": "create_department",
+        "entities": [
+          {}
+        ]
+      },
+      {
+        "taskType": "create_voucher",
+        "entities": [
+          {}
+        ]
+      }
+    ],
+    "expectedApiCalls": {
+      "max": 20,
+      "maxErrors": 2
+    }
+  },
+  {
+    "id": "invoice-es-sierra",
+    "prompt": "Crea una factura para el cliente Sierra SL (org. nº 841679563) con tres líneas de producto: Horas de consultoría (8891) a 18400 NOK con 25 % IVA, Informe de análisis (3817) a 4150 NOK con 15 % IVA (alimentos), y Sesión de formación (5484) a 3250 NOK con 0 % IVA (exento).",
+    "language": "es",
+    "tier": 3,
+    "taskType": "create_invoice",
+    "taskTypeAlternatives": [
+      "create_customer",
+      "create_order"
+    ],
+    "expectedEntities": [
+      {
+        "name": "Crea una factura para el cliente Sierra SL"
+      },
+      {
+        "amount": 18400
+      }
+    ],
+    "expectedTaskSequence": [
+      {
+        "taskType": "create_customer",
+        "entities": [
+          {
+            "name": "Crea una factura para el cliente Sierra SL",
+            "organizationNumber": "841679563"
+          }
+        ]
+      },
+      {
+        "taskType": "create_invoice",
+        "entities": [
+          {
+            "customerName": "Crea una factura para el cliente Sierra SL"
+          }
+        ]
+      }
+    ],
+    "expectedApiCalls": {
+      "max": 23,
+      "maxErrors": 5
+    }
+  },
+  {
+    "id": "customer-nn-elvdal",
+    "prompt": "Opprett prosjektet \"Migrasjon Elvdal\" knytt til kunden Elvdal AS (org.nr 962211348). Prosjektleiar er Geir Aasen (geir.aasen@example.org).",
+    "language": "nn",
+    "tier": 3,
+    "taskType": "create_customer",
+    "taskTypeAlternatives": [
+      "create_employee",
+      "create_project"
+    ],
+    "expectedEntities": [
+      {
+        "name": "Elvdal AS",
+        "organizationNumber": "962211348",
+        "email": "geir.aasen@example.org"
+      }
+    ],
+    "expectedTaskSequence": [
+      {
+        "taskType": "create_customer",
+        "entities": [
+          {}
+        ]
+      },
+      {
+        "taskType": "create_employee",
+        "entities": [
+          {}
+        ]
+      },
+      {
+        "taskType": "create_project",
+        "entities": [
+          {}
+        ]
+      }
+    ],
+    "expectedApiCalls": {
+      "max": 20,
+      "maxErrors": 2
+    }
+  },
+  {
+    "id": "credit_note-es-estrella",
+    "prompt": "El cliente Estrella SL (org. nº 871338140) ha reclamado sobre la factura por \"Diseño web\" (39850 NOK sin IVA). Emita una nota de crédito completa que revierta toda la factura.",
+    "language": "es",
+    "tier": 3,
+    "taskType": "create_credit_note",
+    "expectedEntities": [
+      {
+        "name": "El cliente Estrella SL"
+      },
+      {
+        "amount": 39850
+      }
+    ],
+    "expectedTaskSequence": [
+      {
+        "taskType": "create_customer",
+        "entities": [
+          {
+            "name": "El cliente Estrella SL",
+            "organizationNumber": "871338140"
+          }
+        ]
+      },
+      {
+        "taskType": "create_credit_note",
+        "entities": [
+          {
+            "customerName": "El cliente Estrella SL"
+          }
+        ]
+      }
+    ],
+    "expectedApiCalls": {
+      "max": 6,
+      "maxErrors": 2
+    }
+  },
+  {
+    "id": "send-invoice-es-verde",
+    "prompt": "Crea y envía una factura al cliente Río Verde SL (org. nº 894012358) por 29100 NOK sin IVA. La factura es por Sesión de formación.",
+    "language": "es",
+    "tier": 3,
+    "taskType": "send_invoice",
+    "taskTypeAlternatives": [
+      "create_order",
+      "create_invoice"
+    ],
+    "expectedEntities": [
+      {
+        "name": "Verde SL"
+      },
+      {
+        "amount": 29100
+      }
+    ],
+    "expectedTaskSequence": [
+      {
+        "taskType": "create_customer",
+        "entities": [
+          {
+            "name": "Verde SL",
+            "organizationNumber": "894012358"
+          }
+        ]
+      },
+      {
+        "taskType": "send_invoice",
+        "entities": [
+          {
+            "customerName": "Verde SL"
+          }
+        ]
+      }
+    ],
+    "expectedApiCalls": {
+      "max": 11,
+      "maxErrors": 4
+    }
+  },
+  {
+    "id": "payment-de-brckentor",
+    "prompt": "Der Kunde Brückentor GmbH (Org.-Nr. 903308621) hat eine offene Rechnung über 19650 NOK ohne MwSt. für \"Datenberatung\". Registrieren Sie die vollständige Zahlung dieser Rechnung.",
+    "language": "de",
+    "tier": 3,
+    "taskType": "create_payment",
+    "expectedEntities": [
+      {}
+    ],
+    "expectedApiCalls": {
+      "max": 7,
+      "maxErrors": 2
+    }
+  },
+  {
+    "id": "invoice-no-blgekraft",
+    "prompt": "Opprett ein faktura til kunden Bølgekraft AS (org.nr 827304212) med tre produktlinjer: Webdesign (6744) til 27000 kr med 25 % MVA, Programvarelisens (2584) til 9300 kr med 15 % MVA (næringsmiddel), og Opplæring (3739) til 16300 kr med 0 % MVA (avgiftsfri).",
+    "language": "no",
+    "tier": 3,
+    "taskType": "create_invoice",
+    "taskTypeAlternatives": [
+      "create_order",
+      "send_invoice"
+    ],
+    "expectedEntities": [
+      {
+        "amount": 27000
+      }
+    ],
+    "expectedTaskSequence": [
+      {
+        "taskType": "create_order",
+        "entities": [
+          {}
+        ]
+      },
+      {
+        "taskType": "create_invoice",
+        "entities": [
+          {}
+        ]
+      },
+      {
+        "taskType": "send_invoice",
+        "entities": [
+          {}
+        ]
+      }
+    ],
+    "expectedApiCalls": {
+      "max": 11,
+      "maxErrors": 2
+    }
+  },
+  {
+    "id": "invoice-en-oakwood",
+    "prompt": "Create an invoice for the customer Oakwood Ltd (org no. 820641566) with three product lines: Analysis Report (7049) at 12250 NOK with 25% VAT, Cloud Storage (5725) at 3750 NOK with 15% VAT (food), and Consulting Hours (9683) at 10750 NOK with 0% VAT (exempt).",
+    "language": "en",
+    "tier": 3,
+    "taskType": "create_invoice",
+    "expectedEntities": [
+      {
+        "name": "Create an invoice for the customer Oakwood Ltd"
+      },
+      {
+        "amount": 12250
+      }
+    ],
+    "expectedTaskSequence": [
+      {
+        "taskType": "create_customer",
+        "entities": [
+          {
+            "name": "Create an invoice for the customer Oakwood Ltd",
+            "organizationNumber": "820641566"
+          }
+        ]
+      },
+      {
+        "taskType": "create_invoice",
+        "entities": [
+          {
+            "customerName": "Create an invoice for the customer Oakwood Ltd"
+          }
+        ]
+      }
+    ],
+    "expectedApiCalls": {
+      "max": 20,
+      "maxErrors": 2
+    }
+  },
+  {
+    "id": "unknown-pt-azul",
+    "prompt": "O cliente Rio Azul Lda (org. nº 932217643) tem uma fatura pendente de 44100 NOK sem IVA por \"Sessão de formação\". Registe o pagamento total desta fatura.",
+    "language": "pt",
+    "tier": 3,
+    "taskType": "unknown",
+    "expectedEntities": [
+      {
+        "name": "Sessão de formação"
+      },
+      {
+        "amount": 44100
+      }
+    ],
+    "expectedApiCalls": {
+      "max": 20,
+      "maxErrors": 2
+    }
+  },
+  {
+    "id": "product-fr-pomme",
+    "prompt": "Créez le produit \"Jus de pomme\" avec le numéro de produit 3582. Le prix est de 33800 NOK hors TVA, avec le taux de TVA pour les denrées alimentaires de 15 %.",
+    "language": "fr",
+    "tier": 2,
+    "taskType": "create_product",
+    "expectedEntities": [
+      {
+        "name": "Jus de pomme"
+      }
+    ],
+    "expectedApiCalls": {
+      "max": 20,
+      "maxErrors": 5
+    }
+  },
+  {
+    "id": "customer-no-nordlys",
+    "prompt": "Opprett kunden Nordlys AS med organisasjonsnummer 872778330. Adressa er Nygata 45, 6003 Ålesund. E-post: post@nordlys.no.",
+    "language": "no",
+    "tier": 1,
+    "taskType": "create_customer",
+    "expectedEntities": [
+      {
+        "name": "Opprett kunden Nordlys AS",
+        "email": "post@nordlys.no."
+      }
+    ],
+    "expectedApiCalls": {
+      "max": 5,
+      "maxErrors": 2
+    }
+  },
+  {
+    "id": "send-invoice-es-solmar",
+    "prompt": "Crea y envía una factura al cliente Solmar SL (org. nº 967736430) por 11700 NOK sin IVA. La factura es por Informe de análisis.",
+    "language": "es",
+    "tier": 3,
+    "taskType": "send_invoice",
+    "expectedEntities": [
+      {
+        "name": "Solmar SL"
+      },
+      {
+        "amount": 11700
+      }
+    ],
+    "expectedTaskSequence": [
+      {
+        "taskType": "create_customer",
+        "entities": [
+          {
+            "name": "Solmar SL",
+            "organizationNumber": "967736430"
+          }
+        ]
+      },
+      {
+        "taskType": "send_invoice",
+        "entities": [
+          {
+            "customerName": "Solmar SL"
+          }
+        ]
+      }
+    ],
+    "expectedApiCalls": {
+      "max": 20,
+      "maxErrors": 2
+    }
+  },
+  {
+    "id": "credit_note-no-fossekraft",
+    "prompt": "Kunden Fossekraft AS (org.nr 918737227) har reklamert på fakturaen for \"Konsulenttimar\" (16200 kr ekskl. MVA). Opprett ei fullstendig kreditnota som reverserer heile fakturaen.",
+    "language": "no",
+    "tier": 3,
+    "taskType": "create_credit_note",
+    "expectedEntities": [
+      {
+        "name": "Kunden Fossekraft AS"
+      },
+      {
+        "amount": 16200
+      }
+    ],
+    "expectedTaskSequence": [
+      {
+        "taskType": "create_customer",
+        "entities": [
+          {
+            "name": "Kunden Fossekraft AS",
+            "organizationNumber": "918737227"
+          }
+        ]
+      },
+      {
+        "taskType": "create_credit_note",
+        "entities": [
+          {
+            "customerName": "Kunden Fossekraft AS"
+          }
+        ]
+      }
+    ],
+    "expectedApiCalls": {
+      "max": 20,
+      "maxErrors": 2
+    }
+  },
+  {
+    "id": "unknown-de-kostsenter-2",
+    "prompt": "Erstellen Sie eine benutzerdefinierte Buchhaltungsdimension \"Kostsenter\" mit den Werten \"Kundeservice\" und \"Markedsføring\". Buchen Sie dann einen Beleg auf Konto 7100 über 42400 NOK, verknüpft mit dem Dimensionswert \"Markedsføring\".",
+    "language": "de",
+    "tier": 3,
+    "taskType": "unknown",
+    "expectedEntities": [
+      {
+        "name": "Kostsenter"
+      },
+      {
+        "name": "Kundeservice"
+      },
+      {
+        "name": "Markedsføring"
+      },
+      {
+        "name": "Markedsføring"
+      },
+      {
+        "amount": 42400
+      }
+    ],
+    "expectedApiCalls": {
+      "max": 14,
+      "maxErrors": 3
+    }
+  },
+  {
+    "id": "order-nn-blgekraft",
+    "prompt": "Opprett ein ordre for kunden Bølgekraft AS (org.nr 908252764) med produkta Nettverksteneste (6065) til 25500 kr og Systemutvikling (2511) til 23550 kr. Konverter ordren til faktura og registrer full betaling.",
+    "language": "nn",
+    "tier": 3,
+    "taskType": "create_order",
+    "expectedEntities": [
+      {}
+    ],
+    "expectedApiCalls": {
+      "max": 20,
+      "maxErrors": 2
+    }
+  },
+  {
+    "id": "unknown-fr-dimension",
+    "prompt": "Créez une dimension comptable personnalisée \"Produktlinje\" avec les valeurs \"Premium\" et \"Standard\". Puis comptabilisez une pièce sur le compte 7140 pour 13750 NOK, liée à la valeur de dimension \"Premium\".",
+    "language": "fr",
+    "tier": 3,
+    "taskType": "unknown",
+    "expectedEntities": [
+      {
+        "name": "Produktlinje"
+      },
+      {
+        "name": "Premium"
+      },
+      {
+        "name": "Standard"
+      },
+      {
+        "name": "Premium"
+      },
+      {
+        "amount": 13750
+      }
+    ],
+    "expectedApiCalls": {
+      "max": 7,
+      "maxErrors": 2
+    }
+  },
+  {
+    "id": "order-nn-skogheim",
+    "prompt": "Opprett ein ordre for kunden Skogheim AS (org.nr 865101422) med produkta Opplæring (2677) til 15100 kr og Webdesign (5844) til 20600 kr. Konverter ordren til faktura og registrer full betaling.",
+    "language": "nn",
+    "tier": 3,
+    "taskType": "create_order",
+    "expectedEntities": [
+      {
+        "customerName": "Opprett ein ordre for kunden Skogheim AS"
+      }
+    ],
+    "expectedTaskSequence": [
+      {
+        "taskType": "create_customer",
+        "entities": [
+          {
+            "name": "Opprett ein ordre for kunden Skogheim AS"
+          }
+        ]
+      },
+      {
+        "taskType": "create_order",
+        "entities": [
+          {
+            "customerName": "Opprett ein ordre for kunden Skogheim AS"
+          }
+        ]
+      }
+    ],
+    "expectedApiCalls": {
+      "max": 18,
+      "maxErrors": 2
+    }
+  },
+  {
+    "id": "unknown-es-marta",
+    "prompt": "Ejecute la nómina de Marta López (marta.lopez@example.org) para este mes. El salario base es de 31300 NOK. Añada una bonificación única de 13300 NOK además del salario base.",
     "language": "es",
     "tier": 3,
     "taskType": "unknown",
     "expectedEntities": [
-      { "dimensionName": "Region", "accountNumber": 7100, "amount": 34350 }
+      {
+        "amount": 31300
+      }
     ],
-    "expectedApiCalls": { "max": 30, "maxErrors": 10 },
-    "notes": "Competition prompt. Custom accounting dimension with values, then voucher linked to dimension value. LLM parses as single combined entity. Must use unknown handler (generic agent). Agentic handler has high variability — custom dimensions require multiple exploration calls."
+    "expectedApiCalls": {
+      "max": 20,
+      "maxErrors": 2
+    }
   },
   {
-    "id": "comp-payment-existing-invoice-pt",
-    "prompt": "O cliente Estrela Lda (org. nº 977023211) tem uma fatura pendente de 13650 NOK sem IVA por \"Design web\". Registe o pagamento total desta fatura.",
-    "language": "pt",
-    "tier": 2,
-    "taskType": "create_payment",
+    "id": "unknown-no-strandvik",
+    "prompt": "Registrer 7 timar for Liv Brekke (liv.brekke@example.org) på aktiviteten \"Design\" i prosjektet \"Datamigrering\" for Strandvik AS (org.nr 962818684). Timesats: 1650 kr/t. Generer ein prosjektfaktura til kunden basert på dei registrerte timane.",
+    "language": "no",
+    "tier": 3,
+    "taskType": "unknown",
     "expectedEntities": [
-      { "customerName": "Estrela Lda", "amount": 13650 }
+      {
+        "name": "Design"
+      },
+      {
+        "name": "Datamigrering"
+      },
+      {
+        "amount": 1650
+      }
     ],
-    "expectedApiCalls": { "max": 4, "maxErrors": 0 },
-    "notes": "Competition prompt. Invoice ALREADY EXISTS in sandbox ('tem uma fatura pendente' = has a pending invoice). Must NOT create a new invoice. Only register payment."
+    "expectedApiCalls": {
+      "max": 21,
+      "maxErrors": 2
+    }
   },
   {
-    "id": "comp-multiline-invoice-pt",
-    "prompt": "Crie uma fatura para o cliente Montanha Lda (org. nº 970481389) com três linhas de produto: Horas de consultoria (8659) a 21850 NOK com 25 % IVA, Relatório de análise (2341) a 11250 NOK com 15 % IVA (alimentos), e Manutenção (1043) a 9250 NOK com 0 % IVA (isento).",
+    "id": "unknown-pt-alegre",
+    "prompt": "Registe o fornecedor Porto Alegre Lda com número de organização 813918382. E-mail: faktura@portoalegrelda.no.",
+    "language": "pt",
+    "tier": 3,
+    "taskType": "unknown",
+    "taskTypeAlternatives": [
+      "create_supplier"
+    ],
+    "expectedEntities": [
+      {}
+    ],
+    "expectedApiCalls": {
+      "max": 8,
+      "maxErrors": 3
+    }
+  },
+  {
+    "id": "unknown-en-dalheim",
+    "prompt": "Betalinga frå Dalheim AS (org.nr 979527578) for fakturaen \"Systemutvikling\" (14550 kr ekskl. MVA) vart returnert av banken. Reverser betalinga slik at fakturaen igjen viser uteståande beløp.",
+    "language": "en",
+    "tier": 3,
+    "taskType": "unknown",
+    "expectedEntities": [
+      {
+        "name": "Systemutvikling"
+      },
+      {
+        "amount": 14550
+      }
+    ],
+    "expectedApiCalls": {
+      "max": 20,
+      "maxErrors": 2
+    }
+  },
+  {
+    "id": "customer-no-nordlys-2",
+    "prompt": "Opprett kunden Nordlys AS med organisasjonsnummer 951285463. Adressa er Parkveien 45, 5003 Bergen. E-post: post@nordlys.no.",
+    "language": "no",
+    "tier": 1,
+    "taskType": "create_customer",
+    "expectedEntities": [
+      {
+        "name": "Opprett kunden Nordlys AS",
+        "email": "post@nordlys.no."
+      }
+    ],
+    "expectedApiCalls": {
+      "max": 5,
+      "maxErrors": 2
+    }
+  },
+  {
+    "id": "unknown-no-produksjon",
+    "prompt": "Opprett tre avdelinger i Tripletex: \"Produksjon\", \"Kvalitetskontroll\" og \"Administrasjon\".",
+    "language": "no",
+    "tier": 3,
+    "taskType": "unknown",
+    "taskTypeAlternatives": [
+      "create_department"
+    ],
+    "expectedEntities": [
+      {
+        "name": "Produksjon"
+      },
+      {
+        "name": "Kvalitetskontroll"
+      },
+      {
+        "name": "Administrasjon"
+      }
+    ],
+    "expectedApiCalls": {
+      "max": 11,
+      "maxErrors": 3
+    }
+  },
+  {
+    "id": "unknown-es-datos",
+    "prompt": "Establezca un precio fijo de 266550 NOK en el proyecto \"Seguridad de datos\" para Montaña SL (org. nº 865036981). El director del proyecto es Sofía Pérez (sofia.perez@example.org). Facture al cliente el 50 % del precio fijo como pago parcial.",
+    "language": "es",
+    "tier": 3,
+    "taskType": "unknown",
+    "expectedEntities": [
+      {
+        "name": "Seguridad de datos"
+      },
+      {
+        "amount": 266550
+      }
+    ],
+    "expectedApiCalls": {
+      "max": 20,
+      "maxErrors": 2
+    }
+  },
+  {
+    "id": "order-de-waldstein",
+    "prompt": "Erstellen Sie einen Auftrag für den Kunden Waldstein GmbH (Org.-Nr. 824546835) mit den Produkten Datenberatung (5664) zu 27900 NOK und Analysebericht (4776) zu 22900 NOK. Wandeln Sie den Auftrag in eine Rechnung um und registrieren Sie die vollständige Zahlung.",
+    "language": "de",
+    "tier": 3,
+    "taskType": "create_order",
+    "expectedEntities": [
+      {
+        "customerName": "Kunden Waldstein GmbH"
+      }
+    ],
+    "expectedApiCalls": {
+      "max": 20,
+      "maxErrors": 2
+    }
+  },
+  {
+    "id": "unknown-pt-beatriz",
+    "prompt": "Processe o salário de Beatriz Pereira (beatriz.pereira@example.org) para este mês. O salário base é de 58650 NOK. Adicione um bónus único de 8850 NOK além do salário base.",
+    "language": "pt",
+    "tier": 3,
+    "taskType": "unknown",
+    "expectedEntities": [
+      {
+        "amount": 58650
+      }
+    ],
+    "expectedApiCalls": {
+      "max": 66,
+      "maxErrors": 5
+    }
+  },
+  {
+    "id": "travel_expense-pt-viagem",
+    "prompt": "Registe uma despesa de viagem para Bruno Santos (bruno.santos@example.org) referente a \"Conferência Drammen\". A viagem durou 3 dias com ajudas de custo (taxa diária 800 NOK). Despesas: bilhete de avião 5950 NOK e táxi 600 NOK.",
+    "language": "pt",
+    "tier": 3,
+    "taskType": "create_travel_expense",
+    "expectedEntities": [
+      {
+        "employeeFirstName": "viagem",
+        "employeeLastName": "para"
+      }
+    ],
+    "expectedApiCalls": {
+      "max": 15,
+      "maxErrors": 5
+    }
+  },
+  {
+    "id": "unknown-fr-cascade",
+    "prompt": "Enregistrez 38 heures pour Camille Petit (camille.petit@example.org) sur l'activité \"Design\" du projet \"Audit de sécurité\" pour Cascade SARL (nº org. 824869383). Taux horaire : 1400 NOK/h. Générez une facture de projet au client basée sur les heures enregistrées.",
+    "language": "fr",
+    "tier": 3,
+    "taskType": "unknown",
+    "expectedEntities": [
+      {
+        "name": "Design"
+      },
+      {
+        "name": "Audit de sécurité"
+      },
+      {
+        "amount": 1400
+      }
+    ],
+    "expectedApiCalls": {
+      "max": 17,
+      "maxErrors": 4
+    }
+  },
+  {
+    "id": "invoice-pt-floresta",
+    "prompt": "Crie uma fatura para o cliente Floresta Lda (org. nº 919172657) com três linhas de produto: Sessão de formação (4783) a 24900 NOK com 25 % IVA, Armazenamento na nuvem (3343) a 14050 NOK com 15 % IVA (alimentos), e Serviço de rede (4380) a 15750 NOK com 0 % IVA (isento).",
     "language": "pt",
     "tier": 3,
     "taskType": "create_invoice",
-    "taskTypeAlternatives": ["create_customer", "create_product", "create_invoice"],
     "expectedEntities": [
-      { "name": "Montanha Lda", "organizationNumber": "970481389" },
-      { "unitPrice": 21850, "vatRate": 25 },
-      { "unitPrice": 11250, "vatRate": 15 },
-      { "unitPrice": 9250, "vatRate": 0 }
+      {
+        "name": "Crie uma fatura para o cliente Floresta Lda"
+      },
+      {
+        "amount": 24900
+      }
     ],
     "expectedTaskSequence": [
-      { "taskType": "create_customer", "entities": [{ "name": "Montanha Lda", "organizationNumber": "970481389" }] },
-      { "taskType": "create_invoice", "entities": [{ "customerName": "Montanha Lda" }] }
+      {
+        "taskType": "create_customer",
+        "entities": [
+          {
+            "name": "Crie uma fatura para o cliente Floresta Lda",
+            "organizationNumber": "919172657"
+          }
+        ]
+      },
+      {
+        "taskType": "create_invoice",
+        "entities": [
+          {
+            "customerName": "Crie uma fatura para o cliente Floresta Lda"
+          }
+        ]
+      }
     ],
-    "expectedApiCalls": { "max": 11, "maxErrors": 0 },
-    "notes": "Competition prompt. Multi-line invoice with 3 products at different VAT rates (25%, 15%, 0%). Products have specific numbers. Products may already exist in sandbox."
+    "expectedApiCalls": {
+      "max": 6,
+      "maxErrors": 5
+    }
   },
   {
-    "id": "employee-admin-role-en",
-    "prompt": "Create employee Maria Svensson (maria.svensson@example.com) as an administrator in Tripletex.",
-    "language": "en",
+    "id": "customer-nn-vestfjord",
+    "prompt": "Opprett prosjektet \"Integrasjon Vestfjord\" knytt til kunden Vestfjord AS (org.nr 954285405). Prosjektleiar er Håkon Eide (hakon.eide@example.org).",
+    "language": "nn",
     "tier": 1,
-    "taskType": "create_employee",
+    "taskType": "create_customer",
     "expectedEntities": [
-      { "firstName": "Maria", "lastName": "Svensson", "email": "maria.svensson@example.com", "userType": "ADMINISTRATOR" }
+      {
+        "name": "Vestfjord AS",
+        "organizationNumber": "954285405",
+        "email": "hakon.eide@example.org"
+      }
     ],
-    "expectedApiCalls": { "max": 5, "maxErrors": 0 },
-    "notes": "Tests admin role detection. Employee created with EXTENDED access, entitlement granted directly. Dirty sandbox: 5 calls (skips entitlement if userType write-once)."
+    "expectedApiCalls": {
+      "max": 6,
+      "maxErrors": 2
+    }
   },
   {
-    "id": "employee-admin-role-no",
-    "prompt": "Opprett ansatt Erik Hansen (erik.hansen@example.com) med administratorrettigheter.",
-    "language": "no",
-    "tier": 1,
-    "taskType": "create_employee",
+    "id": "unknown-fr-colline",
+    "prompt": "Le paiement de Colline SARL (nº org. 804499180) pour la facture \"Heures de conseil\" (8850 NOK HT) a été retourné par la banque. Annulez le paiement afin que la facture affiche à nouveau le montant impayé.",
+    "language": "fr",
+    "tier": 3,
+    "taskType": "unknown",
     "expectedEntities": [
-      { "firstName": "Erik", "lastName": "Hansen", "email": "erik.hansen@example.com", "userType": "ADMINISTRATOR" }
+      {
+        "name": "Heures de conseil"
+      },
+      {
+        "amount": 8850
+      }
     ],
-    "expectedApiCalls": { "max": 5, "maxErrors": 0 },
-    "notes": "Norwegian admin role detection test. Employee created with EXTENDED access, entitlement granted directly. Dirty sandbox: 5 calls (skips entitlement if userType write-once)."
+    "expectedApiCalls": {
+      "max": 8,
+      "maxErrors": 2
+    }
   },
   {
-    "id": "project-with-manager-de",
-    "prompt": "Erstellen Sie das Projekt \"Analyse Windkraft\" verknüpft mit dem Kunden Windkraft GmbH (Org.-Nr. 897356171). Projektleiter ist Finn Richter (finn.richter@example.org).",
+    "id": "unknown-de-region",
+    "prompt": "Erstellen Sie eine benutzerdefinierte Buchhaltungsdimension \"Region\" mit den Werten \"Vestlandet\" und \"Midt-Norge\". Buchen Sie dann einen Beleg auf Konto 6540 über 8600 NOK, verknüpft mit dem Dimensionswert \"Vestlandet\".",
     "language": "de",
     "tier": 3,
-    "taskType": "create_project",
-    "taskTypeAlternatives": ["create_customer", "create_employee", "create_project"],
+    "taskType": "unknown",
     "expectedEntities": [
-      { "name": "Windkraft GmbH", "organizationNumber": "897356171" },
-      { "firstName": "Finn", "lastName": "Richter", "email": "finn.richter@example.org" },
-      { "name": "Analyse Windkraft", "projectManagerFirstName": "Finn", "projectManagerLastName": "Richter" }
+      {
+        "name": "Region"
+      },
+      {
+        "name": "Vestlandet"
+      },
+      {
+        "name": "Midt-Norge"
+      },
+      {
+        "name": "Vestlandet"
+      },
+      {
+        "amount": 8600
+      }
+    ],
+    "expectedApiCalls": {
+      "max": 15,
+      "maxErrors": 3
+    }
+  },
+  {
+    "id": "customer-en-oakwood",
+    "prompt": "Create the customer Oakwood Ltd with organization number 980094863. The address is Torggata 10, 6003 Ålesund. Email: post@oakwood.no.",
+    "language": "en",
+    "tier": 1,
+    "taskType": "create_customer",
+    "expectedEntities": [
+      {
+        "name": "Create the customer Oakwood Ltd",
+        "email": "post@oakwood.no."
+      }
+    ],
+    "expectedApiCalls": {
+      "max": 5,
+      "maxErrors": 2
+    }
+  },
+  {
+    "id": "send-invoice-no-fjelltopp",
+    "prompt": "Opprett og send ein faktura til kunden Fjelltopp AS (org.nr 845696993) på 38150 kr eksklusiv MVA. Fakturaen gjeld Programvarelisens.",
+    "language": "no",
+    "tier": 3,
+    "taskType": "send_invoice",
+    "expectedEntities": [
+      {
+        "name": "Opprett og send ein faktura til kunden Fjelltopp AS"
+      },
+      {
+        "amount": 38150
+      }
     ],
     "expectedTaskSequence": [
-      { "taskType": "create_customer", "entities": [{ "name": "Windkraft GmbH" }] },
-      { "taskType": "create_employee", "entities": [{ "firstName": "Finn", "lastName": "Richter" }] },
-      { "taskType": "create_project", "entities": [{ "name": "Analyse Windkraft" }] }
+      {
+        "taskType": "create_customer",
+        "entities": [
+          {
+            "name": "Opprett og send ein faktura til kunden Fjelltopp AS",
+            "organizationNumber": "845696993"
+          }
+        ]
+      },
+      {
+        "taskType": "send_invoice",
+        "entities": [
+          {
+            "customerName": "Opprett og send ein faktura til kunden Fjelltopp AS"
+          }
+        ]
+      }
     ],
-    "expectedApiCalls": { "max": 10, "maxErrors": 1 },
-    "notes": "Tests project manager resolution from created employee. PM entitlement has dependencies (AUTH_CREATE_PROJECT). In dirty sandbox, existing employee may lack EXTENDED (write-once). Fresh sandbox: ~8 calls, 0 errors."
+    "expectedApiCalls": {
+      "max": 9,
+      "maxErrors": 2
+    }
+  },
+  {
+    "id": "unknown-en-clearwater",
+    "prompt": "Set a fixed price of 202150 NOK on the project \"Cloud Migration\" for Clearwater Ltd (org no. 872682023). The project manager is Oliver Brown (oliver.brown@example.org). Invoice the customer for 25% of the fixed price as a milestone payment.",
+    "language": "en",
+    "tier": 3,
+    "taskType": "unknown",
+    "expectedEntities": [
+      {
+        "name": "Cloud Migration"
+      },
+      {
+        "amount": 202150
+      }
+    ],
+    "expectedApiCalls": {
+      "max": 12,
+      "maxErrors": 2
+    }
+  },
+  {
+    "id": "credit_note-no-fjelltopp",
+    "prompt": "Kunden Fjelltopp AS (org.nr 950710241) har reklamert på fakturaen for \"Nettverksteneste\" (28100 kr ekskl. MVA). Opprett ei fullstendig kreditnota som reverserer heile fakturaen.",
+    "language": "no",
+    "tier": 3,
+    "taskType": "create_credit_note",
+    "expectedEntities": [
+      {
+        "name": "Kunden Fjelltopp AS"
+      },
+      {
+        "amount": 28100
+      }
+    ],
+    "expectedTaskSequence": [
+      {
+        "taskType": "create_customer",
+        "entities": [
+          {
+            "name": "Kunden Fjelltopp AS",
+            "organizationNumber": "950710241"
+          }
+        ]
+      },
+      {
+        "taskType": "create_credit_note",
+        "entities": [
+          {
+            "customerName": "Kunden Fjelltopp AS"
+          }
+        ]
+      }
+    ],
+    "expectedApiCalls": {
+      "max": 7,
+      "maxErrors": 3
+    }
+  },
+  {
+    "id": "credit_note-de-waldstein",
+    "prompt": "Der Kunde Waldstein GmbH (Org.-Nr. 908048199) hat die Rechnung für \"Webdesign\" (8750 NOK ohne MwSt.) reklamiert. Erstellen Sie eine vollständige Gutschrift, die die gesamte Rechnung storniert.",
+    "language": "de",
+    "tier": 3,
+    "taskType": "create_credit_note",
+    "expectedEntities": [
+      {
+        "name": "Der Kunde Waldstein GmbH"
+      },
+      {
+        "amount": 8750
+      }
+    ],
+    "expectedApiCalls": {
+      "max": 6,
+      "maxErrors": 2
+    }
+  },
+  {
+    "id": "unknown-de-t47",
+    "prompt": "Führen Sie die Gehaltsabrechnung für Laura Schneider (laura.schneider@example.org) für diesen Monat durch. Das Grundgehalt beträgt 33000 NOK. Fügen Sie einen einmaligen Bonus von 17850 NOK zum Grundgehalt hinzu.",
+    "language": "de",
+    "tier": 3,
+    "taskType": "unknown",
+    "expectedEntities": [
+      {
+        "amount": 33000
+      }
+    ],
+    "expectedApiCalls": {
+      "max": 33,
+      "maxErrors": 5
+    }
+  },
+  {
+    "id": "travel_expense-no-sigurd",
+    "prompt": "Registrer en reiseregning for Sigurd Hansen (sigurd.hansen@example.org) for \"Kundebesøk Kristiansand\". Reisen varte 4 dager med diett (dagsats 800 kr). Utlegg: flybillett 3800 kr og taxi 200 kr.",
+    "language": "no",
+    "tier": 3,
+    "taskType": "create_travel_expense",
+    "expectedEntities": [
+      {
+        "employeeFirstName": "Sigurd",
+        "employeeLastName": "Hansen"
+      }
+    ],
+    "expectedApiCalls": {
+      "max": 21,
+      "maxErrors": 5
+    }
+  },
+  {
+    "id": "order-es-luna",
+    "prompt": "Crea un pedido para el cliente Luna SL (org. nº 966920963) con los productos Desarrollo de sistemas (5271) a 6950 NOK y Asesoría de datos (3613) a 7000 NOK. Convierte el pedido en factura y registra el pago completo.",
+    "language": "es",
+    "tier": 3,
+    "taskType": "create_order",
+    "taskTypeAlternatives": [
+      "create_invoice"
+    ],
+    "expectedEntities": [
+      {
+        "customerName": "Crea un pedido para el cliente Luna SL"
+      }
+    ],
+    "expectedTaskSequence": [
+      {
+        "taskType": "create_customer",
+        "entities": [
+          {
+            "name": "Crea un pedido para el cliente Luna SL"
+          }
+        ]
+      },
+      {
+        "taskType": "create_order",
+        "entities": [
+          {
+            "customerName": "Crea un pedido para el cliente Luna SL"
+          }
+        ]
+      }
+    ],
+    "expectedApiCalls": {
+      "max": 8,
+      "maxErrors": 5
+    }
+  },
+  {
+    "id": "unknown-fr-colline-2",
+    "prompt": "Le paiement de Colline SARL (nº org. 916057903) pour la facture \"Maintenance\" (8300 NOK HT) a été retourné par la banque. Annulez le paiement afin que la facture affiche à nouveau le montant impayé.",
+    "language": "fr",
+    "tier": 3,
+    "taskType": "unknown",
+    "taskTypeAlternatives": [
+      "create_order",
+      "create_invoice"
+    ],
+    "expectedEntities": [
+      {
+        "name": "Maintenance"
+      },
+      {
+        "amount": 8300
+      }
+    ],
+    "expectedTaskSequence": [
+      {
+        "taskType": "create_order",
+        "entities": [
+          {}
+        ]
+      },
+      {
+        "taskType": "create_invoice",
+        "entities": [
+          {}
+        ]
+      }
+    ],
+    "expectedApiCalls": {
+      "max": 9,
+      "maxErrors": 3
+    }
+  },
+  {
+    "id": "unknown-fr-colline-3",
+    "prompt": "Enregistrez le fournisseur Colline SARL avec le numéro d'organisation 915612865. E-mail : faktura@collinesarl.no.",
+    "language": "fr",
+    "tier": 3,
+    "taskType": "unknown",
+    "taskTypeAlternatives": [
+      "create_supplier"
+    ],
+    "expectedEntities": [
+      {}
+    ],
+    "expectedApiCalls": {
+      "max": 4,
+      "maxErrors": 2
+    }
+  },
+  {
+    "id": "send-invoice-de-flussgold",
+    "prompt": "Erstellen und senden Sie eine Rechnung an den Kunden Flussgold GmbH (Org.-Nr. 939332332) über 23500 NOK ohne MwSt. Die Rechnung betrifft Systementwicklung.",
+    "language": "de",
+    "tier": 3,
+    "taskType": "send_invoice",
+    "taskTypeAlternatives": [
+      "create_order",
+      "create_invoice"
+    ],
+    "expectedEntities": [
+      {
+        "name": "Erstellen und senden Sie eine Rechnung an den Kunden Flussgold GmbH"
+      },
+      {
+        "amount": 23500
+      }
+    ],
+    "expectedTaskSequence": [
+      {
+        "taskType": "create_order",
+        "entities": [
+          {}
+        ]
+      },
+      {
+        "taskType": "create_invoice",
+        "entities": [
+          {}
+        ]
+      },
+      {
+        "taskType": "send_invoice",
+        "entities": [
+          {}
+        ]
+      }
+    ],
+    "expectedApiCalls": {
+      "max": 9,
+      "maxErrors": 2
+    }
+  },
+  {
+    "id": "order-nn-vestfjord",
+    "prompt": "Opprett ein ordre for kunden Vestfjord AS (org.nr 960144015) med produkta Konsulenttimar (1874) til 34750 kr og Nettverksteneste (9344) til 14350 kr. Konverter ordren til faktura og registrer full betaling.",
+    "language": "nn",
+    "tier": 3,
+    "taskType": "create_order",
+    "taskTypeAlternatives": [
+      "unknown"
+    ],
+    "expectedEntities": [
+      {
+        "customerName": "Opprett ein ordre for kunden Vestfjord AS"
+      }
+    ],
+    "expectedTaskSequence": [
+      {
+        "taskType": "create_customer",
+        "entities": [
+          {
+            "name": "Opprett ein ordre for kunden Vestfjord AS"
+          }
+        ]
+      },
+      {
+        "taskType": "create_order",
+        "entities": [
+          {
+            "customerName": "Opprett ein ordre for kunden Vestfjord AS"
+          }
+        ]
+      }
+    ],
+    "expectedApiCalls": {
+      "max": 20,
+      "maxErrors": 2
+    }
+  },
+  {
+    "id": "order-pt-cascata",
+    "prompt": "Crie um pedido para o cliente Cascata Lda (org. nº 927161524) com os produtos Consultoria de dados (8400) a 5700 NOK e Design web (2535) a 3850 NOK. Converta o pedido em fatura e registe o pagamento total.",
+    "language": "pt",
+    "tier": 3,
+    "taskType": "create_order",
+    "taskTypeAlternatives": [
+      "create_invoice"
+    ],
+    "expectedEntities": [
+      {
+        "customerName": "Crie um pedido para o cliente Cascata Lda"
+      }
+    ],
+    "expectedTaskSequence": [
+      {
+        "taskType": "create_customer",
+        "entities": [
+          {
+            "name": "Crie um pedido para o cliente Cascata Lda"
+          }
+        ]
+      },
+      {
+        "taskType": "create_order",
+        "entities": [
+          {
+            "customerName": "Crie um pedido para o cliente Cascata Lda"
+          }
+        ]
+      }
+    ],
+    "expectedApiCalls": {
+      "max": 20,
+      "maxErrors": 2
+    }
+  },
+  {
+    "id": "unknown-en-erik",
+    "prompt": "Kjør lønn for Erik Nilsen (erik.nilsen@example.org) for denne måneden. Grunnlønn er 53350 kr. Legg til en engangsbonus på 11050 kr i tillegg til grunnlønnen. Dersom lønns-API-et ikke fungerer, kan du bruke manuelle bilag på lønnskontoer (5000-serien) for å registrere lønnskostnaden.",
+    "language": "en",
+    "tier": 3,
+    "taskType": "unknown",
+    "expectedEntities": [
+      {
+        "amount": 53350
+      }
+    ],
+    "expectedApiCalls": {
+      "max": 36,
+      "maxErrors": 5
+    }
+  },
+  {
+    "id": "unknown-de-konomi",
+    "prompt": "Erstellen Sie drei Abteilungen in Tripletex: \"Økonomi\", \"Logistikk\" und \"Produksjon\".",
+    "language": "de",
+    "tier": 3,
+    "taskType": "unknown",
+    "taskTypeAlternatives": [
+      "create_department"
+    ],
+    "expectedEntities": [
+      {
+        "name": "Økonomi"
+      },
+      {
+        "name": "Logistikk"
+      },
+      {
+        "name": "Produksjon"
+      }
+    ],
+    "expectedApiCalls": {
+      "max": 6,
+      "maxErrors": 2
+    }
   }
 ]
