@@ -1,0 +1,23 @@
+docs/plans/1-initial-setup/PLAN.md
+  dc005ff5010b2747 24-26
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.15",
+  "base_commit_sha": "ac80c34fe3fe9ee6204f4d96d28b2fbb4e9ded2c",
+  "prompts": {
+    "dc005ff5010b2747": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "5672a6a0-1631-4064-bb48-97af30ba945f",
+        "model": "claude-4.6-opus-high-thinking"
+      },
+      "human_author": "Kjetil Hårtveit <kjetil_runescape@hotmail.com>",
+      "messages": [],
+      "total_additions": 41,
+      "total_deletions": 41,
+      "accepted_lines": 8,
+      "overriden_lines": 0
+    }
+  }
+}
