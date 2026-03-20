@@ -6,6 +6,7 @@ import type { ParsedTask } from "../types/index.js";
 import type { SequenceContext } from "../lib/sequence-context.js";
 import { config } from "../lib/config.js";
 import { TRIPLETEX_API_REFERENCE } from "../lib/tripletex-api-reference.js";
+import { searchEndpoints, getEndpointDetail } from "../lib/openapi-index.js";
 
 const MAX_STEPS = 25;
 
@@ -32,6 +33,7 @@ IMPORTANT RULES:
 9. The sandbox MAY have pre-existing data for certain tasks (like invoices for payment tasks). ALWAYS search for existing resources first.
 10. Be efficient: minimize the number of API calls. Use tripletex_post_list for batch creation (e.g. /department/list, /product/list).
 11. When you're done, stop calling tools and summarize what you did.
+12. If you're unsure about an endpoint's exact path, parameters, or required fields, use the api_search tool first to look it up in the full Tripletex API documentation (546 endpoints available).
 
 CRITICAL endpoint patterns:
 - List endpoints require date params: GET /invoice needs invoiceDateFrom + invoiceDateTo, GET /order needs orderDateFrom + orderDateTo
@@ -268,6 +270,31 @@ export async function handleGenericTask(
             );
             return { success: false, error: msg };
           }
+        },
+      }),
+      api_search: tool({
+        description:
+          "Search the Tripletex API documentation for endpoints matching a keyword or topic. Use this BEFORE making API calls to unfamiliar endpoints to learn the correct path, parameters, and required fields.",
+        parameters: z.object({
+          query: z
+            .string()
+            .describe('Search query, e.g. "salary", "bank reconciliation", "asset", "incoming invoice"'),
+        }),
+        execute: async ({ query }) => {
+          console.log(`[GenericHandler] API-SEARCH: "${query}"`);
+          return { docs: searchEndpoints(query, 8) };
+        },
+      }),
+      api_endpoint_detail: tool({
+        description:
+          "Get detailed documentation for a specific API endpoint (path + method). Returns parameters, required fields, and response schema.",
+        parameters: z.object({
+          path: z.string().describe('API path, e.g. "/salary/payslip"'),
+          method: z.string().describe('HTTP method, e.g. "GET", "POST"'),
+        }),
+        execute: async ({ path, method }) => {
+          console.log(`[GenericHandler] API-DETAIL: ${method} ${path}`);
+          return { docs: getEndpointDetail(path, method) };
         },
       }),
     },

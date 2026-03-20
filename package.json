@@ -20,7 +20,8 @@
     "feedback": "tsx src/scripts/feedback-loop.ts",
     "dashboard": "tsx src/scripts/dashboard.ts",
     "sync-prompts": "tsx src/scripts/sync-prompts.ts",
-    "migrate": "tsx src/scripts/migrate-jsonl-to-sqlite.ts"
+    "migrate": "tsx src/scripts/migrate-jsonl-to-sqlite.ts",
+    "build-api-index": "tsx src/scripts/build-api-index.ts"
   },
   "dependencies": {
     "@ai-sdk/openai": "^1.3.22",
