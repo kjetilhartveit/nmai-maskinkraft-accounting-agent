@@ -1,0 +1,37 @@
+src/lib/tripletex-helpers.ts
+  dc005ff5010b2747 1-54
+src/scripts/test-e2e.ts
+  dc005ff5010b2747 1-104
+src/lib/config.ts
+  dc005ff5010b2747 3-4,22
+src/handlers/create-supplier.ts
+  dc005ff5010b2747 18-19,21
+src/handlers/create-customer.ts
+  dc005ff5010b2747 18-19
+src/handlers/create-employee.ts
+  dc005ff5010b2747 3,9-10,15-16,23
+package.json
+  dc005ff5010b2747 11-12
+src/lib/llm.ts
+  dc005ff5010b2747 10
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.15",
+  "base_commit_sha": "0100b247d0e697e5debda7f0d7e0923744f29781",
+  "prompts": {
+    "dc005ff5010b2747": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "5672a6a0-1631-4064-bb48-97af30ba945f",
+        "model": "claude-4.6-opus-high-thinking"
+      },
+      "human_author": "Kjetil Hårtveit <kjetil_runescape@hotmail.com>",
+      "messages": [],
+      "total_additions": 422,
+      "total_deletions": 257,
+      "accepted_lines": 210,
+      "overriden_lines": 0
+    }
+  }
+}
