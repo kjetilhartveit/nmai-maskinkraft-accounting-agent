@@ -1,10 +1,4 @@
-import { writeFileSync, readFileSync, existsSync } from "fs";
-import { join, resolve } from "path";
 import db from "../lib/db.js";
-
-const PROJECT_ROOT = join(import.meta.dirname, "../..");
-const DEFAULT_TARGET_REPO = resolve(PROJECT_ROOT, "../nmai-maskinkraft");
-const TARGET_FILE = "tripletex/shared-prompts.json";
 
 interface SolveRow {
   id: string;
@@ -34,18 +28,6 @@ function normalizePrompt(prompt: string): string {
 }
 
 function main() {
-  const args = process.argv.slice(2);
-  const targetRepo = args.find((a) => a.startsWith("--target="))?.split("=")[1] ?? DEFAULT_TARGET_REPO;
-  const dryRun = args.includes("--dry-run");
-
-  const targetPath = join(targetRepo, TARGET_FILE);
-
-  if (!existsSync(targetRepo)) {
-    console.error(`Target repo not found: ${targetRepo}`);
-    console.error("Use --target=/path/to/nmai-maskinkraft to specify the repo location.");
-    process.exit(1);
-  }
-
   const solves = db.prepare(
     "SELECT id, timestamp, prompt, parsed_sequence, api_call_total, api_call_errors, success, source FROM solves ORDER BY timestamp",
   ).all() as SolveRow[];
@@ -95,59 +77,10 @@ function main() {
     }
   }
 
-  let existingShared: SharedPrompt[] = [];
-  if (existsSync(targetPath)) {
-    try {
-      existingShared = JSON.parse(readFileSync(targetPath, "utf-8"));
-      console.log(`Found ${existingShared.length} existing shared prompts in target`);
-    } catch {
-      console.warn("Could not parse existing shared prompts, starting fresh.");
-    }
-  }
+  const prompts = Array.from(promptMap.values()).sort((a, b) => a.firstSeen.localeCompare(b.firstSeen));
 
-  let added = 0;
-  let updated = 0;
-
-  for (const [key, entry] of promptMap) {
-    const existingIdx = existingShared.findIndex((p) => normalizePrompt(p.prompt) === key);
-    if (existingIdx >= 0) {
-      const ex = existingShared[existingIdx];
-      let changed = false;
-
-      if (entry.bestApiCalls > 0 && (ex.bestApiCalls === 0 || entry.bestApiCalls < ex.bestApiCalls || (entry.bestApiCalls === ex.bestApiCalls && entry.bestErrors < ex.bestErrors))) {
-        ex.bestApiCalls = entry.bestApiCalls;
-        ex.bestErrors = entry.bestErrors;
-        changed = true;
-      }
-      ex.attemptCount = Math.max(ex.attemptCount, entry.attemptCount);
-      ex.successCount = Math.max(ex.successCount, entry.successCount);
-
-      if (changed) updated++;
-    } else {
-      existingShared.push(entry);
-      added++;
-    }
-  }
-
-  existingShared.sort((a, b) => a.firstSeen.localeCompare(b.firstSeen));
-
-  console.log(`\nSync summary:`);
-  console.log(`  New prompts to add: ${added}`);
-  console.log(`  Existing prompts updated: ${updated}`);
-  console.log(`  Total shared prompts: ${existingShared.length}`);
-
-  if (dryRun) {
-    console.log("\n[DRY RUN] No files written.");
-    return;
-  }
-
-  if (added === 0 && updated === 0) {
-    console.log("\nNothing new to sync.");
-    return;
-  }
-
-  writeFileSync(targetPath, JSON.stringify(existingShared, null, 2) + "\n");
-  console.log(`\nWritten to ${targetPath}`);
+  console.log(`\nUnique prompts: ${prompts.length}`);
+  console.log(JSON.stringify(prompts, null, 2));
 }
 
 main();
