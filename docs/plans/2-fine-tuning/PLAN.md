@@ -13,8 +13,17 @@ We have set up the project, but we must fine-tune our solution, fix bugs and set
   - [x] This feedback loop in the evals should be automated so we can continuously improve the eval system.
 - [x] I think we can reduce the number of API calls in our evals, sometimes we create department twice and employees twice when we only need to do it once.
 - [x] We should attempt to submit a solution to the competition. Use the browser tool and window to click the submit button, consider the results coming in and act upon them.
-- [ ] Note that our solution must not be too rigid with specific tasks, the Tripletex API is quite vast and our system prompt does not cover all the of them. The tool must have a way to access either the official API for reference or our own documentation (if we have a local reference).
-- [ ] Once we have come up with an improved solution based on the previous implementation, we try submitting again.
+- [x] Note that our solution must not be too rigid with specific tasks, the Tripletex API is quite vast and our system prompt does not cover all the of them. The tool must have a way to access either the official API for reference or our own documentation (if we have a local reference).
+  - [x] Created generic agentic handler (`generic-handler.ts`) using Vercel AI SDK tool-calling
+  - [x] Created condensed Tripletex API reference (`tripletex-api-reference.ts`) covering all major endpoints
+  - [x] Unknown task types now fall through to the generic handler instead of being skipped
+  - [x] Improved LLM parsing to correctly classify unknown tasks (especially accounting dimensions)
+- [x] Created dedicated `create_payment` handler for invoice payment registration
+  - Uses `PUT /invoice/{id}/:payment` with query parameters (not body)
+  - Searches for existing invoices before creating new ones
+- [ ] Fix create_invoice handler to support multiple product lines with different VAT types
+- [ ] Fix create_product handler to search for existing products before creating
+- [ ] Continue submitting and iterating based on competition results
 
 ## Findings from competition submission
 
@@ -34,6 +43,18 @@ Key issues identified:
 ### Previous results from the competition (observed in UI):
 - Best: 8/8 (100%) and 7/7 (100%) - so our system CAN work for simpler tasks
 - Worst: Multiple 0/7 and 0/8 - failing on tasks we don't support
+
+## Second round of submissions (with generic handler + payment handler)
+
+**Result: 2/7 (29%)** — Portuguese payment task. Check 1 passed (invoice found), Check 2 failed (payment not registered — generic handler couldn't find the correct endpoint). Fixed by creating dedicated payment handler.
+
+**Result: pending** — Portuguese invoice with 3 product lines at different VAT rates (25%, 15%, 0%). Products already existed in sandbox, create_product failed. Invoice created with only 1 line instead of 3.
+
+### Key issues identified (round 2):
+1. **Payment endpoint uses query params not body** - `PUT /invoice/{id}/:payment` takes paymentDate, paymentTypeId, paidAmount as query parameters. Generic handler was trying body-based PUT. Fixed with `tripletex_put_action` tool and dedicated handler.
+2. **Products may pre-exist in sandbox** - Product numbers can already be in use. Need to search for existing products first.
+3. **Invoice handler only creates 1 product line** - When task requires multiple lines with different VAT rates, our handler only creates one. Need to support multi-line invoices.
+4. **Generic handler GET crash** - `client.list()` used for single-object endpoints like `/invoice/{id}` causing "Cannot read properties of undefined". Fixed by detecting ID-based endpoints.
 
 ### Execution of plan
 
