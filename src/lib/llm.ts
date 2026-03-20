@@ -51,9 +51,10 @@ Your job is to:
 
 Task types and their entity fields:
 
-- create_employee: fields: firstName, lastName, email, phoneNumber, phoneNumberMobile, dateOfBirth, employeeNumber, userType
+- create_employee: fields: firstName, lastName, email, phoneNumber, phoneNumberMobile, dateOfBirth, employeeNumber, userType, startDate (YYYY-MM-DD, employment start date)
   - userType: "ADMINISTRATOR" if the prompt says admin/administrator/administrador/administrateur/administratör/Verwalter/tilgangsrettighet: administrator. "STANDARD" for regular users with email. "NO_ACCESS" if no email/login needed.
   - IMPORTANT: If the prompt asks to give someone admin rights, set userType to "ADMINISTRATOR".
+  - startDate: The date when the employee starts working. Extract from prompt if mentioned (e.g. "data de início", "startdato", "fecha de inicio", "Anfangsdatum", "date de début", "start date").
 - update_employee: fields: firstName, lastName (to find) + any updated fields
 - create_customer: fields: name, email, organizationNumber, phoneNumber, postalAddress
 - update_customer: fields: name (to find) + any updated fields

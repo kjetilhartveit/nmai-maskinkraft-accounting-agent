@@ -135,6 +135,25 @@ export async function grantProjectManagerEntitlement(
   await grantEntitlement(client, employeeId, ENTITLEMENT_PM, companyId, "AUTH_PROJECT_MANAGER");
 }
 
+async function createEmployment(
+  client: TripletexClient,
+  employeeId: number,
+  startDate: string,
+): Promise<void> {
+  try {
+    await client.post("/employee/employment", {
+      employee: { id: employeeId },
+      startDate,
+      employmentType: "ORDINARY",
+      percentageOfFullTimeEquivalent: 100,
+    });
+    console.log(`[Handler] Created employment for employee ${employeeId}, startDate=${startDate}`);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn(`[Handler] Failed to create employment: ${msg}`);
+  }
+}
+
 export async function handleCreateEmployee(
   client: TripletexClient,
   task: ParsedTask,
@@ -199,6 +218,10 @@ export async function handleCreateEmployee(
 
     if (isAdminRequested(entity)) {
       await grantAdminEntitlement(client, empId, createdAsExtended);
+    }
+
+    if (entity.startDate) {
+      await createEmployment(client, empId, String(entity.startDate));
     }
 
     if (firstName && lastName) ctx.registerEmployee(`${firstName} ${lastName}`, empId);
