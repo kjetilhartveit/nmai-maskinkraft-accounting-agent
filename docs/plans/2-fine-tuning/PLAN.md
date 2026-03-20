@@ -23,12 +23,17 @@ We have set up the project, but we must fine-tune our solution, fix bugs and set
   - Searches for existing invoices before creating new ones
 - [ ] Fix create_invoice handler to support multiple product lines with different VAT types
 - [ ] Fix create_product handler to search for existing products before creating
+- [ ] I've noticed you write something about retrieving existing data in our solver - we can do this but only for data we have created in the current run as we should expect the sandbox to be empty. Just check that we're doing this correctly.
+- [ ] Are we also detecting information accurately in the prompts? Because that's part of the scoring I think, and we might get points based on that? Can you just check with the official documentation regarding this and our implementation and whether we should make changes to it?
 - [ ] We should update our eval test cases to include cases from the actual competition.
 - [ ] We'll try solving the test cases to the best of our abilities and update the "expected values" accordingly if we find better solutions.
+  - For new test cases we run them in the solver, see errors, and try to iteratively improve on them until we achieve the task without errors and hopefully with less API calls.
 - [ ] Continue testing against our sandbox and making iterative improvements. ~~Continue submitting and iterating based on competition results~~
   - We have reached the daily limit, so we should continue against our sandbox and improving our evals.
 - [ ] For later it would be useful if we could differentiate our runs with runs from other team members. Perhaps by date (in the UI) or other identifiers. Note that when we submit we also get GET requests (with path submissions) continuously which gives us information about the API calls made.
 - [ ] Consider adding previous solutions as inspiration in our system prompt.
+- [ ] Could we add a tool for the LLM to retrieve API information? This could be helpful for the LLM, especially if we don't have a handler for it.
+- [ ] Keep running our evals (we should have more now due to adding new test cases) and keep iterating on improving them if possible. Fix errors and be creative in case we think we have found the perfect way.
 
 ## Findings from competition submission
 
