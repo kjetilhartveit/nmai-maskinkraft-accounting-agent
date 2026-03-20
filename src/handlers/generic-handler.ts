@@ -1,20 +1,22 @@
-import { createOpenAI } from "@ai-sdk/openai";
-import { generateText, tool } from "ai";
-import { z } from "zod";
+// Archived: OpenRouter + Vercel AI SDK
+// import { createOpenAI } from "@ai-sdk/openai";
+// import { generateText, tool } from "ai";
+// import { z } from "zod";
+// const openrouter = createOpenAI({
+//   baseURL: "https://openrouter.ai/api/v1",
+//   apiKey: config.openrouter.apiKey,
+//   compatibility: "compatible",
+// });
+
 import type { TripletexClient } from "../lib/tripletex-client.js";
 import type { ParsedTask } from "../types/index.js";
 import type { SequenceContext } from "../lib/sequence-context.js";
 import { config } from "../lib/config.js";
 import { TRIPLETEX_API_REFERENCE } from "../lib/tripletex-api-reference.js";
 import { searchEndpoints, getEndpointDetail } from "../lib/openapi-index.js";
+import { geminiGenerateWithTools, type GeminiToolDef } from "../lib/gemini.js";
 
 const MAX_STEPS = 25;
-
-const openrouter = createOpenAI({
-  baseURL: "https://openrouter.ai/api/v1",
-  apiKey: config.openrouter.apiKey,
-  compatibility: "compatible",
-});
 
 function buildSystemPrompt(): string {
   return `You are an expert Tripletex accounting API agent. You receive a task description and must execute it by making the correct API calls to the Tripletex API.
@@ -80,232 +82,265 @@ export async function handleGenericTask(
   );
   console.log(`[GenericHandler] Prompt: ${task.rawPrompt.slice(0, 200)}...`);
 
-  const modelId = config.openrouter.model;
+  const tools: GeminiToolDef[] = [
+    {
+      name: "tripletex_get",
+      description:
+        "Make a GET request to the Tripletex API. Use for searching/listing resources. For list endpoints, returns { values: [...], fullResultSize }. For single-object endpoints (with ID), returns { value: {...} }.",
+      parameters: {
+        type: "object",
+        properties: {
+          endpoint: {
+            type: "string",
+            description: 'API endpoint path, e.g. "/employee", "/ledger/account", "/invoice/123"',
+          },
+          params: {
+            type: "object",
+            description: 'Query parameters as string key-value pairs, e.g. { "name": "Acme", "from": "0", "count": "10" }',
+          },
+        },
+        required: ["endpoint"],
+      },
+      execute: async (args) => {
+        const endpoint = args.endpoint as string;
+        const params = args.params as Record<string, string> | undefined;
+        console.log(`[GenericHandler] GET ${endpoint} ${params ? JSON.stringify(params) : ""}`);
+        try {
+          if (isIdEndpoint(endpoint)) {
+            const result = await client.get<unknown>(endpoint, params);
+            return { success: true, value: result.value };
+          }
+          const result = await client.list<unknown>(endpoint, params);
+          return {
+            success: true,
+            fullResultSize: result.fullResultSize,
+            count: result.values.length,
+            values: result.values,
+          };
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          console.error(`[GenericHandler] GET ${endpoint} failed: ${msg}`);
+          return { success: false, error: msg };
+        }
+      },
+    },
+    {
+      name: "tripletex_post",
+      description: "Make a POST request to the Tripletex API. Use for creating new resources.",
+      parameters: {
+        type: "object",
+        properties: {
+          endpoint: {
+            type: "string",
+            description: 'API endpoint path, e.g. "/employee", "/customer"',
+          },
+          body: {
+            type: "object",
+            description: "JSON body for the request",
+          },
+        },
+        required: ["endpoint", "body"],
+      },
+      execute: async (args) => {
+        const endpoint = args.endpoint as string;
+        const body = args.body as Record<string, unknown>;
+        console.log(`[GenericHandler] POST ${endpoint} ${JSON.stringify(body).slice(0, 300)}`);
+        try {
+          const result = await client.post<unknown>(endpoint, body);
+          return { success: true, value: result.value };
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          console.error(`[GenericHandler] POST ${endpoint} failed: ${msg}`);
+          return { success: false, error: msg };
+        }
+      },
+    },
+    {
+      name: "tripletex_put",
+      description: "Make a PUT request with a JSON body. Use for updating existing resources (include id and version).",
+      parameters: {
+        type: "object",
+        properties: {
+          endpoint: {
+            type: "string",
+            description: 'API endpoint path with ID, e.g. "/employee/123", "/company"',
+          },
+          body: {
+            type: "object",
+            description: "JSON body for the request. Must include id and version fields for most resources.",
+          },
+        },
+        required: ["endpoint", "body"],
+      },
+      execute: async (args) => {
+        const endpoint = args.endpoint as string;
+        const body = args.body as Record<string, unknown>;
+        console.log(`[GenericHandler] PUT ${endpoint} ${JSON.stringify(body).slice(0, 300)}`);
+        try {
+          const result = await client.put<unknown>(endpoint, body);
+          return { success: true, value: result.value };
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          console.error(`[GenericHandler] PUT ${endpoint} failed: ${msg}`);
+          return { success: false, error: msg };
+        }
+      },
+    },
+    {
+      name: "tripletex_put_action",
+      description:
+        'Make a PUT request with QUERY PARAMETERS (no body). Use for action endpoints like "PUT /invoice/{id}/:payment", "PUT /travelExpense/:deliver", etc. These endpoints use query params instead of a JSON body.',
+      parameters: {
+        type: "object",
+        properties: {
+          endpoint: {
+            type: "string",
+            description: 'API endpoint path with action, e.g. "/invoice/123/:payment"',
+          },
+          params: {
+            type: "object",
+            description: 'Query parameters as string key-value pairs, e.g. { "paymentDate": "2026-03-20", "paymentTypeId": "123", "paidAmount": "10000" }',
+          },
+        },
+        required: ["endpoint", "params"],
+      },
+      execute: async (args) => {
+        const endpoint = args.endpoint as string;
+        const params = args.params as Record<string, string>;
+        const qs = new URLSearchParams(params).toString();
+        const fullEndpoint = `${endpoint}?${qs}`;
+        console.log(`[GenericHandler] PUT-ACTION ${fullEndpoint}`);
+        try {
+          const result = await client.put<unknown>(fullEndpoint, undefined);
+          return { success: true, value: result.value };
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          console.error(`[GenericHandler] PUT-ACTION ${fullEndpoint} failed: ${msg}`);
+          return { success: false, error: msg };
+        }
+      },
+    },
+    {
+      name: "tripletex_post_list",
+      description:
+        "Make a POST request with an ARRAY body to a /list endpoint. Use for batch creating multiple resources at once (e.g. POST /department/list, POST /product/list). Returns { values: [...] }.",
+      parameters: {
+        type: "object",
+        properties: {
+          endpoint: {
+            type: "string",
+            description: 'API list endpoint path, e.g. "/department/list", "/product/list"',
+          },
+          body: {
+            type: "array",
+            items: { type: "object" },
+            description: "Array of JSON objects to create",
+          },
+        },
+        required: ["endpoint", "body"],
+      },
+      execute: async (args) => {
+        const endpoint = args.endpoint as string;
+        const body = args.body as Record<string, unknown>[];
+        console.log(`[GenericHandler] POST-LIST ${endpoint} (${body.length} items)`);
+        try {
+          const result = await client.postList<unknown>(endpoint, body);
+          return {
+            success: true,
+            count: result.values.length,
+            values: result.values,
+          };
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          console.error(`[GenericHandler] POST-LIST ${endpoint} failed: ${msg}`);
+          return { success: false, error: msg };
+        }
+      },
+    },
+    {
+      name: "tripletex_delete",
+      description: "Make a DELETE request to the Tripletex API. Use for removing resources.",
+      parameters: {
+        type: "object",
+        properties: {
+          endpoint: {
+            type: "string",
+            description: 'API endpoint path with ID, e.g. "/employee/123", "/travelExpense/456"',
+          },
+        },
+        required: ["endpoint"],
+      },
+      execute: async (args) => {
+        const endpoint = args.endpoint as string;
+        console.log(`[GenericHandler] DELETE ${endpoint}`);
+        try {
+          await client.delete(endpoint);
+          return { success: true };
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          console.error(`[GenericHandler] DELETE ${endpoint} failed: ${msg}`);
+          return { success: false, error: msg };
+        }
+      },
+    },
+    {
+      name: "api_search",
+      description:
+        "Search the Tripletex API documentation for endpoints matching a keyword or topic. Use this BEFORE making API calls to unfamiliar endpoints to learn the correct path, parameters, and required fields.",
+      parameters: {
+        type: "object",
+        properties: {
+          query: {
+            type: "string",
+            description: 'Search query, e.g. "salary", "bank reconciliation", "asset", "incoming invoice"',
+          },
+        },
+        required: ["query"],
+      },
+      execute: async (args) => {
+        const query = args.query as string;
+        console.log(`[GenericHandler] API-SEARCH: "${query}"`);
+        return { docs: searchEndpoints(query, 8) };
+      },
+    },
+    {
+      name: "api_endpoint_detail",
+      description:
+        "Get detailed documentation for a specific API endpoint (path + method). Returns parameters, required fields, and response schema.",
+      parameters: {
+        type: "object",
+        properties: {
+          path: {
+            type: "string",
+            description: 'API path, e.g. "/salary/payslip"',
+          },
+          method: {
+            type: "string",
+            description: 'HTTP method, e.g. "GET", "POST"',
+          },
+        },
+        required: ["path", "method"],
+      },
+      execute: async (args) => {
+        const path = args.path as string;
+        const method = args.method as string;
+        console.log(`[GenericHandler] API-DETAIL: ${method} ${path}`);
+        return { docs: getEndpointDetail(path, method) };
+      },
+    },
+  ];
 
-  const { text, steps } = await generateText({
-    model: openrouter(modelId),
+  const { text, steps, toolCalls } = await geminiGenerateWithTools({
+    model: config.google.model,
     system: buildSystemPrompt(),
     prompt: buildUserPrompt(task),
+    tools,
     maxSteps: MAX_STEPS,
     maxTokens: 16384,
-    tools: {
-      tripletex_get: tool({
-        description:
-          "Make a GET request to the Tripletex API. Use for searching/listing resources. For list endpoints, returns { values: [...], fullResultSize }. For single-object endpoints (with ID), returns { value: {...} }.",
-        parameters: z.object({
-          endpoint: z
-            .string()
-            .describe(
-              'API endpoint path, e.g. "/employee", "/ledger/account", "/invoice/123"',
-            ),
-          params: z
-            .record(z.string())
-            .optional()
-            .describe(
-              'Query parameters, e.g. { "name": "Acme", "from": "0", "count": "10" }',
-            ),
-        }),
-        execute: async ({ endpoint, params }) => {
-          console.log(
-            `[GenericHandler] GET ${endpoint} ${params ? JSON.stringify(params) : ""}`,
-          );
-          try {
-            if (isIdEndpoint(endpoint)) {
-              const result = await client.get<unknown>(endpoint, params);
-              return { success: true, value: result.value };
-            }
-            const result = await client.list<unknown>(endpoint, params);
-            return {
-              success: true,
-              fullResultSize: result.fullResultSize,
-              count: result.values.length,
-              values: result.values,
-            };
-          } catch (err) {
-            const msg = err instanceof Error ? err.message : String(err);
-            console.error(`[GenericHandler] GET ${endpoint} failed: ${msg}`);
-            return { success: false, error: msg };
-          }
-        },
-      }),
-      tripletex_post: tool({
-        description:
-          "Make a POST request to the Tripletex API. Use for creating new resources.",
-        parameters: z.object({
-          endpoint: z
-            .string()
-            .describe('API endpoint path, e.g. "/employee", "/customer"'),
-          body: z
-            .record(z.unknown())
-            .describe("JSON body for the request"),
-        }),
-        execute: async ({ endpoint, body }) => {
-          console.log(
-            `[GenericHandler] POST ${endpoint} ${JSON.stringify(body).slice(0, 300)}`,
-          );
-          try {
-            const result = await client.post<unknown>(endpoint, body);
-            return { success: true, value: result.value };
-          } catch (err) {
-            const msg = err instanceof Error ? err.message : String(err);
-            console.error(`[GenericHandler] POST ${endpoint} failed: ${msg}`);
-            return { success: false, error: msg };
-          }
-        },
-      }),
-      tripletex_put: tool({
-        description:
-          "Make a PUT request with a JSON body. Use for updating existing resources (include id and version).",
-        parameters: z.object({
-          endpoint: z
-            .string()
-            .describe(
-              'API endpoint path with ID, e.g. "/employee/123", "/company"',
-            ),
-          body: z
-            .record(z.unknown())
-            .describe(
-              "JSON body for the request. Must include id and version fields for most resources.",
-            ),
-        }),
-        execute: async ({ endpoint, body }) => {
-          console.log(
-            `[GenericHandler] PUT ${endpoint} ${JSON.stringify(body).slice(0, 300)}`,
-          );
-          try {
-            const result = await client.put<unknown>(endpoint, body);
-            return { success: true, value: result.value };
-          } catch (err) {
-            const msg = err instanceof Error ? err.message : String(err);
-            console.error(`[GenericHandler] PUT ${endpoint} failed: ${msg}`);
-            return { success: false, error: msg };
-          }
-        },
-      }),
-      tripletex_put_action: tool({
-        description:
-          'Make a PUT request with QUERY PARAMETERS (no body). Use for action endpoints like "PUT /invoice/{id}/:payment", "PUT /travelExpense/:deliver", etc. These endpoints use query params instead of a JSON body.',
-        parameters: z.object({
-          endpoint: z
-            .string()
-            .describe(
-              'API endpoint path with action, e.g. "/invoice/123/:payment"',
-            ),
-          params: z
-            .record(z.string())
-            .describe(
-              'Query parameters, e.g. { "paymentDate": "2026-03-20", "paymentTypeId": "123", "paidAmount": "10000" }',
-            ),
-        }),
-        execute: async ({ endpoint, params }) => {
-          const qs = new URLSearchParams(params).toString();
-          const fullEndpoint = `${endpoint}?${qs}`;
-          console.log(
-            `[GenericHandler] PUT-ACTION ${fullEndpoint}`,
-          );
-          try {
-            const result = await client.put<unknown>(fullEndpoint, undefined);
-            return { success: true, value: result.value };
-          } catch (err) {
-            const msg = err instanceof Error ? err.message : String(err);
-            console.error(
-              `[GenericHandler] PUT-ACTION ${fullEndpoint} failed: ${msg}`,
-            );
-            return { success: false, error: msg };
-          }
-        },
-      }),
-      tripletex_post_list: tool({
-        description:
-          "Make a POST request with an ARRAY body to a /list endpoint. Use for batch creating multiple resources at once (e.g. POST /department/list, POST /product/list). Returns { values: [...] }.",
-        parameters: z.object({
-          endpoint: z
-            .string()
-            .describe(
-              'API list endpoint path, e.g. "/department/list", "/product/list"',
-            ),
-          body: z
-            .array(z.record(z.unknown()))
-            .describe("Array of JSON objects to create"),
-        }),
-        execute: async ({ endpoint, body }) => {
-          console.log(
-            `[GenericHandler] POST-LIST ${endpoint} (${body.length} items)`,
-          );
-          try {
-            const result = await client.postList<unknown>(endpoint, body);
-            return {
-              success: true,
-              count: result.values.length,
-              values: result.values,
-            };
-          } catch (err) {
-            const msg = err instanceof Error ? err.message : String(err);
-            console.error(
-              `[GenericHandler] POST-LIST ${endpoint} failed: ${msg}`,
-            );
-            return { success: false, error: msg };
-          }
-        },
-      }),
-      tripletex_delete: tool({
-        description:
-          "Make a DELETE request to the Tripletex API. Use for removing resources.",
-        parameters: z.object({
-          endpoint: z
-            .string()
-            .describe(
-              'API endpoint path with ID, e.g. "/employee/123", "/travelExpense/456"',
-            ),
-        }),
-        execute: async ({ endpoint }) => {
-          console.log(`[GenericHandler] DELETE ${endpoint}`);
-          try {
-            await client.delete(endpoint);
-            return { success: true };
-          } catch (err) {
-            const msg = err instanceof Error ? err.message : String(err);
-            console.error(
-              `[GenericHandler] DELETE ${endpoint} failed: ${msg}`,
-            );
-            return { success: false, error: msg };
-          }
-        },
-      }),
-      api_search: tool({
-        description:
-          "Search the Tripletex API documentation for endpoints matching a keyword or topic. Use this BEFORE making API calls to unfamiliar endpoints to learn the correct path, parameters, and required fields.",
-        parameters: z.object({
-          query: z
-            .string()
-            .describe('Search query, e.g. "salary", "bank reconciliation", "asset", "incoming invoice"'),
-        }),
-        execute: async ({ query }) => {
-          console.log(`[GenericHandler] API-SEARCH: "${query}"`);
-          return { docs: searchEndpoints(query, 8) };
-        },
-      }),
-      api_endpoint_detail: tool({
-        description:
-          "Get detailed documentation for a specific API endpoint (path + method). Returns parameters, required fields, and response schema.",
-        parameters: z.object({
-          path: z.string().describe('API path, e.g. "/salary/payslip"'),
-          method: z.string().describe('HTTP method, e.g. "GET", "POST"'),
-        }),
-        execute: async ({ path, method }) => {
-          console.log(`[GenericHandler] API-DETAIL: ${method} ${path}`);
-          return { docs: getEndpointDetail(path, method) };
-        },
-      }),
-    },
   });
 
-  const totalToolCalls = steps.reduce(
-    (sum, step) => sum + (step.toolCalls?.length ?? 0),
-    0,
-  );
   console.log(
-    `[GenericHandler] Completed in ${steps.length} step(s), ${totalToolCalls} tool call(s)`,
+    `[GenericHandler] Completed in ${steps} step(s), ${toolCalls} tool call(s)`,
   );
   if (text) {
     console.log(`[GenericHandler] Summary: ${text.slice(0, 500)}`);
