@@ -19,9 +19,11 @@ Here's a list of tasks I think we need to work on to get started:
 
 ## Tech stack
 
-- Framework: FastAPI.
-- Programming language: TypeScript.
+- Runtime: Node.js with TypeScript.
+- HTTP Framework: Hono (lightweight, fast, TypeScript-first).
 - AI: OpenRouter + Vercel AI SDK.
+- Manage dependencies/packages: pnpm.
+- Deployment: Cloudflare Tunnel (local dev → HTTPS).
 
 ## Links
 

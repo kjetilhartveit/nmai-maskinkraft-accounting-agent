@@ -1,5 +1,6 @@
-
 .env
+node_modules/
+dist/
 
 # Claude
 /.claude/settings.local.json
