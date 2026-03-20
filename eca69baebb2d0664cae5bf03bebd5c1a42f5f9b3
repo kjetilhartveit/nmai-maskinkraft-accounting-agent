@@ -1,0 +1,35 @@
+package.json
+  8d031f7ab2ae97f5 14-15
+src/scripts/submit.ts
+  8d031f7ab2ae97f5 1-152
+.gitignore
+  8d031f7ab2ae97f5 6
+src/routes/solve.ts
+  8d031f7ab2ae97f5 8,37,40-42,57-63,72,79,82-96,116-134
+src/lib/solve-logger.ts
+  8d031f7ab2ae97f5 1-53
+docs/plans/1-initial-setup/PLAN.md
+  8d031f7ab2ae97f5 26,30-38
+.env.example
+  8d031f7ab2ae97f5 2-6,9,13
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.15",
+  "base_commit_sha": "eca69baebb2d0664cae5bf03bebd5c1a42f5f9b3",
+  "prompts": {
+    "8d031f7ab2ae97f5": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "06e5e389-f9e0-4365-be5a-53389fd3d251",
+        "model": "claude-4.6-opus-high-thinking"
+      },
+      "human_author": "Kjetil Hårtveit <kjetil_runescape@hotmail.com>",
+      "messages": [],
+      "total_additions": 470,
+      "total_deletions": 215,
+      "accepted_lines": 311,
+      "overriden_lines": 0
+    }
+  }
+}
