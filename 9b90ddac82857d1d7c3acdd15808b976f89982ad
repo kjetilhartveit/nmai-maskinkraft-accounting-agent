@@ -1,0 +1,27 @@
+data/verified/promoted-test-cases.json
+  337de63860b9f879 12,41,61
+src/eval/test-cases.ts
+  337de63860b9f879 26-27,41,97,107,123,151,174
+docs/plans/2-fine-tuning/PLAN.md
+  337de63860b9f879 24-45,48
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.15",
+  "base_commit_sha": "9b90ddac82857d1d7c3acdd15808b976f89982ad",
+  "prompts": {
+    "337de63860b9f879": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "60fea3ea-ce92-4f94-9618-02d2df3eb3db",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Kjetil Hårtveit <kjetil_runescape@hotmail.com>",
+      "messages": [],
+      "total_additions": 216,
+      "total_deletions": 200,
+      "accepted_lines": 39,
+      "overriden_lines": 0
+    }
+  }
+}
