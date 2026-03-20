@@ -19,6 +19,10 @@
   - [x] `src/index.ts` — Hono server entry point on port 3000.
   - [x] `src/scripts/test-sandbox.ts` — Script to verify sandbox connectivity and list available endpoints.
   - [x] `src/handlers/` — Initial task handlers for create_employee, create_customer, create_department, create_supplier.
+  - [x] Added remaining handlers: create_product, create_order, create_invoice, send_invoice, create_travel_expense, delete_travel_expense, create_project, create_voucher, update_employee, update_customer.
+  - [x] Optimized batch handlers: department/customer/supplier/employee all use `/list` endpoints when creating multiple entities.
+  - [x] Added `postList` to TripletexClient and new helpers: getDefaultCurrencyId, getDefaultProductVatTypeId, getDefaultProductUnitId, findCustomerByName, findOrCreateProduct, today, daysFromNow.
+  - [x] Updated system prompt with per-task entity field guidance and date normalization rules.
 - [ ] Get us up and running and submit against the endpoint. Our system should be deterministic (apart from the LLM of course) and easy to run (also for humans). Automate submittions and session tokens etc. as much as possible.
   - [x] Verify `pnpm dev` starts the server and `/solve` accepts POST requests.
   - [x] Test against the sandbox with a sample prompt end-to-end.
