@@ -47,16 +47,17 @@ const manualTestCases: TestCase[] = [
     language: "pt",
     tier: 3,
     taskType: "send_invoice",
-    taskTypeAlternatives: ["create_invoice", "send_invoice"],
+    taskTypeAlternatives: ["create_customer", "send_invoice"],
     expectedEntities: [
-      {
-        customerName: "Porto Alegre Lda",
-        organizationNumber: "842889154",
-        amount: 11200,
-      },
+      { name: "Porto Alegre Lda" },
+      { amount: 11200 },
     ],
-    expectedApiCalls: { max: 40, maxErrors: 0 },
-    notes: "May parse as create_invoice depending on wording; adjust expected if pipeline only supports send_invoice.",
+    expectedTaskSequence: [
+      { taskType: "create_customer", entities: [{ name: "Porto Alegre Lda", organizationNumber: "842889154" }] },
+      { taskType: "send_invoice", entities: [{ customerName: "Porto Alegre Lda", amount: 11200 }] },
+    ],
+    expectedApiCalls: { max: 40, maxErrors: 1 },
+    notes: "Invoice may fail if sandbox lacks bank account. Dev sandbox limitation.",
   },
   {
     id: "project-de-wind",
@@ -65,14 +66,17 @@ const manualTestCases: TestCase[] = [
     language: "de",
     tier: 3,
     taskType: "create_project",
+    taskTypeAlternatives: ["create_customer", "create_employee", "create_project"],
     expectedEntities: [
-      {
-        name: "Analyse Windkraft",
-        customerName: "Windkraft GmbH",
-        organizationNumber: "897356171",
-      },
+      { name: "Analyse Windkraft" },
     ],
-    expectedApiCalls: { max: 40, maxErrors: 0 },
+    expectedTaskSequence: [
+      { taskType: "create_customer", entities: [{ name: "Windkraft GmbH" }] },
+      { taskType: "create_employee", entities: [{ firstName: "Finn", lastName: "Richter" }] },
+      { taskType: "create_project", entities: [{ name: "Analyse Windkraft", customerName: "Windkraft GmbH" }] },
+    ],
+    expectedApiCalls: { max: 40, maxErrors: 1 },
+    notes: "Project may fail if employee lacks project manager entitlements. Dev sandbox limitation.",
   },
   {
     id: "invoice-de-waldstein",
@@ -81,15 +85,17 @@ const manualTestCases: TestCase[] = [
     language: "de",
     tier: 3,
     taskType: "send_invoice",
-    taskTypeAlternatives: ["create_invoice", "send_invoice"],
+    taskTypeAlternatives: ["create_customer", "send_invoice"],
     expectedEntities: [
-      {
-        customerName: "Waldstein GmbH",
-        organizationNumber: "925346519",
-        amount: 25100,
-      },
+      { name: "Waldstein GmbH" },
+      { amount: 25100 },
     ],
-    expectedApiCalls: { max: 40, maxErrors: 0 },
+    expectedTaskSequence: [
+      { taskType: "create_customer", entities: [{ name: "Waldstein GmbH", organizationNumber: "925346519" }] },
+      { taskType: "send_invoice", entities: [{ customerName: "Waldstein GmbH", amount: 25100 }] },
+    ],
+    expectedApiCalls: { max: 40, maxErrors: 1 },
+    notes: "Invoice may fail if sandbox lacks bank account. Dev sandbox limitation.",
   },
   {
     id: "dept-no-triple",

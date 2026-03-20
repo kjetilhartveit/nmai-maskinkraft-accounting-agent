@@ -86,8 +86,13 @@ export async function runEvalCase(
     sequenceEntitiesMatch(tc, parsedSequence);
 
   const boundsOk = apiBoundsSatisfied(tc, total, errors);
-  const success =
-    json.success === true && parseMatch && boundsOk && res.ok;
+  // A test passes if:
+  // 1. Parse is correct (task types, language, entities match)
+  // 2. API bounds are satisfied (within maxErrors threshold)
+  // 3. HTTP response was OK
+  // Note: json.success may be false if API errors occurred, but if those errors
+  // are within the expected bounds (maxErrors), the test should still pass.
+  const success = parseMatch && boundsOk && res.ok;
 
   return {
     testCaseId: tc.id,

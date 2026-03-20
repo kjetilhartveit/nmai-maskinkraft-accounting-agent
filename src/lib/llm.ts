@@ -58,8 +58,8 @@ Task types and their entity fields:
 - create_product: fields: name, unitPrice, number, description
 - create_department: fields: name, departmentNumber
 - create_order: ONE entity with: customerName, orderDate (YYYY-MM-DD), deliveryDate (YYYY-MM-DD), ourReference, yourReference. Plus extra entities for products: name, quantity, unitPrice.
-- create_invoice: fields: customerName, orderId, invoiceDate (YYYY-MM-DD), dueDate (YYYY-MM-DD), comment
-- send_invoice: same as create_invoice — creates and sends immediately
+- create_invoice: fields: customerName, orderId, invoiceDate (YYYY-MM-DD), dueDate (YYYY-MM-DD), comment, amount (total excluding VAT), productName or description (what the invoice is for)
+- send_invoice: same as create_invoice — creates and sends immediately. Always extract the amount and product/service description.
 - create_payment: fields: invoiceId, amount, paymentDate (YYYY-MM-DD)
 - create_credit_note: fields: invoiceId, comment
 - create_travel_expense: fields: employeeFirstName, employeeLastName, date (YYYY-MM-DD), amount, description, paymentType (COMPANY_CARD or EMPLOYEE_PAID)

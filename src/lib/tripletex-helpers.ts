@@ -90,24 +90,54 @@ export async function getDefaultProductVatTypeId(
 ): Promise<number> {
   if (cachedProductVatTypeId !== null) return cachedProductVatTypeId;
 
-  // Fetch VAT types and prefer one suitable for product sales (outgoing, high rate)
+  // Fetch all VAT types
   const result = await client.list<VatType>("/ledger/vatType", {
     from: "0",
-    count: "50",
+    count: "100",
   });
 
   if (result.values.length > 0) {
-    // Try to find "utgående" (outgoing) standard VAT
-    const outgoing = result.values.find(
+    // Priority order for finding valid product VAT type:
+    // 1. VAT code "3" (utgående mva høy sats 25%) - standard for product sales
+    const code3 = result.values.find((v) => v.number === "3");
+    if (code3) {
+      cachedProductVatTypeId = code3.id;
+      console.log(`[Helper] Using VAT type id=${code3.id} (code 3)`);
+      return cachedProductVatTypeId;
+    }
+
+    // 2. Look for "utgående" (outgoing) and "høy" (high) in name
+    const outgoingHigh = result.values.find(
       (v) =>
         v.name?.toLowerCase().includes("utgående") &&
         v.name?.toLowerCase().includes("høy"),
     );
-    cachedProductVatTypeId = outgoing?.id ?? result.values[0].id;
+    if (outgoingHigh) {
+      cachedProductVatTypeId = outgoingHigh.id;
+      console.log(`[Helper] Using VAT type id=${outgoingHigh.id} (${outgoingHigh.name})`);
+      return cachedProductVatTypeId;
+    }
+
+    // 3. Any outgoing VAT
+    const anyOutgoing = result.values.find((v) =>
+      v.name?.toLowerCase().includes("utgående"),
+    );
+    if (anyOutgoing) {
+      cachedProductVatTypeId = anyOutgoing.id;
+      console.log(`[Helper] Using VAT type id=${anyOutgoing.id} (${anyOutgoing.name})`);
+      return cachedProductVatTypeId;
+    }
+
+    // 4. Log available types for debugging and try first one
+    console.log(
+      `[Helper] Available VAT types: ${result.values.map((v) => `${v.id}:${v.number}:${v.name}`).join(", ")}`,
+    );
+    cachedProductVatTypeId = result.values[0].id;
     return cachedProductVatTypeId;
   }
 
-  cachedProductVatTypeId = 6; // Sandbox default from testing
+  console.warn("[Helper] No VAT types found, defaulting to id=3");
+  cachedProductVatTypeId = 3;
   return cachedProductVatTypeId;
 }
 
@@ -144,6 +174,18 @@ export async function findEmployeeByName(
   return result.values[0] ?? null;
 }
 
+export async function findEmployeeByEmail(
+  client: TripletexClient,
+  email: string,
+): Promise<Employee | null> {
+  const result = await client.list<Employee>("/employee", {
+    email,
+    from: "0",
+    count: "1",
+  });
+  return result.values[0] ?? null;
+}
+
 export async function findCustomerByName(
   client: TripletexClient,
   name: string,
@@ -169,21 +211,34 @@ export async function findOrCreateProduct(
   });
   if (result.values.length > 0) return result.values[0];
 
-  // Create it
-  const [departmentId, vatTypeId, unitId] = await Promise.all([
+  // Create it - try without VAT type first, then with if needed
+  const [departmentId, unitId] = await Promise.all([
     getDefaultDepartmentId(client),
-    getDefaultProductVatTypeId(client),
     getDefaultProductUnitId(client),
   ]);
 
-  const created = await client.post<Product>("/product", {
-    name,
-    priceExcludingVatCurrency: unitPriceExcVat,
-    vatType: { id: vatTypeId },
-    department: { id: departmentId },
-    productUnit: { id: unitId },
-  });
-  return created.value;
+  // First attempt: minimal fields (no VAT type)
+  try {
+    const created = await client.post<Product>("/product", {
+      name,
+      priceExcludingVatCurrency: unitPriceExcVat,
+      department: { id: departmentId },
+      productUnit: { id: unitId },
+    });
+    return created.value;
+  } catch (err) {
+    console.log("[Helper] Product creation without VAT failed, trying with VAT type");
+    // Second attempt: with VAT type
+    const vatTypeId = await getDefaultProductVatTypeId(client);
+    const created = await client.post<Product>("/product", {
+      name,
+      priceExcludingVatCurrency: unitPriceExcVat,
+      vatType: { id: vatTypeId },
+      department: { id: departmentId },
+      productUnit: { id: unitId },
+    });
+    return created.value;
+  }
 }
 
 /** Returns today's date as YYYY-MM-DD */

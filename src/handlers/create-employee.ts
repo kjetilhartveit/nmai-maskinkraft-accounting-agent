@@ -1,6 +1,10 @@
 import type { TripletexClient } from "../lib/tripletex-client.js";
 import type { ParsedTask } from "../types/index.js";
-import { getDefaultDepartmentId } from "../lib/tripletex-helpers.js";
+import {
+  getDefaultDepartmentId,
+  findEmployeeByEmail,
+  findEmployeeByName,
+} from "../lib/tripletex-helpers.js";
 
 function buildEmployeeBody(
   entity: Record<string, unknown>,
@@ -31,13 +35,38 @@ export async function handleCreateEmployee(
   task: ParsedTask,
 ): Promise<void> {
   const departmentId = await getDefaultDepartmentId(client);
-  const bodies = task.entities.map((e) => buildEmployeeBody(e, departmentId));
 
-  if (bodies.length === 1) {
-    const result = await client.post<{ id: number }>("/employee", bodies[0]);
+  for (const entity of task.entities) {
+    // Check if employee already exists by email
+    if (entity.email) {
+      const existing = await findEmployeeByEmail(
+        client,
+        String(entity.email),
+      );
+      if (existing) {
+        console.log(
+          `[Handler] Employee with email ${entity.email} already exists: id=${existing.id}`,
+        );
+        continue;
+      }
+    }
+
+    // Check if employee already exists by name
+    const firstName = String(entity.firstName ?? "");
+    const lastName = String(entity.lastName ?? "");
+    if (firstName && lastName) {
+      const existing = await findEmployeeByName(client, firstName, lastName);
+      if (existing) {
+        console.log(
+          `[Handler] Employee ${firstName} ${lastName} already exists: id=${existing.id}`,
+        );
+        continue;
+      }
+    }
+
+    // Create new employee
+    const body = buildEmployeeBody(entity, departmentId);
+    const result = await client.post<{ id: number }>("/employee", body);
     console.log(`[Handler] Created employee: id=${result.value.id}`);
-  } else {
-    const result = await client.postList<{ id: number }>("/employee/list", bodies);
-    console.log(`[Handler] Created ${result.values.length} employees`);
   }
 }
