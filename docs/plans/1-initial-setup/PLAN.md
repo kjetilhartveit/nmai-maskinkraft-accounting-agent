@@ -21,9 +21,9 @@
   - [x] `src/handlers/` — Initial task handlers for create_employee, create_customer, create_department, create_supplier.
 - [ ] Get us up and running and submit against the endpoint. Our system should be deterministic (apart from the LLM of course) and easy to run (also for humans). Automate submittions and session tokens etc. as much as possible.
   - [x] Verify `pnpm dev` starts the server and `/solve` accepts POST requests.
-  - [ ] Test against the sandbox with a sample prompt end-to-end.
-  - [ ] Set up Cloudflare Tunnel (`pnpm tunnel`) for HTTPS exposure.
-  - [ ] Submit the endpoint URL to the competition platform.
+  - [x] Test against the sandbox with a sample prompt end-to-end.
+  - [x] Set up Cloudflare Tunnel (`pnpm tunnel`) for HTTPS exposure.
+  - [ ] Submit the endpoint URL to the competition platform. (Requires manual sign-in at https://app.ainm.no/submit/tripletex)
 - [ ] We will thoroughly examine the Tripletex API and learn the ins and outs of it. Some key details are exploring the possibilities, especially in terms of how we can use as few API calls as possible to do operations. We should batch when we can and be smart about it. Sometimes we must create things in advance to avoid errors, because in real attempts the sandbox is empty - and this is what we should simulate.
   - [ ] Create a report with your findings in a new report regarding the Tripletex API.
 - [ ] **Create a testing framework:** Although we will create helpful tools for the LLM (like skills perhaps and documentation in the AGENTS.md), what is perhaps even more important is creating an evaluation system which we can use to rate setups. What we'll do is use sample prompts (including those we gain from submitting tasks) and add the answers to it (e.g. the data to identify and the most efficient API calls). We can use this data to evaluate systems and see what works and what doesn't, which LLMs perform the best and so on. We could even rate setups based on properties per prompt, e.g. the complexitity, the language and so on. And we must be able to run evaluation tests a reasonable number of times to increase our confidence in the results.
