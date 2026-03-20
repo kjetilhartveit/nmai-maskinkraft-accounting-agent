@@ -40,6 +40,67 @@ Your role in this project is of utter importance. As an autonomous senior softwa
 - **Prizes and how it works**: https://app.ainm.no/prizes
 - **Team**: Maskinkraft
 
+## API exploration workflow
+
+Before running full eval tests, validate endpoints directly against the sandbox using `pnpm probe`. This is the fastest way to learn how endpoints behave, discover required fields, and verify fixes.
+
+### Quick validation (one-shot)
+
+```bash
+pnpm probe GET /employee '{"from":"0","count":"2"}'
+pnpm probe POST /department '{"name":"Test"}'
+pnpm probe GET /ledger/vatType '{"from":"0","count":"100"}'
+pnpm probe DELETE /department/12345
+```
+
+### Interactive REPL
+
+```bash
+pnpm probe
+probe> GET /employee
+probe> POST /customer {"name":"Acme AS","isCustomer":true}
+probe> GET /invoice {"invoiceDateFrom":"2026-01-01","invoiceDateTo":"2026-12-31"}
+probe> stats
+probe> log
+```
+
+### Recommended workflow
+
+1. **Discover** — Use `pnpm probe` to explore unfamiliar endpoints and understand their response shapes.
+2. **Validate** — When fixing a handler or adding support for a new task type, probe the exact endpoint sequence first to confirm it works.
+3. **Iterate** — If a POST returns 422, read the error, adjust the payload, and retry immediately in the REPL — no need to run the full agent loop.
+4. **Apply** — Once the working endpoint pattern is confirmed, update the handler/prompt and run `pnpm eval` to verify end-to-end.
+
+Other sandbox tools: `pnpm test:sandbox` (connectivity smoke test), `pnpm reset-sandbox` (clean up dev sandbox).
+
+## BETA endpoint restrictions (critical)
+
+Tripletex is a module-based accounting system. Many endpoints marked `[BETA]` in the Swagger docs return **403 Forbidden** in the competition sandbox. This was the #1 source of errors in submissions.
+
+### Key rules
+
+- **403 = likely BETA.** If an endpoint returns 403, do not retry it — find a non-beta alternative.
+- **Batch `/list` endpoints that are BETA:** `/customer/list`, `/invoice/list`, `/order/list`, `/project/list`. Use repeated single `POST` calls instead.
+- **Safe batch `/list` endpoints (non-beta):** `/department/list`, `/product/list`, `/employee/list`, `/supplier/list`, `/ledger/account/list`.
+- **Employee entitlements** (`POST /employee/entitlement`) are BETA. May return 403. The first sandbox employee usually has PM rights already.
+- **Incoming invoice** endpoints are all BETA. Use voucher postings as an alternative.
+- **`POST /company/salesmodules`** is BETA. Modules cannot be activated via API.
+- **Project update/delete** (`PUT /project/{id}`, `DELETE /project/{id}`) are BETA.
+- **`DELETE /customer/{id}`** is BETA.
+- Some BETA endpoints work (e.g. `GET /project/{id}`), but this is unreliable.
+
+### How it's handled in the codebase
+
+- `api-index.json` now has a `beta: true/false` flag per endpoint (115/800 are BETA).
+- `api_search` / `api_endpoint_detail` tools show `[BETA]` warnings and down-rank beta endpoints in search results.
+- Generic handler system prompt explicitly lists forbidden beta endpoints and safe alternatives.
+- 403 errors in tool responses are enriched with "this is likely a BETA endpoint" guidance.
+- Dedicated handlers use single POST calls instead of beta batch endpoints.
+
+### Probe first, learn, then apply
+
+Use `pnpm probe` to quickly test whether an endpoint works before building it into a handler. If it returns 403, document it and find the non-beta alternative.
+
 ## Evaluation system
 
 Some details we can evaluate are:
