@@ -1,7 +1,7 @@
 .env
 node_modules/
 dist/
-docs/reports/tripletex-openapi.json
+docs/tripletex-openapi.json
 data/captures/
 data/eval-candidates/
 data/solve-logs/

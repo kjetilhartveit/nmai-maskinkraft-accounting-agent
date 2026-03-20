@@ -51,12 +51,15 @@ We have set up the project, but we must fine-tune our solution, fix bugs and set
     - Key optimizations: skip redundant employee name search when email provided, skip `ensureExtendedAccess` for just-created employees, cache companyId from POST response, skip order search for just-created customers, verify userType write-once before granting entitlements
 - [x] For later it would be useful if we could differentiate our runs with runs from other team members. Perhaps by timetamp/date (in the UI) or other identifiers. Note that when we submit we also get GET requests (with path submissions) continuously which gives us information about the API calls made.
   - Added date group headers, session detection (5-min gap grouping), run badges with color coding, and solve IDs in dashboard detail view
-- [ ] Continue submitting and iterating based on competition results.
 - [x] Consider adding previous solutions as inspiration in our system prompt.
   - Added few-shot examples for payment, customer+invoice, custom dimension+voucher, and admin role tasks
 - [x] Could we add a tool for the LLM to retrieve API information? This could be helpful for the LLM, especially if we don't have a handler for it.
   - Added `tripletex_post_list` batch creation tool to generic handler for efficiency
   - Updated API reference with correct userType values (STANDARD/EXTENDED/NO_ACCESS) and entitlement format
+- [ ] Create a script which syncs my prompts in [solves.jsonl](../../../data/solve-logs/solves.jsonl) with the repo [nmai-maskinkraft](../../../../nmai-maskinkraft/) which in turn can be used by the team. We should make sure not to override or add new prompts (only unique).
+- [ ] The problem with jsonl is that it's so unreadable, should we use a different format like an sqldb lite instead? Remember to update existing code to use the sqlite instead of jsonl when we do the switch.
+- [ ] Should we utilise the [tripletex-openapi.json](../../../docs/reports/tripletex-openapi.json) seeing as it's the truth of source of what's possible with the API? This could be helpful for the LLM, especially if we don't have a handler for it. Consider whether we can hook the handlers up or replace the handlers entirely with the openapi?
+- [ ] Keep working on the tests against the sandbox. Remember the goal is not 100% pass rate, because LLMs are non-deterministic. The goal is to create a solid and robust solution and then figure out which solution is the most consistently good.
 
 ### Execution of plan
 
