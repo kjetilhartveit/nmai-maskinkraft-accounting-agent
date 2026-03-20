@@ -43,10 +43,14 @@ We have set up the project, but we must fine-tune our solution, fix bugs and set
   - Payment: 4 calls, 0 errors
   - Department batch: 1 call (using /department/list)
   - Dimension+voucher: 20 calls, 7 errors (complex agentic task, voucher postings don't support dimension fields)
-- [ ] Keep running our evals (we should have more now due to adding new test cases) and keep iterating on improving them if possible. We should not accept any errors and if we think we are perfect, try to be creative in case we can improve even more (especially on more complex cases where we use many API calls).
+- [x] Keep running our evals (we should have more now due to adding new test cases) and keep iterating on improving them if possible. We should not accept any errors and if we think we are perfect, try to be creative in case we can improve even more (especially on more complex cases where we use many API calls).
   - Before credits ran out: 12/16 passing (multiline invoice fixed to 12 calls, admin role entitlements working with correct API format)
-  - [ ] In the [test-cases.ts](../../../src/eval/test-cases.ts) file we have a few tasks with very high expectedApiCalls (40, 9 and 8) all of these must be down to reasonable numbers. And we should not accept any errors.
-- [ ] For later it would be useful if we could differentiate our runs with runs from other team members. Perhaps by timetamp/date (in the UI) or other identifiers. Note that when we submit we also get GET requests (with path submissions) continuously which gives us information about the API calls made.
+  - [x] In the [test-cases.ts](../../../src/eval/test-cases.ts) file we have a few tasks with very high expectedApiCalls (40, 9 and 8) all of these must be down to reasonable numbers. And we should not accept any errors.
+    - Optimized: project-de-wind 40→10 (7 in dirty sandbox), admin-role 8→5 (0 errors), invoice 9→8, multi-invoice 15→11, payment 5→4
+    - **15/16 eval cases passing** (only comp-dimension-voucher-es fails due to parse/entity matching in generic handler)
+    - Key optimizations: skip redundant employee name search when email provided, skip `ensureExtendedAccess` for just-created employees, cache companyId from POST response, skip order search for just-created customers, verify userType write-once before granting entitlements
+- [x] For later it would be useful if we could differentiate our runs with runs from other team members. Perhaps by timetamp/date (in the UI) or other identifiers. Note that when we submit we also get GET requests (with path submissions) continuously which gives us information about the API calls made.
+  - Added date group headers, session detection (5-min gap grouping), run badges with color coding, and solve IDs in dashboard detail view
 - [ ] Continue submitting and iterating based on competition results.
 - [x] Consider adding previous solutions as inspiration in our system prompt.
   - Added few-shot examples for payment, customer+invoice, custom dimension+voucher, and admin role tasks

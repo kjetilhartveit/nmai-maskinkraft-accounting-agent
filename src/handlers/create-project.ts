@@ -64,7 +64,8 @@ export async function handleCreateProject(
     }
 
     if (!grantedPMs.has(projectManagerId)) {
-      await grantProjectManagerEntitlement(client, projectManagerId);
+      const knownExtended = ctx.isEmployeeExtended(projectManagerId);
+      await grantProjectManagerEntitlement(client, projectManagerId, knownExtended);
       grantedPMs.add(projectManagerId);
     }
 

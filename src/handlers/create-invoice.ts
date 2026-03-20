@@ -191,12 +191,15 @@ export async function handleCreateInvoice(
   if (entity.orderId) {
     order = await findOrderById(client, Number(entity.orderId));
   }
-  if (!order && customerName) {
+
+  const customerFromCtx = customerName ? ctx?.getCustomerId(customerName) : undefined;
+
+  if (!order && customerName && !customerFromCtx) {
     order = await findOrderByCustomerName(client, customerName);
   }
 
   if (!order && customerName) {
-    let customerId = ctx?.getCustomerId(customerName);
+    let customerId = customerFromCtx;
     let customer: Customer | null = null;
     if (customerId) {
       console.log(`[Handler] Using customer from context: ${customerName} → id=${customerId}`);

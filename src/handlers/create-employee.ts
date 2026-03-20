@@ -4,6 +4,7 @@ import type { SequenceContext } from "../lib/sequence-context.js";
 import {
   getDefaultDepartmentId,
   getCompanyId,
+  setCompanyId,
   findEmployeeByEmail,
   findEmployeeByName,
 } from "../lib/tripletex-helpers.js";
@@ -66,7 +67,7 @@ async function grantEntitlement(
 async function ensureExtendedAccess(
   client: TripletexClient,
   employeeId: number,
-): Promise<void> {
+): Promise<boolean> {
   try {
     const emp = await client.get<{
       id: number;
@@ -77,7 +78,7 @@ async function ensureExtendedAccess(
       email: string | null;
       dateOfBirth: string | null;
     }>(`/employee/${employeeId}`);
-    if (emp.value.userType === "EXTENDED") return;
+    if (emp.value.userType === "EXTENDED") return true;
     await client.put(`/employee/${employeeId}`, {
       id: employeeId,
       version: emp.value.version,
@@ -87,18 +88,32 @@ async function ensureExtendedAccess(
       dateOfBirth: emp.value.dateOfBirth ?? "1990-01-01",
       userType: "EXTENDED",
     });
+    const verify = await client.get<{ userType: string | null }>(`/employee/${employeeId}`);
+    if (verify.value.userType !== "EXTENDED") {
+      console.warn(`[Handler] Employee ${employeeId} userType is write-once; cannot upgrade to EXTENDED`);
+      return false;
+    }
     console.log(`[Handler] Upgraded employee ${employeeId} to EXTENDED access`);
+    return true;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.warn(`[Handler] Failed to upgrade employee to EXTENDED: ${msg}`);
+    return false;
   }
 }
 
 async function grantAdminEntitlement(
   client: TripletexClient,
   employeeId: number,
+  knownExtended = false,
 ): Promise<void> {
-  await ensureExtendedAccess(client, employeeId);
+  if (!knownExtended) {
+    const ok = await ensureExtendedAccess(client, employeeId);
+    if (!ok) {
+      console.warn(`[Handler] Skipping admin entitlement — employee ${employeeId} does not have EXTENDED access`);
+      return;
+    }
+  }
   const companyId = await getCompanyId(client);
   await grantEntitlement(client, employeeId, ENTITLEMENT_ADMIN, companyId, "ROLE_ADMINISTRATOR");
 }
@@ -106,8 +121,15 @@ async function grantAdminEntitlement(
 export async function grantProjectManagerEntitlement(
   client: TripletexClient,
   employeeId: number,
+  knownExtended = false,
 ): Promise<void> {
-  await ensureExtendedAccess(client, employeeId);
+  if (!knownExtended) {
+    const ok = await ensureExtendedAccess(client, employeeId);
+    if (!ok) {
+      console.warn(`[Handler] Skipping PM entitlement — employee ${employeeId} does not have EXTENDED access`);
+      return;
+    }
+  }
   const companyId = await getCompanyId(client);
   await grantEntitlement(client, employeeId, ENTITLEMENT_CREATE_PROJECT, companyId, "AUTH_CREATE_PROJECT");
   await grantEntitlement(client, employeeId, ENTITLEMENT_PM, companyId, "AUTH_PROJECT_MANAGER");
@@ -127,22 +149,25 @@ export async function handleCreateEmployee(
   }
 
   for (const entity of task.entities) {
-    if (entity.email) {
-      const existing = await findEmployeeByEmail(client, String(entity.email));
+    const firstName = String(entity.firstName ?? "");
+    const lastName = String(entity.lastName ?? "");
+    const hasEmail = Boolean(entity.email);
+
+    let existing: { id: number } | null = null;
+
+    if (hasEmail) {
+      existing = await findEmployeeByEmail(client, String(entity.email));
       if (existing) {
         console.log(`[Handler] Employee with email ${entity.email} already exists: id=${existing.id}`);
         ctx.registerEmployee(String(entity.email), existing.id);
+        if (firstName && lastName) ctx.registerEmployee(`${firstName} ${lastName}`, existing.id);
         if (isAdminRequested(entity)) {
           await grantAdminEntitlement(client, existing.id);
         }
         continue;
       }
-    }
-
-    const firstName = String(entity.firstName ?? "");
-    const lastName = String(entity.lastName ?? "");
-    if (firstName && lastName) {
-      const existing = await findEmployeeByName(client, firstName, lastName);
+    } else if (firstName && lastName) {
+      existing = await findEmployeeByName(client, firstName, lastName);
       if (existing) {
         console.log(`[Handler] Employee ${firstName} ${lastName} already exists: id=${existing.id}`);
         ctx.registerEmployee(`${firstName} ${lastName}`, existing.id);
@@ -158,15 +183,25 @@ export async function handleCreateEmployee(
     const deptForEmployee = entityDeptId ?? departmentId;
 
     const body = buildEmployeeBody(entity, deptForEmployee);
-    const result = await client.post<{ id: number }>("/employee", body);
+    const result = await client.post<{ id: number; companyId?: number }>("/employee", body);
     const empId = result.value.id;
     console.log(`[Handler] Created employee: id=${empId}`);
 
-    if (isAdminRequested(entity)) {
-      await grantAdminEntitlement(client, empId);
+    if (result.value.companyId) {
+      setCompanyId(result.value.companyId);
     }
 
-    ctx.registerEmployee(`${firstName} ${lastName}`, empId);
-    if (entity.email) ctx.registerEmployee(String(entity.email), empId);
+    const createdAsExtended = hasEmail;
+
+    if (createdAsExtended) {
+      ctx.registerEmployeeExtended(empId);
+    }
+
+    if (isAdminRequested(entity)) {
+      await grantAdminEntitlement(client, empId, createdAsExtended);
+    }
+
+    if (firstName && lastName) ctx.registerEmployee(`${firstName} ${lastName}`, empId);
+    if (hasEmail) ctx.registerEmployee(String(entity.email), empId);
   }
 }

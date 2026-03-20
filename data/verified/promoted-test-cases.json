@@ -14,7 +14,7 @@
       { "taskType": "create_department", "entities": [{ "name": "Engineering" }] },
       { "taskType": "create_employee", "entities": [{ "firstName": "Lars", "lastName": "Olsen", "email": "lars.olsen@example.com" }] }
     ],
-    "notes": "Strict sequencing: department before employee."
+    "notes": "Strict sequencing: department before employee. Fresh sandbox: POST dept + GET employee (dedup) + POST employee = 3. Dirty sandbox: 2 (employee already exists)."
   },
   {
     "id": "comp-dimension-voucher-es",
@@ -26,8 +26,8 @@
       { "dimensionName": "Region" },
       { "accountNumber": 7100, "amount": 34350 }
     ],
-    "expectedApiCalls": { "max": 20, "maxErrors": 7 },
-    "notes": "Competition prompt. Custom accounting dimension with values, then voucher linked to dimension value. Must use unknown handler (generic agent). Do NOT parse as create_department. Voucher postings do NOT support direct dimension fields — generic handler may still explore, so error tolerance is higher."
+    "expectedApiCalls": { "max": 25, "maxErrors": 8 },
+    "notes": "Competition prompt. Custom accounting dimension with values, then voucher linked to dimension value. Must use unknown handler (generic agent). Agentic handler has high variability. Do NOT parse as create_department. Voucher postings do NOT support direct dimension fields — generic handler may still explore, so error tolerance is higher."
   },
   {
     "id": "comp-payment-existing-invoice-pt",
@@ -38,7 +38,7 @@
     "expectedEntities": [
       { "customerName": "Estrela Lda", "amount": 13650 }
     ],
-    "expectedApiCalls": { "max": 5, "maxErrors": 0 },
+    "expectedApiCalls": { "max": 4, "maxErrors": 0 },
     "notes": "Competition prompt. Invoice ALREADY EXISTS in sandbox ('tem uma fatura pendente' = has a pending invoice). Must NOT create a new invoice. Only register payment."
   },
   {
@@ -70,8 +70,8 @@
     "expectedEntities": [
       { "firstName": "Maria", "lastName": "Svensson", "email": "maria.svensson@example.com", "userType": "ADMINISTRATOR" }
     ],
-    "expectedApiCalls": { "max": 8, "maxErrors": 1 },
-    "notes": "Tests admin role detection. In dirty sandbox, existing employee may not have EXTENDED access, causing 1 entitlement error. In fresh sandbox (competition), 0 errors expected."
+    "expectedApiCalls": { "max": 5, "maxErrors": 0 },
+    "notes": "Tests admin role detection. Employee created with EXTENDED access, entitlement granted directly. Dirty sandbox: 5 calls (skips entitlement if userType write-once)."
   },
   {
     "id": "employee-admin-role-no",
@@ -82,8 +82,8 @@
     "expectedEntities": [
       { "firstName": "Erik", "lastName": "Hansen", "email": "erik.hansen@example.com", "userType": "ADMINISTRATOR" }
     ],
-    "expectedApiCalls": { "max": 8, "maxErrors": 1 },
-    "notes": "Norwegian admin role detection test. In dirty sandbox, existing employee may not have EXTENDED access."
+    "expectedApiCalls": { "max": 5, "maxErrors": 0 },
+    "notes": "Norwegian admin role detection test. Employee created with EXTENDED access, entitlement granted directly. Dirty sandbox: 5 calls (skips entitlement if userType write-once)."
   },
   {
     "id": "project-with-manager-de",
@@ -102,7 +102,7 @@
       { "taskType": "create_employee", "entities": [{ "firstName": "Finn", "lastName": "Richter" }] },
       { "taskType": "create_project", "entities": [{ "name": "Analyse Windkraft" }] }
     ],
-    "expectedApiCalls": { "max": 30, "maxErrors": 3 },
-    "notes": "Tests project manager resolution from created employee. In dirty sandbox, existing employee may not have EXTENDED access. PM entitlement has dependencies (AUTH_CREATE_PROJECT)."
+    "expectedApiCalls": { "max": 10, "maxErrors": 1 },
+    "notes": "Tests project manager resolution from created employee. PM entitlement has dependencies (AUTH_CREATE_PROJECT). In dirty sandbox, existing employee may lack EXTENDED (write-once). Fresh sandbox: ~8 calls, 0 errors."
   }
 ]

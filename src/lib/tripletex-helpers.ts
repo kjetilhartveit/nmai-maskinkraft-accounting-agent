@@ -46,6 +46,10 @@ let cachedProductVatTypeId: number | null = null;
 let cachedProductUnitId: number | null = null;
 let cachedCompanyId: number | null = null;
 
+export function setCompanyId(id: number): void {
+  cachedCompanyId = id;
+}
+
 export async function getCompanyId(
   client: TripletexClient,
 ): Promise<number> {

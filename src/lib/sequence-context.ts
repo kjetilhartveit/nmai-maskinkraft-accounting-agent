@@ -9,6 +9,7 @@ export class SequenceContext {
   private employees = new Map<string, number>();    // "firstName lastName" or email → id
   private suppliers = new Map<string, number>();    // name → id
   private products = new Map<string, number>();     // name or number → id
+  private extendedEmployees = new Set<number>();    // employees known to have EXTENDED access
 
   registerDepartment(name: string, id: number): void {
     this.departments.set(name.toLowerCase(), id);
@@ -48,5 +49,13 @@ export class SequenceContext {
 
   getProductId(key: string): number | undefined {
     return this.products.get(key.toLowerCase());
+  }
+
+  registerEmployeeExtended(id: number): void {
+    this.extendedEmployees.add(id);
+  }
+
+  isEmployeeExtended(id: number): boolean {
+    return this.extendedEmployees.has(id);
   }
 }

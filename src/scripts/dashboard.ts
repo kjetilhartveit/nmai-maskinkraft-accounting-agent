@@ -272,6 +272,22 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
       return new Date(ts).toLocaleString('nb-NO', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
     }
 
+    function formatDate(ts) {
+      return new Date(ts).toLocaleDateString('nb-NO', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
+    }
+
+    function detectSessions(solves) {
+      const SESSION_GAP_MS = 5 * 60 * 1000;
+      let sessionId = 0;
+      let lastTs = 0;
+      return solves.map(s => {
+        const ts = new Date(s.timestamp).getTime();
+        if (lastTs === 0 || Math.abs(ts - lastTs) > SESSION_GAP_MS) sessionId++;
+        lastTs = ts;
+        return { ...s, _sessionId: sessionId };
+      });
+    }
+
     function renderStats(data) {
       const compRate = data.competition.total > 0 ? Math.round((data.competition.successes / data.competition.total) * 100) : 0;
       statsEl.innerHTML = [
@@ -312,12 +328,20 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
       return html;
     }
 
+    function sessionBadge(sessionId) {
+      const colors = ['var(--blue)', 'var(--purple)', 'var(--orange)', 'var(--green)', 'var(--yellow)', 'var(--red)'];
+      const color = colors[(sessionId - 1) % colors.length];
+      return '<span class="badge" style="background:' + color + '22;color:' + color + ';font-size:0.65rem;">run ' + sessionId + '</span>';
+    }
+
     function renderSolveRow(solve, includeSource) {
       const tasks = solve.parsedSequence?.tasks?.map(t => t.taskType).join(' > ') ?? '-';
       const promptDisplay = solve.prompt ? (solve.prompt.length > 80 ? solve.prompt.slice(0, 80) + '...' : solve.prompt) : '(empty)';
       const tr = document.createElement('tr');
       let cells =
-        '<td class="mono">' + formatTime(solve.timestamp) + '</td>';
+        '<td class="mono"><div>' + formatTime(solve.timestamp) + '</div>' +
+        (solve._sessionId ? '<div style="margin-top:2px;">' + sessionBadge(solve._sessionId) + '</div>' : '') +
+        '</td>';
       if (includeSource) cells += '<td>' + sourceBadge(solve.source) + '</td>';
       cells +=
         '<td>' + statusBadge(solve.success) + '</td>' +
@@ -332,6 +356,8 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
       const colspan = includeSource ? 9 : 8;
       const detailRow = document.createElement('tr');
       detailRow.innerHTML = '<td colspan="' + colspan + '"><div class="details">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;"><span class="mono" style="color:var(--muted);font-size:0.72rem;">' + esc(solve.id || '') + '</span>' +
+        (solve._sessionId ? sessionBadge(solve._sessionId) : '') + '</div>' +
         (solve.error ? '<h4 style="color:var(--red)">Error:</h4><pre style="border-left:3px solid var(--red);padding-left:10px;">' + esc(solve.error) + '</pre>' : '') +
         renderEntities(solve.parsedSequence) +
         '<h4>API Calls (' + (solve.apiCalls?.length ?? 0) + '):</h4>' +
@@ -356,7 +382,17 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
     function renderSolvesToBody(solves, bodyId, includeSource, limit) {
       const body = document.getElementById(bodyId);
       body.innerHTML = '';
-      for (const solve of solves.slice(0, limit || 100)) {
+      const withSessions = detectSessions([...solves].reverse()).reverse();
+      const colspan = includeSource ? 9 : 8;
+      let lastDate = '';
+      for (const solve of withSessions.slice(0, limit || 100)) {
+        const date = formatDate(solve.timestamp);
+        if (date !== lastDate) {
+          lastDate = date;
+          const dateRow = document.createElement('tr');
+          dateRow.innerHTML = '<td colspan="' + colspan + '" style="background:var(--bg);padding:10px 12px 6px;font-weight:600;font-size:0.8rem;color:var(--muted);border-bottom:2px solid var(--border);">' + esc(date) + '</td>';
+          body.appendChild(dateRow);
+        }
         const [row, detail] = renderSolveRow(solve, includeSource);
         body.appendChild(row);
         body.appendChild(detail);
