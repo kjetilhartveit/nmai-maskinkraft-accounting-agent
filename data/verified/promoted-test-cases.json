@@ -175,8 +175,8 @@
     "taskType": "create_employee",
     "expectedEntities": [
       {
-        "firstName": "chamado",
-        "lastName": "Jo",
+        "firstName": "João",
+        "lastName": "Martins",
         "email": "joao.martins@example.org"
       }
     ],

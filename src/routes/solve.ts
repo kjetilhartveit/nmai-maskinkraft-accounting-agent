@@ -45,7 +45,7 @@ function detectSource(evalMode: boolean, baseUrl: string): "competition" | "eval
 solveRouter.post("/solve", async (c) => {
   const start = performance.now();
   const evalMode = c.req.header("X-Eval-Mode") === "true";
-  const solveId = `solve-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+  const solveId = `solve-${Date.now()}`;
   let client: TripletexClient | undefined;
   let sequence: ParsedTaskSequence | undefined;
   let prompt = "";

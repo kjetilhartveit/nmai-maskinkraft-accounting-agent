@@ -80,6 +80,9 @@ export async function geminiGenerateStructured<T>(options: {
     generationConfig: {
       responseMimeType: "application/json",
       maxOutputTokens: options.maxTokens ?? 4096,
+      temperature: 0,
+      topP: 1,
+      topK: 1,
     },
   });
 
@@ -137,7 +140,12 @@ export async function geminiGenerateWithTools(options: {
       systemInstruction: { parts: [{ text: options.system }] },
       tools: [{ functionDeclarations }],
       toolConfig: { functionCallingConfig: { mode: "AUTO" } },
-      generationConfig: { maxOutputTokens: options.maxTokens ?? 16384 },
+      generationConfig: {
+        maxOutputTokens: options.maxTokens ?? 16384,
+        temperature: 0,
+        topP: 1,
+        topK: 1,
+      },
     });
 
     const candidate = result.candidates[0];
