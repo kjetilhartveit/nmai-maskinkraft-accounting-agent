@@ -1,0 +1,23 @@
+src/handlers/generic-handler.ts
+  599fec1008ee83f4 209-255,311,344,347-351,389,391-395,496,498-502
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.17",
+  "base_commit_sha": "2e2d2c7c81ce0a9016eb5d0dabcc96b8d798acb9",
+  "prompts": {
+    "599fec1008ee83f4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8cda8883-90a4-4b9a-a5d7-6fdca67cb125",
+        "model": "claude-opus-4-5-20251101"
+      },
+      "human_author": "Kjetil Hårtveit <kjetil_runescape@hotmail.com>",
+      "messages": [],
+      "total_additions": 1134,
+      "total_deletions": 989,
+      "accepted_lines": 1014,
+      "overriden_lines": 0
+    }
+  }
+}
