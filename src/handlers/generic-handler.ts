@@ -1,13 +1,3 @@
-// Archived: OpenRouter + Vercel AI SDK
-// import { createOpenAI } from "@ai-sdk/openai";
-// import { generateText, tool } from "ai";
-// import { z } from "zod";
-// const openrouter = createOpenAI({
-//   baseURL: "https://openrouter.ai/api/v1",
-//   apiKey: config.openrouter.apiKey,
-//   compatibility: "compatible",
-// });
-
 import type { TripletexClient } from "../lib/tripletex-client.js";
 import type { ParsedTask } from "../types/index.js";
 import type { SequenceContext } from "../lib/sequence-context.js";
@@ -23,17 +13,23 @@ function buildSystemPrompt(): string {
 
 You have tools to make HTTP requests to the Tripletex API. Authentication is handled automatically.
 
+SCORING CONTEXT — EFFICIENCY MATTERS:
+- Only WRITE calls (POST, PUT, DELETE) count toward the efficiency score. GET requests are FREE — read as much as you need.
+- Any WRITE call that returns a 4xx error (400, 404, 422) REDUCES your score. Avoid trial-and-error on writes.
+- Plan your writes carefully: look up required fields with GET/api_search BEFORE making POST/PUT calls.
+- Use batch endpoints (tripletex_post_list) when creating multiple items of the same type.
+
 IMPORTANT RULES:
 1. Read the task carefully and identify ALL required operations.
 2. Create dependencies first (e.g., customer before invoice, department before employee).
-3. Use GET requests to search for existing resources before creating duplicates.
+3. Use GET requests to search for existing resources before creating duplicates. GETs are free.
 4. All dates MUST be in YYYY-MM-DD format. Use 2026 as the year (current year).
 5. Voucher postings MUST balance (debits = credits).
-6. When creating resources, use the MINIMUM required fields to avoid validation errors.
-7. If a POST/PUT fails with 422, read the error message carefully. If it says "Verdien er ikke av korrekt type for dette feltet." for a date field, it means you must provide the date as a YYYY-MM-DD string, NOT a timestamp or object.
+6. When creating resources, use the MINIMUM required fields to avoid validation errors. Always include required fields.
+7. If a POST/PUT fails with 422, read the error message carefully. If it says "Verdien er ikke av korrekt type for dette feltet." for a date field, it means you must provide the date as a YYYY-MM-DD string, NOT a timestamp or object. Fix it and retry ONCE.
 8. For custom accounting dimensions: create the dimension name first, then create values using the returned dimensionIndex.
 9. The sandbox MAY have pre-existing data for certain tasks (like invoices for payment tasks). ALWAYS search for existing resources first.
-10. Be efficient: minimize the number of API calls. Use tripletex_post_list for batch creation ONLY for non-beta /list endpoints (e.g. /department/list, /product/list, /employee/list, /supplier/list).
+10. Use tripletex_post_list for batch creation ONLY for non-beta /list endpoints (e.g. /department/list, /product/list, /employee/list, /supplier/list).
 11. When you're done, stop calling tools and summarize what you did.
 12. If you're unsure about an endpoint's exact path, parameters, or required fields, use the api_search tool first to look it up in the full Tripletex API documentation (800 endpoints available, 115 are BETA).
 

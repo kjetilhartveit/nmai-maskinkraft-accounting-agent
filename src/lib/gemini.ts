@@ -70,29 +70,42 @@ export async function geminiGenerateStructured<T>(options: {
   prompt: string;
   schema: ZodType<T>;
   maxTokens?: number;
+  maxRetries?: number;
 }): Promise<{ object: T; durationMs: number }> {
   const model = options.model ?? config.google.model;
+  const maxRetries = options.maxRetries ?? 2;
   const start = performance.now();
 
-  const result = await callGemini(model, {
-    contents: [{ role: "user", parts: [{ text: options.prompt }] }],
-    systemInstruction: { parts: [{ text: options.system }] },
-    generationConfig: {
-      responseMimeType: "application/json",
-      maxOutputTokens: options.maxTokens ?? 8192,
-      temperature: 0,
-      topP: 1,
-      topK: 1,
-    },
-  });
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const result = await callGemini(model, {
+        contents: [{ role: "user", parts: [{ text: options.prompt }] }],
+        systemInstruction: { parts: [{ text: options.system }] },
+        generationConfig: {
+          responseMimeType: "application/json",
+          maxOutputTokens: options.maxTokens ?? 8192,
+          temperature: attempt > 0 ? 0.1 : 0,
+          topP: 1,
+          topK: 1,
+        },
+      });
 
-  const durationMs = Math.round(performance.now() - start);
-  let text = (result.candidates[0].content.parts[0] as { text: string }).text.trim();
-  text = text.replace(/^```(?:json)?\n?/i, "").replace(/\n?```$/i, "").trim();
-  const parsed = JSON.parse(text);
-  const object = options.schema.parse(parsed) as T;
+      const durationMs = Math.round(performance.now() - start);
+      let text = (result.candidates[0].content.parts[0] as { text: string }).text.trim();
+      text = text.replace(/^```(?:json)?\n?/i, "").replace(/\n?```$/i, "").trim();
+      const parsed = JSON.parse(text);
+      const object = options.schema.parse(parsed) as T;
+      return { object, durationMs };
+    } catch (err) {
+      lastError = err;
+      if (attempt < maxRetries) {
+        console.warn(`[Gemini] Structured parse attempt ${attempt + 1} failed, retrying...`);
+      }
+    }
+  }
 
-  return { object, durationMs };
+  throw lastError;
 }
 
 // ── Tool-calling agent loop ────────────────────────────────────────────────

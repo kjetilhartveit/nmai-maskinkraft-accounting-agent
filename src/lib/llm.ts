@@ -1,12 +1,3 @@
-// Archived: OpenRouter + Vercel AI SDK
-// import { createOpenAI } from "@ai-sdk/openai";
-// import { generateObject } from "ai";
-// const openrouter = createOpenAI({
-//   baseURL: "https://openrouter.ai/api/v1",
-//   apiKey: config.openrouter.apiKey,
-//   compatibility: "compatible",
-// });
-
 import { z } from "zod";
 import { config } from "./config.js";
 import { geminiGenerateStructured } from "./gemini.js";
@@ -54,7 +45,7 @@ Your job is to:
 Task types and their entity fields:
 
 - create_employee: fields: firstName, lastName, email, phoneNumber, phoneNumberMobile, dateOfBirth, employeeNumber, userType, startDate (YYYY-MM-DD, employment start date)
-  - userType: "ADMINISTRATOR" if the prompt says admin/administrator/administrador/administrateur/administratör/Verwalter/tilgangsrettighet: administrator. "STANDARD" for regular users with email. "NO_ACCESS" if no email/login needed.
+  - userType: "ADMINISTRATOR" if the prompt says admin/administrator/administrador/administrateur/administratör/Verwalter/tilgangsrettighet: administrator. "EXTENDED" for regular users with email. "NO_ACCESS" if no email/login needed.
   - IMPORTANT: If the prompt asks to give someone admin rights, set userType to "ADMINISTRATOR".
   - startDate: The date when the employee starts working. Extract from prompt if mentioned (e.g. "data de início", "startdato", "fecha de inicio", "Anfangsdatum", "date de début", "start date").
 - update_employee: fields: firstName, lastName (to find) + any updated fields

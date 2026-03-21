@@ -22,12 +22,6 @@ export const config = {
     model: optional("GOOGLE_MODEL", "gemini-3.1-pro-preview"),
   },
 
-  // Archived: OpenRouter config (switch back by uncommenting and updating llm.ts / generic-handler.ts)
-  // openrouter: {
-  //   apiKey: required("OPENROUTER_API_KEY"),
-  //   model: optional("OPENROUTER_MODEL", "anthropic/claude-sonnet-4.6"),
-  // },
-
   sandbox: {
     apiUrl: optional("SANDBOX_API_URL", ""),
     sessionToken: optional("SANDBOX_SESSION_TOKEN", ""),
