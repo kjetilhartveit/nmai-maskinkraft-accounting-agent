@@ -69,6 +69,18 @@ if (!columnNames.has("score_earned")) {
 if (!columnNames.has("score_max")) {
   db.exec("ALTER TABLE solves ADD COLUMN score_max REAL");
 }
+if (!columnNames.has("checks_passed")) {
+  db.exec("ALTER TABLE solves ADD COLUMN checks_passed INTEGER");
+}
+if (!columnNames.has("checks_total")) {
+  db.exec("ALTER TABLE solves ADD COLUMN checks_total INTEGER");
+}
+if (!columnNames.has("checks_detail")) {
+  db.exec("ALTER TABLE solves ADD COLUMN checks_detail TEXT");
+}
+if (!columnNames.has("classified_type")) {
+  db.exec("ALTER TABLE solves ADD COLUMN classified_type TEXT");
+}
 
 export default db;
 export { DB_PATH };

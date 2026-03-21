@@ -45,6 +45,10 @@ export type TaskType =
   | "create_payroll"
   | "create_supplier_invoice"
   | "create_dimension"
+  | "reverse_payment"
+  | "create_timesheet"
+  | "project_fixed_price"
+  | "receipt_expense"
   | "unknown";
 
 export interface ParsedTask {
