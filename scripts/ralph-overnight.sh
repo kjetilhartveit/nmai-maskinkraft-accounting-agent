@@ -23,7 +23,7 @@ echo "Log directory: $LOG_DIR"
 echo "Started at: $(date)"
 echo ""
 
-PROMPT=`Analyze the tasks in \`agent.db\` and our test cases. You may read the official documentation about the "Tripletex" task to understand exactly what we are trying to achieve.
+PROMPT="Analyze the tasks in \`agent.db\` and our test cases. You may read the official documentation about the \"Tripletex\" task to understand exactly what we are trying to achieve.
 
 Our goal is to improve the tasks with the following priorities: **total failure**, **tool calls with wrong parameters**, **increase efficiency by minimizing tool calls** (remove unecessary tool calls, use batching if possible and so on) and so on.
 
@@ -43,7 +43,7 @@ After analysis, make targeted improvements. Run pnpm eval after changes to verif
 
 Do not submit towards the competition, we are only improving the tasks and the system.
 
-Clean-up inaccurate documentation and slop. Leave the repository in a good/better shape for the next iteration.`
+Clean-up inaccurate documentation and slop. Leave the repository in a good/better shape for the next iteration."
 
 for i in $(seq 1 $ITERATIONS); do
     echo "=========================================="
