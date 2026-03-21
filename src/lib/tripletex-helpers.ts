@@ -258,12 +258,14 @@ export async function findEmployeeByEmail(
   client: TripletexClient,
   email: string,
 ): Promise<Employee | null> {
-  const result = await client.list<Employee>("/employee", {
-    email,
+  // Tripletex /employee endpoint might not support email filtering directly,
+  // so we fetch a batch and filter locally.
+  const result = await client.list<Employee & { email?: string }>("/employee", {
     from: "0",
-    count: "1",
+    count: "100",
+    fields: "id,firstName,lastName,email",
   });
-  return result.values[0] ?? null;
+  return result.values.find((e) => e.email?.toLowerCase() === email.toLowerCase()) ?? null;
 }
 
 export async function findCustomerByName(
@@ -306,7 +308,7 @@ export async function findOrCreateProduct(
   client: TripletexClient,
   name: string,
   unitPriceExcVat: number,
-  _vatTypeId?: number,
+  vatTypeId?: number,
 ): Promise<Product> {
   const existing = await findProductByName(client, name);
   if (existing) {
@@ -319,24 +321,19 @@ export async function findOrCreateProduct(
     getDefaultProductUnitId(client),
   ]);
 
+  const defaultVatTypeId = vatTypeId ?? await getDefaultProductVatTypeId(client);
+
   const body: Record<string, unknown> = {
     name,
     priceExcludingVatCurrency: unitPriceExcVat,
     department: { id: departmentId },
     productUnit: { id: unitId },
+    vatType: { id: defaultVatTypeId },
   };
 
-  try {
-    const created = await client.post<Product>("/product", body);
-    console.log(`[Helper] Created product: ${name} (id=${created.value.id})`);
-    return created.value;
-  } catch {
-    const defaultVatTypeId = await getDefaultProductVatTypeId(client);
-    body.vatType = { id: defaultVatTypeId };
-    const created = await client.post<Product>("/product", body);
-    console.log(`[Helper] Created product (fallback): ${name} (id=${created.value.id})`);
-    return created.value;
-  }
+  const created = await client.post<Product>("/product", body);
+  console.log(`[Helper] Created product: ${name} (id=${created.value.id})`);
+  return created.value;
 }
 
 /** Returns today's date as YYYY-MM-DD */
@@ -433,14 +430,15 @@ export async function getProjectManagerEmployeeId(
 ): Promise<number | null> {
   if (cachedProjectManagerId !== null) return cachedProjectManagerId;
 
-  // The first employee in the sandbox typically has project manager rights
+  // Fetch a few employees and sort by ID ascending to find the sandbox admin
   const result = await client.list<Employee>("/employee", {
     from: "0",
-    count: "1",
+    count: "50",
   });
 
   if (result.values.length > 0) {
-    cachedProjectManagerId = result.values[0].id;
+    const sorted = result.values.sort((a, b) => a.id - b.id);
+    cachedProjectManagerId = sorted[0].id;
     console.log(`[Helper] Using project manager employee id=${cachedProjectManagerId}`);
     return cachedProjectManagerId;
   }

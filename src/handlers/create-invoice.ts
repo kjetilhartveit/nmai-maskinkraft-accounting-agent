@@ -132,10 +132,15 @@ async function createOrderForInvoice(
       console.log(`[Handler] Using product from context: ${line.productName} → id=${cachedId}`);
       productId = cachedId;
     } else {
+      let vatTypeId: number | undefined;
+      if (line.vatRate !== undefined) {
+        vatTypeId = await findVatTypeIdByRate(client, line.vatRate);
+      }
       const product = await findOrCreateProduct(
         client,
         line.productName,
         line.unitPrice,
+        vatTypeId,
       );
       productId = product.id;
     }
@@ -193,6 +198,8 @@ export async function handleCreateInvoice(
     entity.customerName ?? entity.customer ?? "",
   );
 
+  const productLines = extractProductLines(task);
+
   let order: Order | null = null;
   if (entity.orderId) {
     order = await findOrderById(client, Number(entity.orderId));
@@ -200,7 +207,9 @@ export async function handleCreateInvoice(
 
   const customerFromCtx = customerName ? ctx?.getCustomerId(customerName) : undefined;
 
-  if (!order && customerName && !customerFromCtx) {
+  // Only try to find an existing un-specified order if we have NO product lines.
+  // If we have product lines, we should always create a new order for this invoice.
+  if (!order && customerName && !customerFromCtx && productLines.length === 0) {
     order = await findOrderByCustomerName(client, customerName);
   }
 
@@ -215,8 +224,6 @@ export async function handleCreateInvoice(
     }
 
     if (customer) {
-      const productLines = extractProductLines(task);
-
       if (productLines.length > 0) {
         order = await createOrderForInvoice(
           client,

@@ -4,6 +4,7 @@ import type { SequenceContext } from "../lib/sequence-context.js";
 import {
   findCustomerByName,
   findOrCreateProduct,
+  findVatTypeIdByRate,
   today,
   daysFromNow,
 } from "../lib/tripletex-helpers.js";
@@ -14,6 +15,7 @@ interface ProductLine {
   count?: number;
   unitPrice?: number;
   price?: number;
+  vatRate?: number;
 }
 
 export async function handleCreateOrder(
@@ -78,6 +80,7 @@ export async function handleCreateOrder(
         name: String(pe.name ?? ""),
         quantity: Number(pe.quantity ?? pe.count ?? 1),
         unitPrice: Number(pe.unitPrice ?? pe.price ?? 0),
+        vatRate: pe.vatRate !== undefined ? Number(pe.vatRate) : undefined,
       });
     }
   }
@@ -92,10 +95,15 @@ export async function handleCreateOrder(
           console.log(`[Handler] Using product from context: ${productName} → id=${cachedId}`);
           productId = cachedId;
         } else {
+          let vatTypeId: number | undefined;
+          if (p.vatRate !== undefined) {
+            vatTypeId = await findVatTypeIdByRate(client, p.vatRate);
+          }
           const product = await findOrCreateProduct(
             client,
             productName,
             Number(p.unitPrice ?? p.price ?? 0),
+            vatTypeId,
           );
           productId = product.id;
         }

@@ -59,7 +59,7 @@ CRITICAL endpoint patterns:
 - Employee creation (POST /employee): \`department: { id: <number> }\` is ALWAYS REQUIRED. For \`userType\`, use "EXTENDED" (requires email), "STANDARD", or omit it entirely. NEVER use "0".
 - Product creation (POST /product): \`vatType: { id: <number> }\` is REQUIRED. This is the ID of the VAT type, NOT the percentage.
 - Project creation (POST /project): \`projectManager: { id: <number> }\` is REQUIRED. The employee MUST have the AUTH_PROJECT_MANAGER entitlement. Use the first employee in the sandbox if unsure.
-- List endpoints require date params: GET /invoice needs invoiceDateFrom + invoiceDateTo, GET /order needs orderDateFrom + orderDateTo
+- CRITICAL: List endpoints REQUIRE date parameters. If you call GET /invoice, you MUST include invoiceDateFrom and invoiceDateTo. If you call GET /order, you MUST include orderDateFrom and orderDateTo. Always use a wide date range like "2020-01-01" to "2026-12-31" if no dates are given.
 - Payment registration: use tripletex_put_action with PUT /invoice/{id}/:payment and query params: paymentDate, paymentTypeId, paidAmount
 - Action endpoints (containing /:action) use QUERY PARAMETERS, not request bodies. Use the tripletex_put_action tool for these.
 - Single-object GET (with ID in path like /invoice/123) returns { value: {...} }, NOT a list
