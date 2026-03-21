@@ -4,6 +4,9 @@ import { serve } from "@hono/node-server";
 import { readFileSync, existsSync } from "fs";
 import { join } from "path";
 import db from "../lib/db.js";
+import { DEDICATED_HANDLER_TYPES, HANDLER_FILE_MAP } from "../handlers/index.js";
+import { TASK_TYPE_DEFINITIONS } from "../lib/task-classifier.js";
+import { testCases } from "../eval/test-cases.js";
 
 const PROMOTED_FILE = join(import.meta.dirname, "../../data/verified/promoted-test-cases.json");
 const PORT = 3001;
@@ -23,6 +26,7 @@ interface SolveRow {
   success: number;
   error: string | null;
   source: string;
+  classified_type: string | null;
 }
 
 interface SolveEntry {
@@ -172,6 +176,104 @@ app.get("/api/task-analysis", (c) => {
   return c.json(sorted);
 });
 
+app.get("/api/task-type-registry", (c) => {
+  const sourceFilter = c.req.query("source");
+
+  const solveQuery = sourceFilter
+    ? db.prepare(
+        `SELECT classified_type, success, api_call_total, api_call_errors, elapsed_ms, source
+         FROM solves WHERE source = ? ORDER BY timestamp DESC`,
+      )
+    : db.prepare(
+        `SELECT classified_type, success, api_call_total, api_call_errors, elapsed_ms, source
+         FROM solves ORDER BY timestamp DESC`,
+      );
+  const solveRows = (sourceFilter ? solveQuery.all(sourceFilter) : solveQuery.all()) as {
+    classified_type: string | null;
+    success: number;
+    api_call_total: number;
+    api_call_errors: number;
+    elapsed_ms: number;
+    source: string;
+  }[];
+
+  const evalCasesByType: Record<string, number> = {};
+  for (const tc of testCases) {
+    evalCasesByType[tc.taskType] = (evalCasesByType[tc.taskType] || 0) + 1;
+    if (tc.expectedTaskSequence) {
+      for (const step of tc.expectedTaskSequence) {
+        if (step.taskType !== tc.taskType) {
+          evalCasesByType[step.taskType] = (evalCasesByType[step.taskType] || 0) + 1;
+        }
+      }
+    }
+  }
+
+  const solveStatsByType: Record<string, { total: number; passed: number; failed: number; avgMs: number; avgCalls: number; avgErrors: number; bySource: Record<string, { total: number; passed: number; failed: number }> }> = {};
+
+  for (const row of solveRows) {
+    // Use classified_type from database as source of truth
+    const tt = row.classified_type || "unknown";
+
+    if (!solveStatsByType[tt]) {
+      solveStatsByType[tt] = { total: 0, passed: 0, failed: 0, avgMs: 0, avgCalls: 0, avgErrors: 0, bySource: {} };
+    }
+    const stats = solveStatsByType[tt];
+    stats.total++;
+    if (row.success) stats.passed++;
+    else stats.failed++;
+    stats.avgMs += row.elapsed_ms;
+    stats.avgCalls += row.api_call_total;
+    stats.avgErrors += row.api_call_errors;
+
+    if (!stats.bySource[row.source]) {
+      stats.bySource[row.source] = { total: 0, passed: 0, failed: 0 };
+    }
+    stats.bySource[row.source].total++;
+    if (row.success) stats.bySource[row.source].passed++;
+    else stats.bySource[row.source].failed++;
+  }
+
+  for (const stats of Object.values(solveStatsByType)) {
+    if (stats.total > 0) {
+      stats.avgMs = Math.round(stats.avgMs / stats.total);
+      stats.avgCalls = Math.round((stats.avgCalls / stats.total) * 10) / 10;
+      stats.avgErrors = Math.round((stats.avgErrors / stats.total) * 10) / 10;
+    }
+  }
+
+  const registry = TASK_TYPE_DEFINITIONS.map((def) => {
+    const isDedicated = DEDICATED_HANDLER_TYPES.has(def.id);
+    const stats = solveStatsByType[def.id];
+    return {
+      taskType: def.id,
+      description: def.description,
+      handlerType: def.id === "unknown" ? "fallback" : isDedicated ? "dedicated" : "generic",
+      handlerFile: HANDLER_FILE_MAP[def.id] ?? null,
+      evalCases: evalCasesByType[def.id] ?? 0,
+      solves: stats ?? { total: 0, passed: 0, failed: 0, avgMs: 0, avgCalls: 0, avgErrors: 0, bySource: {} },
+    };
+  });
+
+  registry.sort((a, b) => {
+    if (a.taskType === "unknown") return 1;
+    if (b.taskType === "unknown") return -1;
+    if (b.solves.failed !== a.solves.failed) return b.solves.failed - a.solves.failed;
+    return b.solves.total - a.solves.total;
+  });
+
+  const totals = {
+    types: registry.length,
+    dedicated: registry.filter((r) => r.handlerType === "dedicated").length,
+    generic: registry.filter((r) => r.handlerType === "generic").length,
+    withEvals: registry.filter((r) => r.evalCases > 0).length,
+    totalEvalCases: Object.values(evalCasesByType).reduce((s, v) => s + v, 0),
+    totalSolves: solveRows.length,
+  };
+
+  return c.json({ registry, totals });
+});
+
 app.get("/api/stream", (c) => {
   let lastCount = (db.prepare("SELECT COUNT(*) as cnt FROM solves").get() as { cnt: number }).cnt;
 
@@ -283,6 +385,39 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
     .entity-card .entity-field .key { color: var(--muted); min-width: 80px; }
     .empty-state { padding: 40px; text-align: center; color: var(--muted); font-size: 0.9rem; }
     #connection-status { position: fixed; top: 12px; right: 20px; z-index: 10; }
+
+    .task-filter { background: var(--bg); border: 1px solid var(--border); color: var(--muted); border-radius: 6px; padding: 5px 14px; cursor: pointer; font-size: 0.78rem; font-weight: 500; transition: all 0.15s; }
+    .task-filter:hover { border-color: var(--text); color: var(--text); }
+    .task-filter.active { background: var(--blue); border-color: var(--blue); color: white; }
+
+    .task-summary-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-bottom: 18px; }
+    .task-summary-card { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 12px; text-align: center; }
+    .task-summary-card .tsc-label { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+    .task-summary-card .tsc-value { font-size: 1.4rem; font-weight: 700; margin-top: 2px; }
+
+    .task-registry-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+    .task-registry-table th { text-align: left; padding: 10px 10px; border-bottom: 2px solid var(--border); color: var(--muted); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.03em; white-space: nowrap; }
+    .task-registry-table td { padding: 10px 10px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+    .task-registry-table tr:hover td { background: rgba(255,255,255,0.02); }
+    .task-registry-table tr.task-detail-row td { padding: 0; border-bottom: 1px solid var(--border); }
+    .task-registry-table tr.task-detail-row .task-detail-content { display: none; padding: 14px 16px; background: var(--bg); }
+    .task-registry-table tr.task-detail-row.open .task-detail-content { display: block; }
+
+    .handler-badge { display: inline-block; padding: 3px 10px; border-radius: 6px; font-size: 0.72rem; font-weight: 600; letter-spacing: 0.02em; }
+    .handler-badge.dedicated { background: rgba(34,197,94,0.12); color: var(--green); }
+    .handler-badge.generic { background: rgba(249,115,22,0.12); color: var(--orange); }
+    .handler-badge.fallback { background: rgba(139,143,163,0.12); color: var(--muted); }
+
+    .eval-count { display: inline-block; min-width: 24px; text-align: center; padding: 2px 8px; border-radius: 5px; font-size: 0.78rem; font-weight: 600; }
+    .eval-count.has-evals { background: rgba(59,130,246,0.12); color: var(--blue); }
+    .eval-count.no-evals { background: rgba(239,68,68,0.08); color: var(--muted); }
+
+    .rate-bar { display: inline-flex; align-items: center; gap: 8px; }
+    .rate-bar-track { width: 80px; height: 7px; background: var(--border); border-radius: 4px; overflow: hidden; }
+    .rate-bar-fill { height: 100%; border-radius: 4px; transition: width 0.3s; }
+
+    .source-pips { display: flex; gap: 4px; }
+    .source-pip { display: inline-block; padding: 2px 7px; border-radius: 4px; font-size: 0.68rem; font-weight: 600; }
   </style>
 </head>
 <body>
@@ -330,9 +465,36 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
   </div>
 
   <div class="tab-content" id="tab-tasks">
-    <h2 style="margin-bottom:12px;">Task Type Analysis</h2>
-    <p style="color:var(--muted);font-size:0.82rem;margin-bottom:16px;">Solves grouped by task type pipeline. Sorted by failure count (worst first). Click a row to see recent solves.</p>
-    <div id="tasks-body"></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <div>
+        <h2 style="margin-bottom:4px;">Task Type Registry</h2>
+        <p style="color:var(--muted);font-size:0.82rem;">All task types with handler mapping, eval coverage, and solve performance. Click a row to expand.</p>
+      </div>
+      <div style="display:flex;gap:6px;align-items:center;" id="task-filter-bar">
+        <span style="color:var(--muted);font-size:0.78rem;margin-right:4px;">Source filter:</span>
+        <button class="task-filter active" data-filter="" onclick="setTaskFilter(this, '')">All</button>
+        <button class="task-filter" data-filter="eval" onclick="setTaskFilter(this, 'eval')">Eval</button>
+        <button class="task-filter" data-filter="competition" onclick="setTaskFilter(this, 'competition')">Competition</button>
+        <button class="task-filter" data-filter="manual" onclick="setTaskFilter(this, 'manual')">Manual</button>
+      </div>
+    </div>
+    <div class="task-summary-cards" id="task-summary-cards"></div>
+    <table class="task-registry-table">
+      <thead>
+        <tr>
+          <th style="width:22%">Task Type</th>
+          <th style="width:12%">Handler</th>
+          <th style="width:8%">Eval Cases</th>
+          <th style="width:10%">Solves</th>
+          <th style="width:14%">Success Rate</th>
+          <th style="width:8%">Avg Calls</th>
+          <th style="width:8%">Avg Errors</th>
+          <th style="width:8%">Avg Time</th>
+          <th style="width:10%">By Source</th>
+        </tr>
+      </thead>
+      <tbody id="tasks-body"></tbody>
+    </table>
   </div>
 
   <div class="tab-content" id="tab-raw">
@@ -537,48 +699,119 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
       }
     }
 
+    let currentTaskFilter = '';
+
+    window.setTaskFilter = function(btn, source) {
+      document.querySelectorAll('.task-filter').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentTaskFilter = source;
+      loadTaskAnalysis();
+    };
+
+    window.toggleTaskDetail = function(rowEl) {
+      const detailRow = rowEl.nextElementSibling;
+      if (detailRow && detailRow.classList.contains('task-detail-row')) {
+        detailRow.classList.toggle('open');
+      }
+    };
+
+    function renderRateBar(rate) {
+      const color = rate >= 80 ? 'var(--green)' : rate >= 50 ? 'var(--yellow)' : 'var(--red)';
+      const cls = rate >= 80 ? 'success' : rate >= 50 ? 'warn' : 'failure';
+      return '<div class="rate-bar">' +
+        '<span class="' + cls + '" style="font-weight:700;font-size:0.9rem;min-width:36px;">' + rate + '%</span>' +
+        '<div class="rate-bar-track"><div class="rate-bar-fill" style="width:' + rate + '%;background:' + color + ';"></div></div>' +
+        '</div>';
+    }
+
+    function renderSourcePips(bySource) {
+      if (!bySource || Object.keys(bySource).length === 0) return '<span style="color:var(--muted);">-</span>';
+      const order = ['eval', 'competition', 'manual'];
+      const colors = { eval: 'var(--blue)', competition: 'var(--purple)', manual: 'var(--muted)' };
+      const bgs = { eval: 'rgba(59,130,246,0.12)', competition: 'rgba(168,85,247,0.12)', manual: 'rgba(139,143,163,0.12)' };
+      return '<div class="source-pips">' +
+        order.filter(s => bySource[s]).map(s => {
+          const d = bySource[s];
+          return '<span class="source-pip" style="background:' + bgs[s] + ';color:' + colors[s] + ';" title="' + s + ': ' + d.passed + '/' + d.total + ' ok">' + d.passed + '/' + d.total + '</span>';
+        }).join('') +
+        '</div>';
+    }
+
     async function loadTaskAnalysis() {
       try {
-        const res = await fetch('/api/task-analysis');
-        const groups = await res.json();
-        const container = document.getElementById('tasks-body');
-        document.getElementById('tasks-count').textContent = groups.length;
-        if (groups.length === 0) {
-          container.innerHTML = '<div class="empty-state">No solves to analyze yet.</div>';
+        const url = currentTaskFilter
+          ? '/api/task-type-registry?source=' + currentTaskFilter
+          : '/api/task-type-registry';
+        const res = await fetch(url);
+        const { registry, totals } = await res.json();
+
+        document.getElementById('tasks-count').textContent = registry.length;
+
+        const cardsEl = document.getElementById('task-summary-cards');
+        cardsEl.innerHTML = [
+          { label: 'Task Types', value: totals.types, cls: '' },
+          { label: 'Dedicated', value: totals.dedicated, cls: 'success' },
+          { label: 'Generic', value: totals.generic, cls: 'warn' },
+          { label: 'With Evals', value: totals.withEvals + '/' + totals.types, cls: 'info' },
+          { label: 'Eval Cases', value: totals.totalEvalCases, cls: 'info' },
+          { label: 'Total Solves', value: totals.totalSolves, cls: '' },
+        ].map(c => '<div class="task-summary-card"><div class="tsc-label">' + c.label + '</div><div class="tsc-value ' + c.cls + '">' + c.value + '</div></div>').join('');
+
+        const body = document.getElementById('tasks-body');
+        if (registry.length === 0) {
+          body.innerHTML = '<tr><td colspan="9" class="empty-state">No task types found.</td></tr>';
           return;
         }
-        container.innerHTML = groups.map(g => {
-          const rate = g.successRate;
-          const rateClass = rate >= 80 ? 'success' : rate >= 50 ? 'warn' : 'failure';
-          const bar = '<div style="background:var(--border);border-radius:4px;height:8px;width:120px;display:inline-block;vertical-align:middle;margin-left:8px;"><div style="background:' + (rate >= 80 ? 'var(--green)' : rate >= 50 ? 'var(--yellow)' : 'var(--red)') + ';height:8px;border-radius:4px;width:' + rate + '%;"></div></div>';
 
-          const solvesHtml = g.solves.map(s =>
-            '<div style="display:flex;gap:8px;align-items:center;padding:4px 0;font-size:0.78rem;border-bottom:1px solid var(--border);">' +
-            '<span class="mono" style="min-width:130px;color:var(--muted);">' + esc(new Date(s.timestamp).toLocaleString('nb-NO', {month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'})) + '</span>' +
-            (s.success ? '<span class="badge ok">OK</span>' : '<span class="badge err">FAIL</span>') +
-            '<span class="badge ' + (s.source === 'competition' ? 'comp' : s.source === 'eval' ? 'eval' : 'manual') + '">' + esc(s.source) + '</span>' +
-            '<span class="mono">' + s.apiCalls + ' calls</span>' +
-            (s.errors > 0 ? '<span class="mono failure">' + s.errors + ' err</span>' : '') +
-            '<span class="mono" style="color:var(--muted);">' + (s.elapsedMs / 1000).toFixed(1) + 's</span>' +
-            (s.error ? '<span style="color:var(--red);font-size:0.72rem;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + esc(s.error) + '">' + esc(s.error.slice(0, 60)) + '</span>' : '') +
-            '</div>'
-          ).join('');
+        body.innerHTML = registry.map(r => {
+          const s = r.solves;
+          const rate = s.total > 0 ? Math.round((s.passed / s.total) * 100) : -1;
+          const rateHtml = rate >= 0 ? renderRateBar(rate) : '<span style="color:var(--muted);">-</span>';
 
-          return '<div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:12px;">' +
-            '<div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;" onclick="toggleTaskSolves(this)">' +
+          const handlerBadge = '<span class="handler-badge ' + r.handlerType + '">' + r.handlerType + '</span>';
+          const evalBadge = '<span class="eval-count ' + (r.evalCases > 0 ? 'has-evals' : 'no-evals') + '">' + r.evalCases + '</span>';
+
+          const mainRow = '<tr style="cursor:pointer;" onclick="toggleTaskDetail(this)">' +
+            '<td><span class="mono" style="font-weight:600;">' + esc(r.taskType) + '</span></td>' +
+            '<td>' + handlerBadge + '</td>' +
+            '<td style="text-align:center;">' + evalBadge + '</td>' +
+            '<td class="mono">' + (s.total > 0 ? '<span class="success">' + s.passed + '</span> / <span class="failure">' + s.failed + '</span>' : '<span style="color:var(--muted);">0</span>') + '</td>' +
+            '<td>' + rateHtml + '</td>' +
+            '<td class="mono" style="text-align:center;">' + (s.total > 0 ? s.avgCalls : '-') + '</td>' +
+            '<td class="mono' + (s.avgErrors > 0 ? ' failure' : '') + '" style="text-align:center;">' + (s.total > 0 ? s.avgErrors : '-') + '</td>' +
+            '<td class="mono" style="text-align:center;">' + (s.total > 0 ? (s.avgMs / 1000).toFixed(1) + 's' : '-') + '</td>' +
+            '<td>' + renderSourcePips(s.bySource) + '</td>' +
+            '</tr>';
+
+          const detailRow = '<tr class="task-detail-row"><td colspan="9"><div class="task-detail-content">' +
+            '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">' +
             '<div>' +
-            '<span class="mono" style="font-size:0.95rem;font-weight:600;">' + esc(g.taskType) + '</span>' +
-            '<span style="margin-left:12px;font-size:0.78rem;color:var(--muted);">' + g.total + ' solves</span>' +
+            '<div style="font-size:0.78rem;color:var(--muted);margin-bottom:4px;">Description</div>' +
+            '<div style="font-size:0.85rem;">' + esc(r.description) + '</div>' +
             '</div>' +
-            '<div style="display:flex;gap:16px;align-items:center;">' +
-            '<span class="' + rateClass + '" style="font-weight:700;font-size:1.1rem;">' + rate + '%</span>' + bar +
-            '<span class="success" style="font-size:0.82rem;">' + g.passed + ' ok</span>' +
-            '<span class="failure" style="font-size:0.82rem;">' + g.failed + ' fail</span>' +
-            '<span class="mono" style="font-size:0.78rem;color:var(--muted);">' + g.avgCalls + ' avg calls | ' + g.avgErrors + ' avg err | ' + (g.avgMs / 1000).toFixed(1) + 's avg</span>' +
+            '<div>' +
+            '<div style="font-size:0.78rem;color:var(--muted);margin-bottom:4px;">Handler</div>' +
+            '<div style="font-size:0.85rem;">' + handlerBadge +
+            (r.handlerFile ? ' <span class="mono" style="color:var(--muted);font-size:0.78rem;margin-left:6px;">src/handlers/' + esc(r.handlerFile) + '</span>' : ' <span class="mono" style="color:var(--muted);font-size:0.78rem;margin-left:6px;">generic-handler.ts</span>') +
+            '</div>' +
+            '<div style="margin-top:10px;">' +
+            '<div style="font-size:0.78rem;color:var(--muted);margin-bottom:4px;">Solve breakdown by source</div>' +
+            (Object.keys(s.bySource || {}).length > 0
+              ? Object.entries(s.bySource).map(([src, d]) => {
+                  const srcRate = d.total > 0 ? Math.round((d.passed / d.total) * 100) : 0;
+                  return '<div style="display:flex;gap:8px;align-items:center;font-size:0.8rem;margin:3px 0;">' +
+                    '<span class="badge ' + (src === 'competition' ? 'comp' : src === 'eval' ? 'eval' : 'manual') + '" style="min-width:80px;text-align:center;">' + esc(src) + '</span>' +
+                    '<span class="mono">' + d.passed + '/' + d.total + '</span>' +
+                    '<span class="' + (srcRate >= 80 ? 'success' : srcRate >= 50 ? 'warn' : 'failure') + '" style="font-weight:600;">' + srcRate + '%</span>' +
+                    '</div>';
+                }).join('')
+              : '<span style="color:var(--muted);font-size:0.8rem;">No solves yet</span>'
+            ) +
+            '</div>' +
             '</div></div>' +
-            '<div class="task-solves" style="display:none;margin-top:12px;padding-top:8px;border-top:1px solid var(--border);">' +
-            solvesHtml +
-            '</div></div>';
+            '</div></td></tr>';
+
+          return mainRow + detailRow;
         }).join('');
       } catch (e) {
         console.error('Failed to load task analysis:', e);
