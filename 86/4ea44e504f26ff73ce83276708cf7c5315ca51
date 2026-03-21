@@ -1,0 +1,27 @@
+src/handlers/generic-handler.ts
+  100b2c91081ea247 33
+src/lib/tripletex-api-reference.ts
+  100b2c91081ea247 170-171
+src/handlers/create-invoice.ts
+  100b2c91081ea247 256-266
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.17",
+  "base_commit_sha": "864ea44e504f26ff73ce83276708cf7c5315ca51",
+  "prompts": {
+    "100b2c91081ea247": {
+      "agent_id": {
+        "tool": "gemini",
+        "id": "83dd7f75-9bea-4411-91a8-29646a02e9e9",
+        "model": "gemini-3.1-pro-preview-customtools"
+      },
+      "human_author": "Kjetil Hårtveit <kjetil_runescape@hotmail.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 14,
+      "overriden_lines": 0
+    }
+  }
+}
