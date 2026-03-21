@@ -5,6 +5,7 @@ import {
   findCustomerByName,
   findEmployeeByName,
   findEmployeeByEmail,
+  getDefaultDepartmentId,
   today,
   getProjectManagerEmployeeId,
 } from "../lib/tripletex-helpers.js";
@@ -63,24 +64,13 @@ export async function handleCreateProject(
       continue;
     }
 
-    if (!grantedPMs.has(projectManagerId)) {
-      const knownExtended = ctx.isEmployeeExtended(projectManagerId);
-      const granted = await grantProjectManagerEntitlement(client, projectManagerId, knownExtended);
-      grantedPMs.add(projectManagerId);
-      
-      if (!granted) {
-        console.warn(`[Handler] Failed to grant PM rights to ${projectManagerId}. Falling back to default PM.`);
-        const fallbackPM = await getProjectManagerEmployeeId(client);
-        if (fallbackPM) {
-            projectManagerId = fallbackPM;
-        }
-      }
-    }
-
+    const departmentId = await getDefaultDepartmentId(client);
     const body: Record<string, unknown> = {
       name: entity.name ?? entity.projectName ?? "",
       projectManager: { id: projectManagerId },
+      department: { id: departmentId },
       startDate: String(entity.startDate ?? entity.date ?? today()),
+      isInternal: !entity.customerName && !entity.customer && !entity.customerId,
     };
 
     if (entity.endDate) body.endDate = entity.endDate;
@@ -105,15 +95,21 @@ export async function handleCreateProject(
       console.log(`[Handler] Created project: id=${result.value.id}`);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      if (msg.includes("prosjektleder") || msg.includes("project manager")) {
-        // PM entitlement failed — try with the default first employee
+      if (msg.includes("prosjektleder") || msg.includes("project manager") || msg.includes("rettighet")) {
+        // PM doesn't have rights — try granting, then fall back to default PM
+        if (!grantedPMs.has(projectManagerId)) {
+          const knownExtended = ctx.isEmployeeExtended(projectManagerId);
+          const granted = await grantProjectManagerEntitlement(client, projectManagerId, knownExtended);
+          grantedPMs.add(projectManagerId);
+          if (granted) {
+            const result = await client.post<{ id: number }>("/project", body);
+            console.log(`[Handler] Created project (after PM grant): id=${result.value.id}`);
+            continue;
+          }
+        }
         const fallbackPM = await getProjectManagerEmployeeId(client);
         if (fallbackPM && fallbackPM !== projectManagerId) {
-          console.log(`[Handler] PM entitlement failed, retrying with fallback PM id=${fallbackPM}`);
-          if (!grantedPMs.has(fallbackPM)) {
-            await grantProjectManagerEntitlement(client, fallbackPM, false);
-            grantedPMs.add(fallbackPM);
-          }
+          console.log(`[Handler] Using fallback PM id=${fallbackPM}`);
           body.projectManager = { id: fallbackPM };
           const result = await client.post<{ id: number }>("/project", body);
           console.log(`[Handler] Created project (fallback PM): id=${result.value.id}`);

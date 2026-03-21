@@ -6,6 +6,7 @@ import {
   findOrCreateProduct,
   findProductByNumber,
   findVatTypeIdByRate,
+  warmProductCaches,
   today,
   daysFromNow,
 } from "../lib/tripletex-helpers.js";
@@ -90,55 +91,55 @@ export async function handleCreateOrder(
   }
 
   if (products.length > 0) {
-    const orderLines = await Promise.all(
-      products.map(async (p) => {
-        const productName = String(p.name ?? "Produkt");
-        const cachedId = ctx.getProductId(productName) ??
-          (p.productNumber ? ctx.getProductId(String(p.productNumber)) : undefined);
-        let productId: number;
-        if (cachedId) {
-          console.log(`[Handler] Using product from context: ${productName} → id=${cachedId}`);
-          productId = cachedId;
-        } else {
-          // Try product number lookup first (cheaper than name search + create)
-          if (p.productNumber) {
-            const existing = await findProductByNumber(client, String(p.productNumber));
-            if (existing) {
-              console.log(`[Handler] Found product by number ${p.productNumber}: id=${existing.id}`);
-              productId = existing.id;
-              ctx.registerProduct(productName, existing.id);
-              ctx.registerProduct(String(p.productNumber), existing.id);
-              return {
-                order: { id: orderId },
-                product: { id: productId },
-                count: Number(p.quantity ?? p.count ?? 1),
-                unitPriceExcludingVatCurrency: Number(p.unitPrice ?? p.price ?? 0),
-              };
-            }
-          }
+    // Warm caches once so parallel/sequential product creation hits cache
+    await warmProductCaches(client);
 
+    const orderLines: Record<string, unknown>[] = [];
+    for (const p of products) {
+      const productName = String(p.name ?? "Produkt");
+      let productId = ctx.getProductId(productName) ??
+        (p.productNumber ? ctx.getProductId(String(p.productNumber)) : undefined);
+
+      if (productId) {
+        console.log(`[Handler] Using product from context: ${productName} → id=${productId}`);
+      } else {
+        // Try product number lookup first (cheaper than name search + create)
+        if (p.productNumber) {
+          const existing = await findProductByNumber(client, String(p.productNumber));
+          if (existing) {
+            console.log(`[Handler] Found product by number ${p.productNumber}: id=${existing.id}`);
+            productId = existing.id;
+            ctx.registerProduct(productName, existing.id);
+            ctx.registerProduct(String(p.productNumber), existing.id);
+          }
+        }
+
+        if (!productId) {
           let vatTypeId: number | undefined;
           if (p.vatRate !== undefined) {
             vatTypeId = await findVatTypeIdByRate(client, p.vatRate);
           }
+          const alreadySearchedByNumber = !!p.productNumber;
           const product = await findOrCreateProduct(
             client,
             productName,
             Number(p.unitPrice ?? p.price ?? 0),
             vatTypeId,
+            alreadySearchedByNumber,
           );
           productId = product.id;
           ctx.registerProduct(productName, productId);
           if (p.productNumber) ctx.registerProduct(String(p.productNumber), productId);
         }
-        return {
-          order: { id: orderId },
-          product: { id: productId },
-          count: Number(p.quantity ?? p.count ?? 1),
-          unitPriceExcludingVatCurrency: Number(p.unitPrice ?? p.price ?? 0),
-        };
-      }),
-    );
+      }
+
+      orderLines.push({
+        order: { id: orderId },
+        product: { id: productId },
+        count: Number(p.quantity ?? p.count ?? 1),
+        unitPriceExcludingVatCurrency: Number(p.unitPrice ?? p.price ?? 0),
+      });
+    }
 
     if (orderLines.length === 1) {
       await client.post("/order/orderline", orderLines[0]);

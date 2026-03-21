@@ -154,11 +154,13 @@ async function createOrderForInvoice(
       if (line.vatRate !== undefined) {
         vatTypeId = await findVatTypeIdByRate(client, line.vatRate);
       }
+      const alreadySearchedByNumber = !!line.productNumber;
       const product = await findOrCreateProduct(
         client,
         line.productName,
         line.unitPrice,
         vatTypeId,
+        alreadySearchedByNumber,
       );
       productId = product.id;
       ctx?.registerProduct(line.productName, productId);

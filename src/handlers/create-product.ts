@@ -15,6 +15,12 @@ interface Product {
   name: string;
 }
 
+let vatTypeBroken = false;
+
+export function resetProductCache(): void {
+  vatTypeBroken = false;
+}
+
 function buildProductBody(
   entity: Record<string, unknown>,
   departmentId: number,
@@ -87,16 +93,59 @@ export async function handleCreateProduct(
     return;
   }
 
+  const NO_VAT_FALLBACK_ID = 6;
+
+  async function postProductWithFallback(body: Record<string, unknown>): Promise<Product> {
+    if (vatTypeBroken) {
+      delete body.vatType;
+    }
+    try {
+      const result = await client.post<Product>("/product", body);
+      return result.value;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes("vatTypeId") && !vatTypeBroken) {
+        console.warn(`[Handler] vatType rejected, retrying without vatType for all products`);
+        vatTypeBroken = true;
+        delete body.vatType;
+        try {
+          const result = await client.post<Product>("/product", body);
+          return result.value;
+        } catch {
+          body.vatType = { id: NO_VAT_FALLBACK_ID };
+          const result = await client.post<Product>("/product", body);
+          return result.value;
+        }
+      }
+      throw err;
+    }
+  }
+
   if (toCreate.length === 1) {
-    const result = await client.post<Product>("/product", toCreate[0]);
-    console.log(`[Handler] Created product: id=${result.value.id}`);
+    const product = await postProductWithFallback(toCreate[0]);
+    console.log(`[Handler] Created product: id=${product.id}`);
     const name = String(toCreate[0].name ?? "");
-    if (name) ctx.registerProduct(name, result.value.id);
+    if (name) ctx.registerProduct(name, product.id);
   } else {
-    const result = await client.postList<Product>("/product/list", toCreate);
-    console.log(`[Handler] Created ${result.values.length} products`);
-    for (const p of result.values) {
-      if (p.name) ctx.registerProduct(p.name, p.id);
+    try {
+      const result = await client.postList<Product>("/product/list", toCreate);
+      console.log(`[Handler] Created ${result.values.length} products`);
+      for (const p of result.values) {
+        if (p.name) ctx.registerProduct(p.name, p.id);
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes("vatTypeId")) {
+        console.warn("[Handler] Batch product create failed on vatType, falling back to individual creates");
+        for (const body of toCreate) {
+          const product = await postProductWithFallback(body);
+          console.log(`[Handler] Created product: id=${product.id}`);
+          const name = String(body.name ?? "");
+          if (name) ctx.registerProduct(name, product.id);
+        }
+      } else {
+        throw err;
+      }
     }
   }
 }

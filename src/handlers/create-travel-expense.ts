@@ -69,13 +69,15 @@ export async function handleCreateTravelExpense(
     }
   }
 
+  const travelDate = String(entity.date ?? today());
+  const title = String(entity.description ?? entity.title ?? entity.tripTitle ?? "");
+
+  // Only include fields that the travelExpense API accepts
   const travelExpenseBody: Record<string, unknown> = {
     employee: { id: employeeId },
-    date: String(entity.date ?? today()),
+    date: travelDate,
   };
-
-  const title = entity.description ?? entity.title ?? entity.tripTitle;
-  if (title) travelExpenseBody.title = String(title);
+  if (title) travelExpenseBody.title = title;
 
   const teResult = await client.post<{ id: number }>(
     "/travelExpense",
@@ -87,9 +89,12 @@ export async function handleCreateTravelExpense(
   // Add cost lines for expenses
   const costItems: { amount: number; description: string }[] = [];
 
-  // Check for individual cost items in additional entities
   for (const e of task.entities.slice(1)) {
-    const amt = Number(e.amount ?? e.cost ?? 0);
+    let amt = Number(e.amount ?? e.cost ?? 0);
+    // Compute per-diem total if days+rate provided but no pre-computed amount
+    if (amt <= 0 && e.days && e.dailyRate) {
+      amt = Number(e.days) * Number(e.dailyRate);
+    }
     if (amt > 0) {
       costItems.push({
         amount: amt,
@@ -100,10 +105,13 @@ export async function handleCreateTravelExpense(
 
   // Fallback: single cost from first entity
   if (costItems.length === 0) {
-    const amount = entity.amount ?? entity.cost;
-    if (amount !== undefined && Number(amount) > 0) {
+    let amount = Number(entity.amount ?? entity.cost ?? 0);
+    if (amount <= 0 && entity.days && entity.dailyRate) {
+      amount = Number(entity.days) * Number(entity.dailyRate);
+    }
+    if (amount > 0) {
       costItems.push({
-        amount: Number(amount),
+        amount,
         description: String(entity.description ?? ""),
       });
     }
@@ -120,7 +128,7 @@ export async function handleCreateTravelExpense(
         date: expenseDate,
         amountCurrencyIncVat: item.amount,
       };
-      if (item.description) costBody.description = item.description;
+      if (item.description) costBody.comments = item.description;
 
       try {
         await client.post("/travelExpense/cost", costBody);

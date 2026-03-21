@@ -6,23 +6,27 @@ import { findCustomerByName } from "../lib/tripletex-helpers.js";
 export async function handleUpdateCustomer(
   client: TripletexClient,
   task: ParsedTask,
-  _ctx: SequenceContext,
+  ctx: SequenceContext,
 ): Promise<void> {
   for (const entity of task.entities) {
-    const name = String(entity.name ?? "");
+    const name = String(entity.name ?? entity.customerName ?? "");
 
-    const existing = await findCustomerByName(client, name);
-    if (!existing) {
-      console.warn(`[Handler] Customer not found: ${name}`);
-      continue;
+    let existingId = ctx.getCustomerId(name);
+    if (!existingId) {
+      const existing = await findCustomerByName(client, name);
+      if (!existing) {
+        console.warn(`[Handler] Customer not found: ${name}`);
+        continue;
+      }
+      existingId = existing.id;
     }
 
     const current = await client.get<{ id: number; version: number }>(
-      `/customer/${existing.id}`,
+      `/customer/${existingId}`,
     );
 
     const body: Record<string, unknown> = {
-      id: existing.id,
+      id: existingId,
       version: current.value.version,
       name,
       isCustomer: true,
@@ -33,7 +37,7 @@ export async function handleUpdateCustomer(
     if (entity.phoneNumber) body.phoneNumber = entity.phoneNumber;
     if (entity.phoneNumberMobile) body.phoneNumberMobile = entity.phoneNumberMobile;
 
-    await client.put<{ id: number }>(`/customer/${existing.id}`, body);
-    console.log(`[Handler] Updated customer: id=${existing.id}`);
+    await client.put<{ id: number }>(`/customer/${existingId}`, body);
+    console.log(`[Handler] Updated customer: id=${existingId}`);
   }
 }
