@@ -10,6 +10,7 @@ export class SequenceContext {
   private suppliers = new Map<string, number>();
   private products = new Map<string, number>();
   private extendedEmployees = new Set<number>();
+  private projects = new Map<string, number>();
   private orders = new Map<string, number>();     // customerName → orderId
   private invoices = new Map<string, number>();   // customerName → invoiceId
   private lastOrderId: number | null = null;
@@ -61,6 +62,14 @@ export class SequenceContext {
 
   isEmployeeExtended(id: number): boolean {
     return this.extendedEmployees.has(id);
+  }
+
+  registerProject(name: string, id: number): void {
+    this.projects.set(name.toLowerCase(), id);
+  }
+
+  getProjectId(name: string): number | undefined {
+    return this.projects.get(name.toLowerCase());
   }
 
   registerOrder(customerName: string, orderId: number): void {

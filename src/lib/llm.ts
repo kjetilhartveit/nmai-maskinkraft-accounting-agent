@@ -27,6 +27,14 @@ const TASK_TYPES: TaskType[] = [
   "create_timesheet",
   "project_fixed_price",
   "receipt_expense",
+  "employee_onboarding_pdf",
+  "bank_reconciliation",
+  "ledger_audit",
+  "year_end_closing",
+  "monthly_closing",
+  "fx_payment",
+  "project_lifecycle",
+  "reminder_fee",
   "unknown",
 ];
 
@@ -110,14 +118,46 @@ Task types and their entity fields:
   - Use when setting a fixed price on a project and invoicing a percentage of it.
   - Keywords: "set a fixed price", "sett fastpris", "precio fijo", "prix fixe", "preço fixo", "festpris".
   - IMPORTANT: Extract the invoice percentage (e.g. "invoice 75%" → invoicePercentage: 75).
-- receipt_expense: fields: expenseName, departmentName, accountNumber
+- receipt_expense: fields: expenseName, departmentName, accountNumber, amount, vatRate, vatAmount, date
   - Use when booking an expense from an attached receipt (image/PDF) to a department.
   - Keywords: "from this receipt", "denne kvitteringen", "ce reçu", "this receipt", "diesen Beleg", "este recibo".
   - The handler will read the receipt attachment and determine amounts/VAT.
-- unknown: For tasks that don't clearly match one of the above types. This includes but is not limited to:
-  bank reconciliation, asset management, company settings, contacts, divisions, correcting/reversing entries,
-  activating modules, year-end closing, monthly closing, FX payments, ledger audits, or other complex operations.
-  - Do NOT use "unknown" when a dedicated handler exists. Check all task types above first.
+  - Extract ALL amounts visible in the prompt (total, VAT, net) and the expense account number.
+- employee_onboarding_pdf: fields: firstName, lastName, email, phoneNumber, startDate, salary, position, departmentName, userType
+  - Use when onboarding a new employee from an attached PDF/offer letter.
+  - Keywords: "offer letter", "tilbudsbrev", "Angebotsschreiben", "lettre d'offre", "carta de oferta", "ansettelsesavtale".
+  - Extract ALL employee details from the prompt and/or PDF. The handler creates the employee with full details.
+- bank_reconciliation: fields: date, bankBalance, ledgerBalance, adjustments (array of {accountNumber, amount, description, type: DEBIT/CREDIT})
+  - Use for reconciling bank transactions against ledger entries.
+  - Keywords: "reconcile", "avstemme", "rapprocher", "conciliar", "Abgleich", "bankavstemmelse".
+  - Extract ALL adjustment entries, amounts, account numbers, and dates from the prompt.
+- ledger_audit: fields: corrections (array of {accountNumber, wrongAmount, correctAmount, description}), date, originalVoucherDescription
+  - Use for auditing/reviewing the general ledger and correcting erroneous entries.
+  - Keywords: "audit", "errors in the ledger", "feil i hovedbok", "oppdaget feil", "errores en el libro", "descubierto errores".
+  - Extract ALL corrections with account numbers and amounts.
+- year_end_closing: fields: date, entries (array of {accountNumber, amount, type: DEBIT/CREDIT, description}), depreciationAmount, depreciationAssetAccount, depreciationExpenseAccount
+  - Use for year-end closing: depreciation, accruals, closing revenue/expense accounts.
+  - Keywords: "year-end closing", "årsavslutning", "årsoppgjør", "cierre anual", "clôture annuelle", "Jahresabschluss".
+  - Extract ALL closing entries including depreciation amounts, account numbers, and any accruals.
+- monthly_closing: fields: month, year, entries (array of {accountNumber, amount, type: DEBIT/CREDIT, description}), accruals (array of {accountNumber, amount, description})
+  - Use for monthly closing: accruals, depreciation, prepaid expenses for a specific month.
+  - Keywords: "monthly closing", "månedsavslutning", "clôture mensuelle", "encerramento mensal", "Monatsabschluss".
+  - Extract ALL entries with account numbers, amounts, and the target month/year.
+- fx_payment: fields: supplierName, organizationNumber, foreignAmount, foreignCurrency, exchangeRate, nokAmount, accountNumber, vatRate, description, invoiceNumber
+  - Use for handling foreign-currency invoices or payments with exchange rate conversion.
+  - Keywords: "exchange rate", "valutakurs", "taux de change", "taxa de câmbio", "Wechselkurs", "EUR", "USD", "GBP", "NOK/EUR".
+  - IMPORTANT: Extract the foreign amount, currency code, exchange rate, AND the computed NOK amount. The handler creates a supplier invoice voucher with the converted amount.
+- project_lifecycle: fields: projectName, customerName, organizationNumber, projectManagerFirstName, projectManagerLastName, projectManagerEmail, budget, hours, activityName, hourlyRate, invoicePercentage
+  - Use for full project lifecycle: create project → register hours → invoice.
+  - Keywords: "project lifecycle", "prosjektsyklusen", "ciclo de vida", "cycle de vie", "Projektzyklus".
+  - Extract ALL details: project name, customer, manager, hours to log, budget, and invoicing details.
+- reminder_fee: fields: customerName, organizationNumber, reminderFeeAmount, invoiceDescription, invoiceAmount
+  - Use for registering a reminder fee/charge on an overdue invoice.
+  - Keywords: "reminder fee", "purregebyr", "cargo por recordatorio", "frais de rappel", "Mahngebühr", "reminder charge".
+  - Extract the reminder fee amount, customer details, and any invoice reference.
+- unknown: For tasks that don't clearly match any of the above types. This includes asset management, company settings, contacts, divisions, activating modules, or other very unusual operations.
+  - Do NOT use "unknown" when a dedicated handler exists. Check ALL task types above first.
+  - CRITICAL: We now have 30 task types. Most accounting operations have a dedicated handler. Only use "unknown" as a last resort.
 
 Rules:
 - PRESERVE all Unicode characters exactly as they appear in the prompt (e.g. å, ø, æ, ü, ö, ñ, é, ã). Do NOT transliterate or anglicize names.
@@ -212,10 +252,11 @@ Prompt: "Register 7.5 hours for Maria Silva on the project \\"ERP Implementation
 → tasks: [{ taskType: "create_timesheet", entities: [{ employeeFirstName: "Maria", employeeLastName: "Silva", hours: 7.5, projectName: "ERP Implementation", activityName: "Development", date: "2026-03-15" }] }]`;
 
 const SYSTEM_PROMPT_MINIMAL = `You parse Tripletex accounting prompts into JSON: tasks array (each with taskType and entities), and prompt language.
-Known task types: create_employee, update_employee, create_customer, update_customer, create_product, create_department, create_invoice, send_invoice, create_payment, create_credit_note, create_order, create_travel_expense, delete_travel_expense, create_project, create_voucher, create_supplier, create_payroll, create_supplier_invoice, create_dimension, reverse_payment, create_timesheet, project_fixed_price, receipt_expense, unknown.
+Known task types: create_employee, update_employee, create_customer, update_customer, create_product, create_department, create_invoice, send_invoice, create_payment, create_credit_note, create_order, create_travel_expense, delete_travel_expense, create_project, create_voucher, create_supplier, create_payroll, create_supplier_invoice, create_dimension, reverse_payment, create_timesheet, project_fixed_price, receipt_expense, employee_onboarding_pdf, bank_reconciliation, ledger_audit, year_end_closing, monthly_closing, fx_payment, project_lifecycle, reminder_fee, unknown.
 Return one entity per distinct object (e.g. each department separately). For multi-step operations, return multiple tasks in dependency order.
 Use create_payroll for salary/payroll tasks, create_supplier_invoice for incoming/supplier invoices, create_dimension for custom accounting dimensions.
-Use "unknown" only for operations not in the list above (bank reconciliation, assets, timesheet entries, payment reversals, etc.). Do NOT force into a wrong type. For unknown, extract all data into entities.`;
+Use bank_reconciliation for reconciliation tasks, year_end_closing/monthly_closing for closing entries, fx_payment for foreign currency, project_lifecycle for full project flows, reminder_fee for overdue charges, ledger_audit for correcting ledger errors, employee_onboarding_pdf for PDF-based onboarding.
+Use "unknown" only for operations not in the list above (assets, company settings, module activation, etc.). Do NOT force into a wrong type. For unknown, extract all data into entities.`;
 
 export const SYSTEM_PROMPT_VARIANTS = {
   default: SYSTEM_PROMPT,
@@ -240,6 +281,7 @@ function resolveSystemPrompt(variant?: string): string {
 const TASK_PRIORITY: Record<string, number> = {
   create_department: 0,
   create_employee: 1,
+  employee_onboarding_pdf: 1,
   create_customer: 1,
   create_supplier: 1,
   update_employee: 2,
@@ -252,6 +294,14 @@ const TASK_PRIORITY: Record<string, number> = {
   create_payroll: 3,
   create_supplier_invoice: 3,
   create_dimension: 3,
+  fx_payment: 3,
+  bank_reconciliation: 3,
+  ledger_audit: 3,
+  year_end_closing: 3,
+  monthly_closing: 3,
+  project_lifecycle: 3,
+  receipt_expense: 3,
+  reminder_fee: 3,
   unknown: 3,
   create_invoice: 4,
   send_invoice: 4,

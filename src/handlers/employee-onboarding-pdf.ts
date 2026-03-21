@@ -1,0 +1,148 @@
+import type { TripletexClient } from "../lib/tripletex-client.js";
+import type { ParsedTask } from "../types/index.js";
+import type { SequenceContext } from "../lib/sequence-context.js";
+import { getDefaultDepartmentId, findEmployeeByName, findEmployeeByEmail } from "../lib/tripletex-helpers.js";
+
+/**
+ * Employee onboarding from attached PDF/offer letter.
+ *
+ * The parser extracts employee details from the prompt (and PDF context).
+ * This handler creates the employee with all extracted details.
+ */
+export async function handleEmployeeOnboardingPdf(
+  client: TripletexClient,
+  task: ParsedTask,
+  ctx: SequenceContext,
+): Promise<void> {
+  const entity = task.entities[0] ?? {};
+
+  const firstName = String(entity.firstName ?? "");
+  const lastName = String(entity.lastName ?? "");
+  const email = String(entity.email ?? "");
+  const phone = String(entity.phoneNumber ?? entity.phone ?? "");
+  const phoneMobile = String(entity.phoneNumberMobile ?? entity.mobile ?? "");
+  const dateOfBirth = String(entity.dateOfBirth ?? "");
+  const startDate = String(entity.startDate ?? "");
+  const salary = Number(entity.salary ?? entity.baseSalary ?? 0);
+  const position = String(entity.position ?? entity.title ?? "");
+  const departmentName = String(entity.departmentName ?? entity.department ?? "");
+  const userType = String(entity.userType ?? (email ? "EXTENDED" : "NO_ACCESS"));
+
+  // Check if employee already exists
+  let employeeId: number | null = null;
+  if (email) {
+    const existing = await findEmployeeByEmail(client, email);
+    if (existing) employeeId = existing.id;
+  }
+  if (!employeeId && firstName && lastName) {
+    const existing = await findEmployeeByName(client, firstName, lastName);
+    if (existing) employeeId = existing.id;
+  }
+
+  if (employeeId) {
+    console.log(`[Handler] Employee already exists: id=${employeeId}`);
+    ctx.registerEmployee(`${firstName} ${lastName}`, employeeId);
+    if (email) ctx.registerEmployee(email, employeeId);
+    return;
+  }
+
+  // Resolve department
+  let departmentId: number | undefined;
+  if (departmentName) {
+    const depts = await client.list<{ id: number; name: string }>("/department", {
+      name: departmentName,
+      from: "0",
+      count: "5",
+    });
+    if (depts.values.length > 0) {
+      departmentId = depts.values[0].id;
+    } else {
+      const created = await client.post<{ id: number }>("/department", { name: departmentName });
+      departmentId = created.value.id;
+    }
+  }
+  if (!departmentId) {
+    departmentId = await getDefaultDepartmentId(client);
+  }
+
+  // Create employee
+  const body: Record<string, unknown> = {
+    firstName: firstName || "Ny",
+    lastName: lastName || "Ansatt",
+    department: { id: departmentId },
+  };
+
+  if (email) body.email = email;
+  if (phone) body.phoneNumberHome = phone;
+  if (phoneMobile) body.phoneNumberMobile = phoneMobile;
+  if (dateOfBirth) body.dateOfBirth = dateOfBirth;
+  if (userType) body.userType = userType;
+
+  const result = await client.post<{ id: number }>("/employee", body);
+  employeeId = result.value.id;
+  console.log(`[Handler] Created employee from onboarding: id=${employeeId} (${firstName} ${lastName})`);
+
+  if (firstName && lastName) ctx.registerEmployee(`${firstName} ${lastName}`, employeeId);
+  if (email) ctx.registerEmployee(email, employeeId);
+
+  // Create employment record if start date provided
+  if (startDate) {
+    try {
+      await client.post("/employee/employment", {
+        employee: { id: employeeId },
+        startDate,
+        employmentType: "ORDINARY",
+        percentageOfFullTimeEquivalent: 100,
+      });
+      console.log(`[Handler] Created employment starting ${startDate}`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (!msg.includes("403")) {
+        console.warn(`[Handler] Employment creation failed: ${msg}`);
+      }
+    }
+  }
+
+  // If salary info is provided, create payroll voucher
+  if (salary > 0) {
+    try {
+      const [salaryAcc, taxAcc, bankAcc] = await Promise.all([
+        findAccountByNumber(client, 5000),
+        findAccountByNumber(client, 2780),
+        findAccountByNumber(client, 1920),
+      ]);
+
+      const employerTax = Math.round(salary * 0.141);
+      const total = salary + employerTax;
+      const today = new Date().toISOString().slice(0, 10);
+      const empName = `${firstName} ${lastName}`.trim();
+
+      await client.post("/ledger/voucher", {
+        date: today,
+        description: `Lønn ${empName}`,
+        postings: [
+          { row: 1, account: { id: salaryAcc.id }, date: today, amountGross: salary, amountGrossCurrency: salary, description: "Lønn" },
+          { row: 2, account: { id: taxAcc.id }, date: today, amountGross: employerTax, amountGrossCurrency: employerTax, description: "Arbeidsgiveravgift" },
+          { row: 3, account: { id: bankAcc.id }, date: today, amountGross: -total, amountGrossCurrency: -total, description: "Utbetaling" },
+        ],
+      });
+      console.log(`[Handler] Created salary voucher for onboarded employee`);
+    } catch (err) {
+      console.warn(`[Handler] Salary voucher failed: ${err}`);
+    }
+  }
+}
+
+async function findAccountByNumber(
+  client: TripletexClient,
+  accountNumber: number,
+): Promise<{ id: number; number: number }> {
+  const result = await client.list<{ id: number; number: number }>("/ledger/account", {
+    number: String(accountNumber),
+    from: "0",
+    count: "1",
+  });
+  const account = result.values[0];
+  if (!account) throw new Error(`Ledger account ${accountNumber} not found`);
+  return account;
+}

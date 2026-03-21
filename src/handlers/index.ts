@@ -24,6 +24,15 @@ import { handleCreateDimension } from "./create-dimension.js";
 import { handleReversePayment } from "./reverse-payment.js";
 import { handleProjectFixedPrice } from "./project-fixed-price.js";
 import { handleCreateTimesheet } from "./create-timesheet.js";
+import { handleReceiptExpense } from "./receipt-expense.js";
+import { handleEmployeeOnboardingPdf } from "./employee-onboarding-pdf.js";
+import { handleBankReconciliation } from "./bank-reconciliation.js";
+import { handleLedgerAudit } from "./ledger-audit.js";
+import { handleYearEndClosing } from "./year-end-closing.js";
+import { handleMonthlyClosing } from "./monthly-closing.js";
+import { handleFxPayment } from "./fx-payment.js";
+import { handleProjectLifecycle } from "./project-lifecycle.js";
+import { handleReminderFee } from "./reminder-fee.js";
 import { handleGenericTask } from "./generic-handler.js";
 
 export type TaskHandler = (
@@ -55,6 +64,53 @@ const handlers: Record<string, TaskHandler> = {
   reverse_payment: handleReversePayment,
   project_fixed_price: handleProjectFixedPrice,
   create_timesheet: handleCreateTimesheet,
+  receipt_expense: handleReceiptExpense,
+  employee_onboarding_pdf: handleEmployeeOnboardingPdf,
+  bank_reconciliation: handleBankReconciliation,
+  ledger_audit: handleLedgerAudit,
+  year_end_closing: handleYearEndClosing,
+  monthly_closing: handleMonthlyClosing,
+  fx_payment: handleFxPayment,
+  project_lifecycle: handleProjectLifecycle,
+  reminder_fee: handleReminderFee,
+};
+
+/** Set of task types that have a dedicated (non-generic) handler. */
+export const DEDICATED_HANDLER_TYPES: ReadonlySet<string> = new Set(Object.keys(handlers));
+
+/** Maps each dedicated task type → source file (relative to src/handlers/). */
+export const HANDLER_FILE_MAP: Readonly<Record<string, string>> = {
+  create_employee: "create-employee.ts",
+  update_employee: "update-employee.ts",
+  create_customer: "create-customer.ts",
+  update_customer: "update-customer.ts",
+  create_department: "create-department.ts",
+  create_supplier: "create-supplier.ts",
+  create_product: "create-product.ts",
+  create_order: "create-order.ts",
+  create_invoice: "create-invoice.ts",
+  send_invoice: "create-invoice.ts",
+  create_travel_expense: "create-travel-expense.ts",
+  delete_travel_expense: "create-travel-expense.ts",
+  create_project: "create-project.ts",
+  create_voucher: "create-voucher.ts",
+  create_payment: "create-payment.ts",
+  create_credit_note: "create-credit-note.ts",
+  create_payroll: "create-payroll.ts",
+  create_supplier_invoice: "create-supplier-invoice.ts",
+  create_dimension: "create-dimension.ts",
+  reverse_payment: "reverse-payment.ts",
+  project_fixed_price: "project-fixed-price.ts",
+  create_timesheet: "create-timesheet.ts",
+  receipt_expense: "receipt-expense.ts",
+  employee_onboarding_pdf: "employee-onboarding-pdf.ts",
+  bank_reconciliation: "bank-reconciliation.ts",
+  ledger_audit: "ledger-audit.ts",
+  year_end_closing: "year-end-closing.ts",
+  monthly_closing: "monthly-closing.ts",
+  fx_payment: "fx-payment.ts",
+  project_lifecycle: "project-lifecycle.ts",
+  reminder_fee: "reminder-fee.ts",
 };
 
 export async function executeTask(

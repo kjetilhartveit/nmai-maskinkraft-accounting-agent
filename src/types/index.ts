@@ -49,6 +49,14 @@ export type TaskType =
   | "create_timesheet"
   | "project_fixed_price"
   | "receipt_expense"
+  | "employee_onboarding_pdf"
+  | "bank_reconciliation"
+  | "ledger_audit"
+  | "year_end_closing"
+  | "monthly_closing"
+  | "fx_payment"
+  | "project_lifecycle"
+  | "reminder_fee"
   | "unknown";
 
 export interface ParsedTask {
