@@ -25,7 +25,7 @@ Your role in this project is of utter importance. As an autonomous senior softwa
 
 - Runtime: Node.js with TypeScript.
 - HTTP Framework: Hono (lightweight, fast, TypeScript-first).
-- AI: OpenRouter + Vercel AI SDK.
+- AI: Google Gemini API (direct REST calls via `src/lib/gemini.ts`).
 - Manage dependencies/packages: pnpm.
 - Deployment: Cloudflare Tunnel (local dev → HTTPS).
 
@@ -91,8 +91,7 @@ Tripletex is a module-based accounting system. Many endpoints marked `[BETA]` in
 
 ### How it's handled in the codebase
 
-- `api-index.json` now has a `beta: true/false` flag per endpoint (115/800 are BETA).
-- `api_search` / `api_endpoint_detail` tools show `[BETA]` warnings and down-rank beta endpoints in search results.
+- `api-index.json` (built via `pnpm build-api-index`) provides endpoint metadata with `beta: true/false` flags. The generic handler's `api_search` / `api_endpoint_detail` tools show `[BETA]` warnings.
 - Generic handler system prompt explicitly lists forbidden beta endpoints and safe alternatives.
 - 403 errors in tool responses are enriched with "this is likely a BETA endpoint" guidance.
 - Dedicated handlers use single POST calls instead of beta batch endpoints.
@@ -101,13 +100,42 @@ Tripletex is a module-based accounting system. Many endpoints marked `[BETA]` in
 
 Use `pnpm probe` to quickly test whether an endpoint works before building it into a handler. If it returns 403, document it and find the non-beta alternative.
 
+## Handler architecture
+
+The system uses a hybrid approach: Gemini LLM parses natural-language prompts into structured task sequences, then **dedicated deterministic handlers** execute each task with minimal API calls. Unrecognized tasks fall back to a **generic agentic handler** that uses LLM tool-calling against the Tripletex API.
+
+### Dedicated handlers (in `src/handlers/`)
+
+| Task type | Handler | Typical API calls |
+|-----------|---------|-------------------|
+| `create_employee` | `create-employee.ts` | 2 (dedup check + POST) |
+| `create_customer` | `create-customer.ts` | 1 (POST) |
+| `create_department` | `create-department.ts` | 1 (batch POST /list) |
+| `create_supplier` | `create-supplier.ts` | 1 (POST) |
+| `create_product` | `create-product.ts` | 4 (deps + POST) |
+| `create_order` | `create-order.ts` | 5-8 (customer + products + order + lines) |
+| `create_invoice` / `send_invoice` | `create-invoice.ts` | 5-7 (bank config + order + invoice + send) |
+| `create_payment` | `create-payment.ts` | 3-4 (find invoice + payment type + PUT) |
+| `create_credit_note` | `create-credit-note.ts` | 6-8 (find/create invoice + credit) |
+| `create_project` | `create-project.ts` | 5-8 (PM entitlements + POST) |
+| `create_voucher` | `create-voucher.ts` | 3-5 (account lookups + POST) |
+| `create_travel_expense` | `create-travel-expense.ts` | 3-5 (employee + POST + cost) |
+| `unknown` | `generic-handler.ts` | 5-25 (LLM agentic loop) |
+
+### SequenceContext
+
+Handlers share state via `SequenceContext` which tracks IDs for customers, employees, departments, products, orders, and invoices created in earlier tasks. This eliminates redundant GET lookups in multi-task sequences (e.g., create customer → send invoice → register payment).
+
 ## Evaluation system
 
-Some details we can evaluate are:
+Run `pnpm eval` to test all cases against the sandbox. Use `--filter` to test specific cases.
 
-- Different LLMs.
-- Diffrent system prompts.
-- Skills vs AGENTS.md and hybrid solutions.
+```bash
+pnpm eval                                    # run all test cases
+pnpm eval -- --filter "credit_note"          # filter by ID/type
+pnpm eval -- --filter "order" --iterations 3 # run 3 times for confidence
+pnpm eval -- --update-baselines              # tighten API call bounds
+```
 
 # Environment variables
 

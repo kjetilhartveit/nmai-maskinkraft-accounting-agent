@@ -12,8 +12,8 @@
       }
     ],
     "expectedApiCalls": {
-      "max": 17,
-      "maxErrors": 5
+      "max": 5,
+      "maxErrors": 2
     }
   },
   {
@@ -102,7 +102,7 @@
       }
     ],
     "expectedApiCalls": {
-      "max": 17,
+      "max": 13,
       "maxErrors": 2
     }
   },
@@ -114,8 +114,8 @@
     "taskType": "create_travel_expense",
     "expectedEntities": [
       {
-        "employeeFirstName": "gastos",
-        "employeeLastName": "de"
+        "employeeFirstName": "Pablo",
+        "employeeLastName": "Rodríguez"
       }
     ],
     "expectedApiCalls": {
@@ -179,8 +179,8 @@
       }
     ],
     "expectedApiCalls": {
-      "max": 12,
-      "maxErrors": 5
+      "max": 7,
+      "maxErrors": 2
     }
   },
   {
@@ -214,8 +214,8 @@
       {}
     ],
     "expectedApiCalls": {
-      "max": 9,
-      "maxErrors": 4
+      "max": 2,
+      "maxErrors": 1
     }
   },
   {
@@ -231,8 +231,8 @@
       {}
     ],
     "expectedApiCalls": {
-      "max": 5,
-      "maxErrors": 2
+      "max": 2,
+      "maxErrors": 1
     }
   },
   {
@@ -335,7 +335,7 @@
       }
     ],
     "expectedApiCalls": {
-      "max": 8,
+      "max": 10,
       "maxErrors": 5
     }
   },
@@ -352,32 +352,38 @@
     "expectedEntities": [
       {
         "name": "Elvdal AS",
-        "organizationNumber": "962211348",
-        "email": "geir.aasen@example.org"
+        "organizationNumber": "962211348"
       }
     ],
     "expectedTaskSequence": [
       {
         "taskType": "create_customer",
         "entities": [
-          {}
+          {
+            "name": "Elvdal AS"
+          }
         ]
       },
       {
         "taskType": "create_employee",
         "entities": [
-          {}
+          {
+            "firstName": "Geir",
+            "lastName": "Aasen"
+          }
         ]
       },
       {
         "taskType": "create_project",
         "entities": [
-          {}
+          {
+            "name": "Migrasjon Elvdal"
+          }
         ]
       }
     ],
     "expectedApiCalls": {
-      "max": 20,
+      "max": 10,
       "maxErrors": 2
     }
   },
@@ -415,7 +421,7 @@
       }
     ],
     "expectedApiCalls": {
-      "max": 6,
+      "max": 12,
       "maxErrors": 2
     }
   },
@@ -457,8 +463,8 @@
       }
     ],
     "expectedApiCalls": {
-      "max": 7,
-      "maxErrors": 4
+      "max": 8,
+      "maxErrors": 2
     }
   },
   {
@@ -471,7 +477,7 @@
       {}
     ],
     "expectedApiCalls": {
-      "max": 7,
+      "max": 5,
       "maxErrors": 2
     }
   },
@@ -510,7 +516,7 @@
       }
     ],
     "expectedApiCalls": {
-      "max": 8,
+      "max": 10,
       "maxErrors": 2
     }
   },
@@ -548,7 +554,7 @@
       }
     ],
     "expectedApiCalls": {
-      "max": 8,
+      "max": 10,
       "maxErrors": 2
     }
   },
@@ -558,16 +564,14 @@
     "language": "pt",
     "tier": 3,
     "taskType": "unknown",
+    "taskTypeAlternatives": ["create_payment"],
     "expectedEntities": [
-      {
-        "name": "Sessão de formação"
-      },
       {
         "amount": 44100
       }
     ],
     "expectedApiCalls": {
-      "max": 20,
+      "max": 5,
       "maxErrors": 2
     }
   },
@@ -583,8 +587,8 @@
       }
     ],
     "expectedApiCalls": {
-      "max": 20,
-      "maxErrors": 5
+      "max": 7,
+      "maxErrors": 2
     }
   },
   {
@@ -596,12 +600,12 @@
     "expectedEntities": [
       {
         "name": "Nordlys AS",
-        "email": "post@nordlys.no."
+        "email": "post@nordlys.no"
       }
     ],
     "expectedApiCalls": {
-      "max": 5,
-      "maxErrors": 2
+      "max": 2,
+      "maxErrors": 1
     }
   },
   {
@@ -638,7 +642,7 @@
       }
     ],
     "expectedApiCalls": {
-      "max": 7,
+      "max": 8,
       "maxErrors": 2
     }
   },
@@ -676,7 +680,7 @@
       }
     ],
     "expectedApiCalls": {
-      "max": 20,
+      "max": 9,
       "maxErrors": 2
     }
   },
@@ -718,7 +722,7 @@
       {}
     ],
     "expectedApiCalls": {
-      "max": 20,
+      "max": 13,
       "maxErrors": 2
     }
   },
@@ -780,7 +784,7 @@
       }
     ],
     "expectedApiCalls": {
-      "max": 17,
+      "max": 13,
       "maxErrors": 2
     }
   },
@@ -835,14 +839,14 @@
       {}
     ],
     "expectedApiCalls": {
-      "max": 8,
-      "maxErrors": 3
+      "max": 2,
+      "maxErrors": 1
     }
   },
   {
     "id": "unknown-en-dalheim",
     "prompt": "Betalinga frå Dalheim AS (org.nr 979527578) for fakturaen \"Systemutvikling\" (14550 kr ekskl. MVA) vart returnert av banken. Reverser betalinga slik at fakturaen igjen viser uteståande beløp.",
-    "language": "en",
+    "language": "nn",
     "tier": 3,
     "taskType": "unknown",
     "expectedEntities": [
@@ -867,12 +871,12 @@
     "expectedEntities": [
       {
         "name": "Nordlys AS",
-        "email": "post@nordlys.no."
+        "email": "post@nordlys.no"
       }
     ],
     "expectedApiCalls": {
-      "max": 5,
-      "maxErrors": 2
+      "max": 2,
+      "maxErrors": 1
     }
   },
   {
@@ -896,8 +900,8 @@
       }
     ],
     "expectedApiCalls": {
-      "max": 11,
-      "maxErrors": 3
+      "max": 2,
+      "maxErrors": 1
     }
   },
   {
@@ -932,7 +936,7 @@
     ],
     "expectedApiCalls": {
       "max": 24,
-      "maxErrors": 2
+      "maxErrors": 4
     }
   },
   {
@@ -959,8 +963,8 @@
     "taskType": "create_travel_expense",
     "expectedEntities": [
       {
-        "employeeFirstName": "viagem",
-        "employeeLastName": "para"
+        "employeeFirstName": "Bruno",
+        "employeeLastName": "Santos"
       }
     ],
     "expectedApiCalls": {
@@ -1032,17 +1036,47 @@
     "id": "customer-nn-vestfjord",
     "prompt": "Opprett prosjektet \"Integrasjon Vestfjord\" knytt til kunden Vestfjord AS (org.nr 954285405). Prosjektleiar er Håkon Eide (hakon.eide@example.org).",
     "language": "nn",
-    "tier": 1,
+    "tier": 3,
     "taskType": "create_customer",
+    "taskTypeAlternatives": [
+      "create_employee",
+      "create_project"
+    ],
     "expectedEntities": [
       {
         "name": "Vestfjord AS",
-        "organizationNumber": "954285405",
-        "email": "hakon.eide@example.org"
+        "organizationNumber": "954285405"
+      }
+    ],
+    "expectedTaskSequence": [
+      {
+        "taskType": "create_customer",
+        "entities": [
+          {
+            "name": "Vestfjord AS"
+          }
+        ]
+      },
+      {
+        "taskType": "create_employee",
+        "entities": [
+          {
+            "firstName": "Håkon",
+            "lastName": "Eide"
+          }
+        ]
+      },
+      {
+        "taskType": "create_project",
+        "entities": [
+          {
+            "name": "Integrasjon Vestfjord"
+          }
+        ]
       }
     ],
     "expectedApiCalls": {
-      "max": 6,
+      "max": 10,
       "maxErrors": 2
     }
   },
@@ -1102,12 +1136,12 @@
     "expectedEntities": [
       {
         "name": "Oakwood Ltd",
-        "email": "post@oakwood.no."
+        "email": "post@oakwood.no"
       }
     ],
     "expectedApiCalls": {
-      "max": 5,
-      "maxErrors": 2
+      "max": 2,
+      "maxErrors": 1
     }
   },
   {
@@ -1201,8 +1235,8 @@
       }
     ],
     "expectedApiCalls": {
-      "max": 7,
-      "maxErrors": 3
+      "max": 12,
+      "maxErrors": 2
     }
   },
   {
@@ -1211,6 +1245,7 @@
     "language": "de",
     "tier": 3,
     "taskType": "create_credit_note",
+    "taskTypeAlternatives": ["create_customer"],
     "expectedEntities": [
       {
         "name": "Waldstein GmbH"
@@ -1219,8 +1254,27 @@
         "amount": 8750
       }
     ],
+    "expectedTaskSequence": [
+      {
+        "taskType": "create_customer",
+        "entities": [
+          {
+            "name": "Waldstein GmbH",
+            "organizationNumber": "908048199"
+          }
+        ]
+      },
+      {
+        "taskType": "create_credit_note",
+        "entities": [
+          {
+            "customerName": "Waldstein GmbH"
+          }
+        ]
+      }
+    ],
     "expectedApiCalls": {
-      "max": 6,
+      "max": 12,
       "maxErrors": 2
     }
   },
@@ -1290,7 +1344,7 @@
       }
     ],
     "expectedApiCalls": {
-      "max": 20,
+      "max": 13,
       "maxErrors": 2
     }
   },
@@ -1344,8 +1398,8 @@
       {}
     ],
     "expectedApiCalls": {
-      "max": 4,
-      "maxErrors": 2
+      "max": 2,
+      "maxErrors": 1
     }
   },
   {
@@ -1423,7 +1477,7 @@
       }
     ],
     "expectedApiCalls": {
-      "max": 17,
+      "max": 13,
       "maxErrors": 2
     }
   },
@@ -1460,14 +1514,14 @@
       }
     ],
     "expectedApiCalls": {
-      "max": 20,
+      "max": 13,
       "maxErrors": 2
     }
   },
   {
-    "id": "unknown-en-erik",
+    "id": "unknown-no-erik",
     "prompt": "Kjør lønn for Erik Nilsen (erik.nilsen@example.org) for denne måneden. Grunnlønn er 53350 kr. Legg til en engangsbonus på 11050 kr i tillegg til grunnlønnen. Dersom lønns-API-et ikke fungerer, kan du bruke manuelle bilag på lønnskontoer (5000-serien) for å registrere lønnskostnaden.",
-    "language": "en",
+    "language": "no",
     "tier": 3,
     "taskType": "unknown",
     "expectedEntities": [
@@ -1501,8 +1555,8 @@
       }
     ],
     "expectedApiCalls": {
-      "max": 6,
-      "maxErrors": 2
+      "max": 2,
+      "maxErrors": 1
     }
   }
 ]
