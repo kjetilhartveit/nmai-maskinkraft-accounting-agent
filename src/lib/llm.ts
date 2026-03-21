@@ -53,31 +53,37 @@ Task types and their entity fields:
 - update_customer: fields: name (to find) + any updated fields
 - create_product: fields: name, unitPrice, number, description, vatRate (percentage: 25, 15, 0, etc. — optional, defaults to 25%)
 - create_department: fields: name, departmentNumber
-- create_order: ONE entity with: customerName, orderDate (YYYY-MM-DD), deliveryDate (YYYY-MM-DD), ourReference, yourReference. Plus extra entities for products: name, quantity, unitPrice.
+- create_order: ONE entity with: customerName, orderDate (YYYY-MM-DD), deliveryDate (YYYY-MM-DD), ourReference, yourReference. Plus extra entities for products: name, quantity, unitPrice, productNumber (if given in parentheses like "Data Advisory (4083)").
 - create_invoice: First entity is invoice metadata: customerName, invoiceDate (YYYY-MM-DD), dueDate (YYYY-MM-DD), comment.
   For a SINGLE product line: include productName, amount (excluding VAT) directly in the first entity.
   For MULTIPLE product lines (different items, different VAT rates): add additional entities after the first, each with: productName, unitPrice (excluding VAT), quantity (default 1), vatRate (percentage: 25, 15, 12, 0, etc.)
   Example with 3 lines: [{ customerName: "Acme" }, { productName: "Widget A", unitPrice: 1000, quantity: 2, vatRate: 25 }, { productName: "Widget B", unitPrice: 500, quantity: 1, vatRate: 15 }, { productName: "Widget C", unitPrice: 300, quantity: 1, vatRate: 0 }]
 - send_invoice: same as create_invoice — creates and sends immediately. Always extract the amount and product/service description. Supports multiple product lines.
 - create_payment: fields: customerName, organizationNumber, amount, paymentDate (YYYY-MM-DD), description/service (what the invoice is for)
-  - IMPORTANT: If the prompt says the client "has" a pending/outstanding invoice, the invoice ALREADY EXISTS in the sandbox. Return ONLY create_payment, NOT create_invoice + create_payment. The handler will find the existing invoice.
-  - Keywords indicating existing invoice: "has a pending invoice", "tem uma fatura pendente", "tiene una factura pendiente", "hat eine ausstehende Rechnung", "har en utestående faktura", "a une facture en attente"
+  - IMPORTANT: If the prompt says the client "has" a pending/outstanding/unpaid invoice, the invoice ALREADY EXISTS in the sandbox. Return ONLY create_payment, NOT create_invoice + create_payment. The handler will find the existing invoice.
+  - Keywords indicating existing invoice: "has a pending invoice", "tem uma fatura pendente", "tiene una factura pendiente", "hat eine offene Rechnung", "hat eine ausstehende Rechnung", "har en utestående faktura", "har ein uteståande faktura", "a une facture impayée", "a une facture en attente"
   - When the task is ONLY about registering/recording a payment on an existing invoice, use ONLY create_payment.
-- create_credit_note: fields: invoiceId, comment
+  - IMPORTANT: For "register a supplier" tasks, use create_supplier, NOT create_payment.
+- create_credit_note: fields: customerName, organizationNumber, amount, productName/description (what the original invoice was for), date (YYYY-MM-DD), comment/reason
+  - The handler will find or create the customer's invoice and issue a credit note against it.
+  - IMPORTANT: If the prompt mentions a customer who "complained" or "reclaimed" an invoice, output create_customer (with org number) THEN create_credit_note. The credit note handler needs the customer to exist first.
 - create_travel_expense: fields: employeeFirstName, employeeLastName, date (YYYY-MM-DD), amount, description, paymentType (COMPANY_CARD or EMPLOYEE_PAID)
 - delete_travel_expense: fields: employeeFirstName, employeeLastName OR travelExpenseId
 - create_project: fields: name, projectManagerFirstName, projectManagerLastName, startDate (YYYY-MM-DD), endDate (YYYY-MM-DD), customerName, description
 - create_voucher: fields: date (YYYY-MM-DD), description. Plus extra entities for postings: accountNumber, amount, type (DEBIT/CREDIT), description.
   - IMPORTANT: If the voucher must be LINKED to a custom dimension, accounting dimension, or other non-standard entity, use "unknown" for the ENTIRE task (dimension creation + voucher) so the agentic handler can maintain context.
 - create_supplier: fields: name, email, organizationNumber, phoneNumber
-- unknown: For ANY task that doesn't clearly match one of the above types, OR when a task involves custom accounting dimensions. This includes but is not limited to:
+  - IMPORTANT: "Register a supplier" / "Registrer leverandøren" / "Enregistrez le fournisseur" / "Registre o fornecedor" / "Registrieren Sie den Lieferanten" / "Registre el proveedor" = create_supplier. Do NOT use "unknown" for simple supplier creation.
+- unknown: For tasks that don't clearly match one of the above types. This includes but is not limited to:
   custom accounting dimensions (even when combined with vouchers — the ENTIRE prompt should be ONE "unknown" task),
-  bank reconciliation, incoming invoices, supplier invoices, salary operations, asset management,
+  bank reconciliation, incoming invoices, supplier invoices (with VAT/account details), salary operations, asset management,
   timesheet entries, company settings, contacts, divisions, correcting/reversing entries,
-  activating modules, or any other Tripletex operation.
+  activating modules, or any other complex Tripletex operation.
   - When a prompt asks to create a custom dimension AND then do something with it (like create a voucher linked to it), return a SINGLE "unknown" task containing ALL information. Do NOT split into unknown + create_voucher.
+  - Do NOT use "unknown" when a dedicated handler exists. If the prompt says "create/register a supplier/customer/department/employee", use the dedicated task type.
 
 Rules:
+- PRESERVE all Unicode characters exactly as they appear in the prompt (e.g. å, ø, æ, ü, ö, ñ, é, ã). Do NOT transliterate or anglicize names.
 - All dates must be in YYYY-MM-DD format. Infer from context or use today if not given.
 - For multiple entities of the same type (e.g. "create three departments"), return ONE task with each entity in the array.
 - For orders: first entity = order metadata, additional entities = product lines.
@@ -105,7 +111,25 @@ Prompt: "Cree una dimensión contable personalizada Region con valores Nord-Norg
 
 Example 4 - Employee with admin role:
 Prompt: "Create employee Maria Svensson (maria@test.com) as an administrator."
-→ tasks: [{ taskType: "create_employee", entities: [{ firstName: "Maria", lastName: "Svensson", email: "maria@test.com", userType: "ADMINISTRATOR" }] }]`;
+→ tasks: [{ taskType: "create_employee", entities: [{ firstName: "Maria", lastName: "Svensson", email: "maria@test.com", userType: "ADMINISTRATOR" }] }]
+
+Example 5 - Credit note (customer complained about invoice):
+Prompt: "Kunden Fjelltopp AS (org.nr 950710241) har reklamert på fakturaen for Nettverksteneste (28100 kr). Opprett ei fullstendig kreditnota."
+→ tasks: [{ taskType: "create_customer", entities: [{ name: "Fjelltopp AS", organizationNumber: "950710241" }] }, { taskType: "create_credit_note", entities: [{ customerName: "Fjelltopp AS", amount: 28100, productName: "Nettverksteneste" }] }]
+
+Example 6 - Order → Invoice → Payment (full chain):
+Prompt: "Create an order for Brightstone Ltd (org no. 971948981) with Data Advisory (4083) at 4050 NOK. Convert to invoice and register full payment."
+→ tasks: [{ taskType: "create_customer", entities: [{ name: "Brightstone Ltd", organizationNumber: "971948981" }] }, { taskType: "create_order", entities: [{ customerName: "Brightstone Ltd" }, { name: "Data Advisory", quantity: 1, unitPrice: 4050 }] }, { taskType: "create_invoice", entities: [{ customerName: "Brightstone Ltd" }] }, { taskType: "create_payment", entities: [{ customerName: "Brightstone Ltd" }] }]
+NOTE: For order→invoice→payment chains, always include all 4 task types. The handlers pass context (orderId, invoiceId) between tasks automatically.
+
+Example 7 - Supplier registration (use dedicated handler, NOT unknown):
+Prompt: "Registrer leverandøren Elvdal AS med organisasjonsnummer 994963309. E-post: faktura@elvdal.no."
+→ tasks: [{ taskType: "create_supplier", entities: [{ name: "Elvdal AS", organizationNumber: "994963309", email: "faktura@elvdal.no" }] }]
+WRONG: [{ taskType: "unknown", ... }] — this is a simple supplier creation, use create_supplier!
+
+Example 8 - Three departments (batch in one task):
+Prompt: "Erstellen Sie drei Abteilungen in Tripletex: Økonomi, Logistikk und Produksjon."
+→ tasks: [{ taskType: "create_department", entities: [{ name: "Økonomi" }, { name: "Logistikk" }, { name: "Produksjon" }] }]`;
 
 const SYSTEM_PROMPT_MINIMAL = `You parse Tripletex accounting prompts into JSON: tasks array (each with taskType and entities), and prompt language.
 Known task types: create_employee, update_employee, create_customer, update_customer, create_product, create_department, create_invoice, send_invoice, create_payment, create_credit_note, create_order, create_travel_expense, delete_travel_expense, create_project, create_voucher, create_supplier, unknown.
@@ -134,22 +158,22 @@ function resolveSystemPrompt(variant?: string): string {
 
 const TASK_PRIORITY: Record<string, number> = {
   create_department: 0,
-  unknown: 1, // unknown tasks often create prerequisites (dimensions, contacts, etc.)
-  create_employee: 2,
-  create_customer: 2,
-  create_supplier: 2,
-  update_employee: 3,
-  update_customer: 3,
-  create_product: 3,
-  create_order: 4,
-  create_project: 4,
-  create_voucher: 4,
-  create_travel_expense: 4,
-  create_invoice: 5,
-  send_invoice: 5,
-  delete_travel_expense: 5,
-  create_payment: 6,
-  create_credit_note: 6,
+  create_employee: 1,
+  create_customer: 1,
+  create_supplier: 1,
+  update_employee: 2,
+  update_customer: 2,
+  create_product: 2,
+  create_order: 3,
+  create_project: 3,
+  create_voucher: 3,
+  create_travel_expense: 3,
+  unknown: 3, // after entity creation but before invoicing; unknown tasks may depend on customers/suppliers
+  create_invoice: 4,
+  send_invoice: 4,
+  delete_travel_expense: 4,
+  create_payment: 5,
+  create_credit_note: 5,
 };
 
 function sortByDependency(tasks: ParsedTask[]): ParsedTask[] {
