@@ -1,146 +1,29 @@
+import {
+  GoogleGenAI,
+  FunctionCallingConfigMode,
+  type Content,
+  type Part,
+} from "@google/genai";
+import { zodToJsonSchema } from "zod-to-json-schema";
 import { config } from "./config.js";
 import type { ZodType } from "zod";
 
-const BASE_URL = "https://generativelanguage.googleapis.com/v1beta";
-
-/**
- * Attempt to repair common JSON issues from LLM output:
- * - Trailing commas before } or ]
- * - Single-quoted strings
- * - Unquoted property names
- * - Truncated JSON (close unclosed brackets)
- */
-function repairJson(text: string): string {
-  // Remove trailing commas before closing brackets
-  let fixed = text.replace(/,\s*([\]}])/g, "$1");
-
-  // Try parsing as-is first
-  try {
-    JSON.parse(fixed);
-    return fixed;
-  } catch {
-    // Continue with more aggressive repairs
-  }
-
-  // Replace single-quoted strings with double-quoted (outside of double-quoted strings)
-  {
-    let result = "";
-    let inDouble = false;
-    let inSingle = false;
-    let esc = false;
-    for (let i = 0; i < fixed.length; i++) {
-      const ch = fixed[i];
-      if (esc) { result += ch; esc = false; continue; }
-      if (ch === "\\") { result += ch; esc = true; continue; }
-      if (ch === '"' && !inSingle) { inDouble = !inDouble; result += ch; continue; }
-      if (ch === "'" && !inDouble) {
-        inSingle = !inSingle;
-        result += '"';
-        continue;
-      }
-      result += ch;
-    }
-    fixed = result;
-  }
-
-  // Fix unquoted property names: word before colon outside strings
-  fixed = fixed.replace(/(?<=[\{,]\s*)([a-zA-Z_]\w*)(?=\s*:)/g, '"$1"');
-
-  // Remove trailing commas again after other fixes
-  fixed = fixed.replace(/,\s*([\]}])/g, "$1");
-
-  // Try parsing after string/key repairs
-  try {
-    JSON.parse(fixed);
-    return fixed;
-  } catch {
-    // Continue with structural repairs
-  }
-
-  // Close unclosed arrays and objects
-  let openBraces = 0;
-  let openBrackets = 0;
-  let inString = false;
-  let escape = false;
-  for (const ch of fixed) {
-    if (escape) { escape = false; continue; }
-    if (ch === "\\") { escape = true; continue; }
-    if (ch === '"') { inString = !inString; continue; }
-    if (inString) continue;
-    if (ch === "{") openBraces++;
-    if (ch === "}") openBraces--;
-    if (ch === "[") openBrackets++;
-    if (ch === "]") openBrackets--;
-  }
-
-  // Remove any trailing partial key-value or comma
-  fixed = fixed.replace(/,?\s*"[^"]*"?\s*:?\s*$/, "");
-  fixed = fixed.replace(/,\s*$/, "");
-
-  while (openBrackets > 0) { fixed += "]"; openBrackets--; }
-  while (openBraces > 0) { fixed += "}"; openBraces--; }
-
-  return fixed;
-}
+const ai = new GoogleGenAI({ apiKey: config.google.apiKey });
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
-type GeminiPart =
-  | { text: string }
-  | { functionCall: { name: string; args: Record<string, unknown> } }
-  | { functionResponse: { name: string; response: unknown } };
-
-interface GeminiContent {
-  role: "user" | "model";
-  parts: GeminiPart[];
-}
-
-interface GeminiRequest {
-  contents: GeminiContent[];
-  systemInstruction?: { parts: { text: string }[] };
-  generationConfig?: Record<string, unknown>;
-  tools?: { functionDeclarations: GeminiFunctionDeclaration[] }[];
-  toolConfig?: Record<string, unknown>;
-}
-
-interface GeminiFunctionDeclaration {
-  name: string;
-  description: string;
-  parameters: Record<string, unknown>;
-}
-
-interface GeminiResponse {
-  candidates: {
-    content: { role: string; parts: GeminiPart[] };
-    finishReason: string;
-  }[];
-  usageMetadata?: {
-    promptTokenCount: number;
-    candidatesTokenCount: number;
-    totalTokenCount: number;
-  };
-}
-
-// ── Core API call ──────────────────────────────────────────────────────────
-
-async function callGemini(
-  model: string,
-  request: GeminiRequest,
-): Promise<GeminiResponse> {
-  const url = `${BASE_URL}/models/${model}:generateContent?key=${config.google.apiKey}`;
-  const response = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(request),
-  });
-
-  if (!response.ok) {
-    const errorBody = await response.text();
-    throw new Error(`Gemini API error ${response.status}: ${errorBody}`);
-  }
-
-  return response.json() as Promise<GeminiResponse>;
-}
+/**
+ * JSON Schema type for Gemini's responseSchema (subset of OpenAPI 3.0).
+ * Kept for backward compatibility — prefer letting zodToJsonSchema derive it.
+ */
+export type GeminiJsonSchema = {
+  type: "object" | "array" | "string" | "number" | "boolean";
+  properties?: Record<string, GeminiJsonSchema>;
+  items?: GeminiJsonSchema;
+  required?: string[];
+  enum?: string[];
+  description?: string;
+};
 
 // ── Structured JSON output ─────────────────────────────────────────────────
 
@@ -149,6 +32,8 @@ export async function geminiGenerateStructured<T>(options: {
   system: string;
   prompt: string;
   schema: ZodType<T>;
+  /** Optional JSON Schema override. If omitted, derived automatically from the Zod schema via zodToJsonSchema. */
+  jsonSchema?: GeminiJsonSchema;
   maxTokens?: number;
   maxRetries?: number;
 }): Promise<{ object: T; durationMs: number }> {
@@ -156,14 +41,19 @@ export async function geminiGenerateStructured<T>(options: {
   const maxRetries = options.maxRetries ?? 2;
   const start = performance.now();
 
+  const responseJsonSchema =
+    options.jsonSchema ?? zodToJsonSchema(options.schema);
+
   let lastError: unknown;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
-      const result = await callGemini(model, {
-        contents: [{ role: "user", parts: [{ text: options.prompt }] }],
-        systemInstruction: { parts: [{ text: options.system }] },
-        generationConfig: {
+      const response = await ai.models.generateContent({
+        model,
+        contents: options.prompt,
+        config: {
+          systemInstruction: options.system,
           responseMimeType: "application/json",
+          responseJsonSchema,
           maxOutputTokens: options.maxTokens ?? 8192,
           temperature: attempt > 0 ? 0.1 : 0,
           topP: 1,
@@ -172,15 +62,21 @@ export async function geminiGenerateStructured<T>(options: {
       });
 
       const durationMs = Math.round(performance.now() - start);
-      let text = (result.candidates[0].content.parts[0] as { text: string }).text.trim();
-      text = text.replace(/^```(?:json)?\n?/i, "").replace(/\n?```$/i, "").trim();
-      const parsed = JSON.parse(repairJson(text));
+      const text = response.text;
+
+      if (!text || text.length < 2) {
+        throw new Error("Empty or truncated JSON response");
+      }
+
+      const parsed = JSON.parse(text);
       const object = options.schema.parse(parsed) as T;
       return { object, durationMs };
     } catch (err) {
       lastError = err;
       if (attempt < maxRetries) {
-        console.warn(`[Gemini] Structured parse attempt ${attempt + 1} failed, retrying...`);
+        console.warn(
+          `[Gemini] Structured parse attempt ${attempt + 1} failed, retrying...`,
+        );
       }
     }
   }
@@ -208,17 +104,15 @@ export async function geminiGenerateWithTools(options: {
   const model = options.model ?? config.google.model;
   const maxSteps = options.maxSteps ?? 25;
 
-  const functionDeclarations: GeminiFunctionDeclaration[] = options.tools.map(
-    (t) => ({
-      name: t.name,
-      description: t.description,
-      parameters: t.parameters,
-    }),
-  );
+  const functionDeclarations = options.tools.map((t) => ({
+    name: t.name,
+    description: t.description,
+    parametersJsonSchema: t.parameters,
+  }));
 
   const toolMap = new Map(options.tools.map((t) => [t.name, t]));
 
-  const contents: GeminiContent[] = [
+  const contents: Content[] = [
     { role: "user", parts: [{ text: options.prompt }] },
   ];
 
@@ -229,12 +123,15 @@ export async function geminiGenerateWithTools(options: {
   while (steps < maxSteps) {
     steps++;
 
-    const result = await callGemini(model, {
+    const response = await ai.models.generateContent({
+      model,
       contents,
-      systemInstruction: { parts: [{ text: options.system }] },
-      tools: [{ functionDeclarations }],
-      toolConfig: { functionCallingConfig: { mode: "AUTO" } },
-      generationConfig: {
+      config: {
+        systemInstruction: options.system,
+        tools: [{ functionDeclarations }],
+        toolConfig: {
+          functionCallingConfig: { mode: FunctionCallingConfigMode.AUTO },
+        },
         maxOutputTokens: options.maxTokens ?? 16384,
         temperature: 0,
         topP: 1,
@@ -242,33 +139,31 @@ export async function geminiGenerateWithTools(options: {
       },
     });
 
-    const candidate = result.candidates[0];
-    const parts = candidate.content.parts;
+    const candidate = response.candidates?.[0];
+    if (!candidate?.content?.parts) break;
 
-    contents.push({ role: "model", parts });
+    contents.push({ role: "model", parts: candidate.content.parts });
 
-    const functionCalls = parts.filter(
-      (p): p is { functionCall: { name: string; args: Record<string, unknown> } } =>
-        "functionCall" in p,
-    );
+    const functionCalls = response.functionCalls;
 
-    if (functionCalls.length === 0) {
-      const textParts = parts.filter(
-        (p): p is { text: string } => "text" in p,
-      );
-      finalText = textParts.map((p) => p.text).join("\n");
+    if (!functionCalls || functionCalls.length === 0) {
+      finalText = response.text ?? "";
       break;
     }
 
-    const responseParts: GeminiPart[] = [];
-    for (const part of functionCalls) {
-      const { name, args } = part.functionCall;
+    const responseParts: Part[] = [];
+    for (const fc of functionCalls) {
+      const name = fc.name!;
+      const args = (fc.args ?? {}) as Record<string, unknown>;
       totalToolCalls++;
 
       const tool = toolMap.get(name);
       if (!tool) {
         responseParts.push({
-          functionResponse: { name, response: { error: `Unknown tool: ${name}` } },
+          functionResponse: {
+            name,
+            response: { error: `Unknown tool: ${name}` },
+          },
         });
         continue;
       }
@@ -276,13 +171,18 @@ export async function geminiGenerateWithTools(options: {
       try {
         const toolResult = await tool.execute(args);
         responseParts.push({
-          functionResponse: { name, response: toolResult },
+          functionResponse: {
+            name,
+            response: toolResult as Record<string, unknown>,
+          },
         });
       } catch (err) {
         responseParts.push({
           functionResponse: {
             name,
-            response: { error: err instanceof Error ? err.message : String(err) },
+            response: {
+              error: err instanceof Error ? err.message : String(err),
+            },
           },
         });
       }
