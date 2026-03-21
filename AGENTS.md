@@ -57,15 +57,6 @@ probe> stats
 probe> log
 ```
 
-### Recommended workflow
-
-1. **Discover** — Use `pnpm probe` to explore unfamiliar endpoints and understand their response shapes.
-2. **Validate** — When fixing a handler or adding support for a new task type, probe the exact endpoint sequence first to confirm it works.
-3. **Iterate** — If a POST returns 422, read the error, adjust the payload, and retry immediately in the REPL — no need to run the full agent loop.
-4. **Apply** — Once the working endpoint pattern is confirmed, update the handler/prompt and run `pnpm eval` to verify end-to-end.
-
-Other sandbox tools: `pnpm test:sandbox` (connectivity smoke test), `pnpm reset-sandbox` (clean up dev sandbox).
-
 ## BETA endpoint restrictions (critical)
 
 Tripletex is a module-based accounting system. Many endpoints marked `[BETA]` in the Swagger docs return **403 Forbidden** in the competition sandbox. This was the #1 source of errors in submissions.
