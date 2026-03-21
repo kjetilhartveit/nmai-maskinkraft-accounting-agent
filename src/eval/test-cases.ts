@@ -2,14 +2,22 @@ import { readFileSync, existsSync } from "fs";
 import { join } from "path";
 import type { TestCase } from "./types.js";
 
-function loadPromotedCases(): TestCase[] {
-  const promotedFile = join(import.meta.dirname, "../../data/verified/promoted-test-cases.json");
-  if (!existsSync(promotedFile)) return [];
+function loadJsonTestCases(filename: string): TestCase[] {
+  const filepath = join(import.meta.dirname, "../../data/verified", filename);
+  if (!existsSync(filepath)) return [];
   try {
-    return JSON.parse(readFileSync(promotedFile, "utf-8")) as TestCase[];
+    return JSON.parse(readFileSync(filepath, "utf-8")) as TestCase[];
   } catch {
     return [];
   }
+}
+
+function loadPromotedCases(): TestCase[] {
+  return loadJsonTestCases("promoted-test-cases.json");
+}
+
+function loadImportedCases(): TestCase[] {
+  return loadJsonTestCases("imported-test-cases.json");
 }
 
 /** Baseline cases derived from docs/sample-tripletex-prompts.json with expected parse targets. */
@@ -177,8 +185,13 @@ const manualTestCases: TestCase[] = [
 ];
 
 const promoted = loadPromotedCases();
-const promotedIds = new Set(promoted.map(tc => tc.id));
-const deduped = manualTestCases.filter(tc => !promotedIds.has(tc.id));
+const imported = loadImportedCases();
 
-/** All test cases: manually curated + LLM-verified promoted cases. */
-export const testCases: TestCase[] = [...deduped, ...promoted];
+// Dedupe: promoted > imported > manual
+const allExternalIds = new Set([...promoted.map(tc => tc.id), ...imported.map(tc => tc.id)]);
+const dedupedManual = manualTestCases.filter(tc => !allExternalIds.has(tc.id));
+const promotedIds = new Set(promoted.map(tc => tc.id));
+const dedupedImported = imported.filter(tc => !promotedIds.has(tc.id));
+
+/** All test cases: manually curated + imported + LLM-verified promoted cases. */
+export const testCases: TestCase[] = [...dedupedManual, ...dedupedImported, ...promoted];
