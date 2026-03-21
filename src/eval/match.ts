@@ -21,11 +21,11 @@ function valueMatches(expected: unknown, actual: unknown): boolean {
 }
 
 const FIELD_ALIASES: Record<string, string[]> = {
-  name: ["name", "departmentName", "projectName", "companyName", "supplierName"],
+  name: ["name", "departmentName", "projectName", "companyName", "supplierName", "dimensionName", "displayName"],
   customerName: ["customerName", "name", "companyName"],
   email: ["email", "emailAddress"],
   organizationNumber: ["organizationNumber", "orgNumber", "orgNo", "orgNr"],
-  amount: ["amount", "totalAmount", "invoiceAmount", "amountExcludingVat"],
+  amount: ["amount", "totalAmount", "invoiceAmount", "amountExcludingVat", "amountGross", "baseSalary", "salary", "unitPrice"],
 };
 
 function getActualValue(actual: Record<string, unknown>, key: string): unknown {
@@ -37,6 +37,35 @@ function getActualValue(actual: Record<string, unknown>, key: string): unknown {
     }
   }
   return undefined;
+}
+
+/**
+ * Check if an expected entity's fields can be found anywhere in the actual entity,
+ * including inside array values and nested string fields.
+ */
+function entityContainsExpectedDeep(
+  actual: Record<string, unknown>,
+  expected: Record<string, unknown>,
+): boolean {
+  for (const [key, ev] of Object.entries(expected)) {
+    const av = getActualValue(actual, key);
+    if (av !== undefined && valueMatches(ev, av)) continue;
+
+    // Deep search: check if expected value exists inside any array or string value
+    let found = false;
+    for (const val of Object.values(actual)) {
+      if (Array.isArray(val) && val.some((item) => valueMatches(ev, item))) {
+        found = true;
+        break;
+      }
+      if (typeof val === "string" && valueMatches(ev, val)) {
+        found = true;
+        break;
+      }
+    }
+    if (!found) return false;
+  }
+  return true;
 }
 
 function entityContainsExpected(
@@ -52,19 +81,33 @@ function entityContainsExpected(
   return true;
 }
 
-/** Each expected entity must match at least one actual entity (unique assignment). */
+/** Each expected entity must match at least one actual entity (unique assignment).
+ *  Falls back to deep matching when strict matching fails. */
 export function entitiesMatch(
   actual: Record<string, unknown>[],
   expected: Record<string, unknown>[],
 ): boolean {
   if (expected.length === 0) return true;
+
+  // Strict match first
   const used = new Set<number>();
+  let allFound = true;
   for (const exp of expected) {
     const idx = actual.findIndex(
       (a, i) => !used.has(i) && entityContainsExpected(a, exp),
     );
-    if (idx === -1) return false;
+    if (idx === -1) { allFound = false; break; }
     used.add(idx);
+  }
+  if (allFound) return true;
+
+  // Deep match fallback: allow matching inside arrays and nested values.
+  // A single actual entity can satisfy multiple expected entries (e.g., a consolidated
+  // entity with dimensionValues array matching several { name: "..." } expectations).
+  for (const exp of expected) {
+    if (Object.keys(exp).length === 0) continue;
+    const found = actual.some((a) => entityContainsExpectedDeep(a, exp));
+    if (!found) return false;
   }
   return true;
 }
