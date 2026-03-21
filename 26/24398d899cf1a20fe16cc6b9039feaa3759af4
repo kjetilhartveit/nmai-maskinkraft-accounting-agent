@@ -1,0 +1,29 @@
+src/eval/task-type-analysis.ts
+  466d55fc79af85d8 1-155
+src/scripts/run-eval.ts
+  466d55fc79af85d8 8,21-23,43-48,92-98,107-127,132-138
+src/scripts/task-type-info.ts
+  466d55fc79af85d8 1-141
+package.json
+  466d55fc79af85d8 26
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.17",
+  "base_commit_sha": "2624398d899cf1a20fe16cc6b9039feaa3759af4",
+  "prompts": {
+    "466d55fc79af85d8": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "9edd1cc0-5af3-4fee-9ed0-254ca16ed782",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Kjetil Hårtveit <kjetil_runescape@hotmail.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 342,
+      "overriden_lines": 0
+    }
+  }
+}
