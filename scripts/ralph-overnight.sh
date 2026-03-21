@@ -55,11 +55,11 @@ for i in $(seq 1 $ITERATIONS); do
 
     LOG_FILE="$LOG_DIR/ralph_${TIMESTAMP}_iter${i}.log"
 
-    # Run cursor agent
+    # Run gemini agent (redirect to file to avoid PTY issues on Windows)
     cd "$PROJECT_DIR"
-    "/c/Users/kjeti/AppData/Local/cursor-agent/agent.cmd" --force "$PROMPT" 2>&1 | tee "$LOG_FILE"
+    gemini --model gemini-3.1-pro-preview-customtools --yolo "$PROMPT" > "$LOG_FILE" 2>&1
 
-    EXIT_CODE=${PIPESTATUS[0]}
+    EXIT_CODE=$?
 
     echo ""
     echo "Iteration $i completed at: $(date)"
