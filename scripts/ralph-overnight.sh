@@ -59,7 +59,7 @@ for i in $(seq 1 $ITERATIONS); do
 
     # Run gemini agent (redirect to file to avoid PTY issues on Windows)
     cd "$PROJECT_DIR"
-    gemini --model gemini-3.1-pro-preview-customtools --yolo "$PROMPT" > "$LOG_FILE" 2>&1
+    gemini --model gemini-3.1-pro-preview-customtools --yolo -p "$PROMPT" > "$LOG_FILE" 2>&1
 
     EXIT_CODE=$?
 
