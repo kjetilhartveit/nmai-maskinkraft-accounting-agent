@@ -90,9 +90,9 @@ function detectPrimaryAction(prompt: string): TaskType {
 
   // Payment patterns (most specific first)
   if (/\b(payment|paiement|zahlung|pago|pagamento|betaling)\b/.test(lower)
-    && /\b(register|enregistr|registr|record)\b/.test(lower)) return "create_payment";
+    && /\b(register|enregistr|registr|record)/.test(lower)) return "create_payment";
   if (/\b(facture? impayée?|fatura pendente|ausstehende rechnung|factura pendiente|utestående faktura|pending invoice|offene rechnung)\b/.test(lower)
-    && /\b(register|enregistr|registr|record|paiement|payment|zahlung|betaling)\b/.test(lower)) return "create_payment";
+    && /\b(register|enregistr|registr|record|paiement|payment|zahlung|betaling)/.test(lower)) return "create_payment";
 
   // Reverse payment patterns
   if (/\b(reverse|reverser|annulez|retourné|returnert|revert)\b/.test(lower)
