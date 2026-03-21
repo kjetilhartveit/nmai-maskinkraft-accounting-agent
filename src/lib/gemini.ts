@@ -79,7 +79,7 @@ export async function geminiGenerateStructured<T>(options: {
     systemInstruction: { parts: [{ text: options.system }] },
     generationConfig: {
       responseMimeType: "application/json",
-      maxOutputTokens: options.maxTokens ?? 4096,
+      maxOutputTokens: options.maxTokens ?? 8192,
       temperature: 0,
       topP: 1,
       topK: 1,
@@ -87,7 +87,8 @@ export async function geminiGenerateStructured<T>(options: {
   });
 
   const durationMs = Math.round(performance.now() - start);
-  const text = (result.candidates[0].content.parts[0] as { text: string }).text;
+  let text = (result.candidates[0].content.parts[0] as { text: string }).text;
+  text = text.replace(/^```(?:json)?\n?/i, "").replace(/\n?```$/i, "");
   const parsed = JSON.parse(text);
   const object = options.schema.parse(parsed) as T;
 

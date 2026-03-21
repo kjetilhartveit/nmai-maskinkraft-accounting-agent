@@ -63,7 +63,8 @@ CRITICAL endpoint patterns:
 - Payment registration: use tripletex_put_action with PUT /invoice/{id}/:payment and query params: paymentDate, paymentTypeId, paidAmount
 - Action endpoints (containing /:action) use QUERY PARAMETERS, not request bodies. Use the tripletex_put_action tool for these.
 - Single-object GET (with ID in path like /invoice/123) returns { value: {...} }, NOT a list
-- VOUCHER POSTINGS: Only use these fields in posting objects: { account: {id}, date, amountGross, amountGrossCurrency, description }
+- VOUCHER POSTINGS: Body should be { date: "YYYY-MM-DD", description: "...", postings: [{ account: {id: 5000}, date: "YYYY-MM-DD", amountGross: 1000, amountGrossCurrency: 1000, description: "..." }] }.
+  Only use these fields in posting objects: { account: {id}, date, amountGross, amountGrossCurrency, description }.
   Set amountGross and amountGrossCurrency to the SAME value. Do NOT add dimension1, freeDimension1, accountingDimension1, or customDimension1 — these fields DO NOT EXIST on the posting object and will cause 422 errors.
   For custom dimensions: just create the dimension name + values. The voucher is separate.
 
