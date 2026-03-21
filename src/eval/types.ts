@@ -20,7 +20,7 @@ export interface TestCase {
 }
 
 export interface EvalConfig {
-  /** OpenRouter model id */
+  /** Gemini model id (e.g. gemini-2.5-flash, gemini-3.1-pro-preview) */
   model: string;
   systemPromptVariant?: string;
   /** Human-readable label for reports */

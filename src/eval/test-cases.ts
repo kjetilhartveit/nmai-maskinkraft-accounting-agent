@@ -56,7 +56,7 @@ const manualTestCases: TestCase[] = [
       { taskType: "create_customer", entities: [{ name: "Porto Alegre Lda", organizationNumber: "842889154" }] },
       { taskType: "send_invoice", entities: [{ customerName: "Porto Alegre Lda", amount: 11200 }] },
     ],
-    expectedApiCalls: { max: 8, maxErrors: 0 },
+    expectedApiCalls: { max: 7, maxErrors: 0 },
     notes: "Multi-task: create customer then send invoice.",
   },
   {
@@ -94,7 +94,7 @@ const manualTestCases: TestCase[] = [
       { taskType: "create_customer", entities: [{ name: "Waldstein GmbH", organizationNumber: "925346519" }] },
       { taskType: "send_invoice", entities: [{ customerName: "Waldstein GmbH", amount: 25100 }] },
     ],
-    expectedApiCalls: { max: 8, maxErrors: 0 },
+    expectedApiCalls: { max: 7, maxErrors: 0 },
     notes: "Multi-task: create customer then send invoice.",
   },
   {
