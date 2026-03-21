@@ -23,6 +23,10 @@ const TASK_TYPES: TaskType[] = [
   "create_payroll",
   "create_supplier_invoice",
   "create_dimension",
+  "reverse_payment",
+  "create_timesheet",
+  "project_fixed_price",
+  "receipt_expense",
   "unknown",
 ];
 
@@ -87,15 +91,32 @@ Task types and their entity fields:
   - IMPORTANT: Even if the prompt mentions fallback strategies or alternative approaches (e.g. "if the salary API doesn't work, use manual vouchers"), STILL use create_payroll. The handler already implements the correct approach internally. Do NOT use "unknown" for payroll tasks.
 - create_supplier_invoice: fields: supplierName, amount, amountIncludesVat (boolean), accountNumber, vatRate, invoiceNumber, description, organizationNumber
   - Use for registering incoming/supplier invoices. The handler creates a voucher (debit expense + debit input VAT + credit accounts payable with supplier reference).
-  - Keywords: "register supplier invoice", "incoming invoice", "received invoice from supplier", "factura del proveedor", "facture fournisseur", "leverandørfaktura", "Lieferantenrechnung".
+  - Keywords: "register supplier invoice", "incoming invoice", "received invoice from supplier", "factura del proveedor", "facture fournisseur", "leverandørfaktura", "Lieferantenrechnung", "Register the supplier invoice", "We have received invoice".
+  - CRITICAL: ANY prompt about receiving an invoice FROM a supplier = create_supplier_invoice. Do NOT use "unknown".
   - IMPORTANT: When both supplier creation AND supplier invoice registration are needed, split into create_supplier THEN create_supplier_invoice. The supplier must exist before the voucher.
 - create_dimension: fields: dimensionName, dimensionValues (array of strings), accountNumber, amount, linkedDimensionValue
   - Use for creating custom accounting dimensions (optionally with a linked voucher).
   - When a prompt asks to create a custom dimension AND then create a voucher linked to it, return a SINGLE create_dimension task containing ALL information. Do NOT split into separate tasks.
-  - Keywords: "custom accounting dimension", "benutzerdefinierte Buchhaltungsdimension", "dimension comptable", "dimensión contable", "regnskapsdimensjon", "dimensão contábil".
+  - CRITICAL: Do NOT confuse dimensions with departments. "rekneskapsdimensjon", "Buchhaltungsdimension", "dimensión contable", "dimension comptable" = create_dimension, NOT create_department.
+  - Keywords: "custom accounting dimension", "benutzerdefinierte Buchhaltungsdimension", "dimension comptable", "dimensión contable", "regnskapsdimensjon", "rekneskapsdimensjon", "dimensão contábil", "fri dimensjon", "fri rekneskapsdimensjon".
+- reverse_payment: fields: customerName, organizationNumber, amount, description/service (what the original invoice was for)
+  - Use when a payment has been "returned by the bank" / "returnert av banken" / "retourné par la banque" / "zurückgebucht" and needs to be reversed.
+  - Keywords: "reverse payment", "reverser betaling", "annulez le paiement", "stornieren Sie die Zahlung", "returnert av banken", "retourné par la banque", "returned by the bank", "zurückgebucht".
+  - IMPORTANT: Include the customer org number if provided.
+- create_timesheet: fields: employeeFirstName, employeeLastName, employeeEmail, hours, activityName, projectName, customerName, organizationNumber, hourlyRate, date (YYYY-MM-DD)
+  - Use for logging/registering hours on a project activity.
+  - Keywords: "log hours", "register hours", "registre horas", "enregistrez heures", "erfassen stunden", "registrer timer", "logg timer".
+- project_fixed_price: fields: projectName, customerName, organizationNumber, projectManagerFirstName, projectManagerLastName, projectManagerEmail, fixedPrice, invoicePercentage
+  - Use when setting a fixed price on a project and invoicing a percentage of it.
+  - Keywords: "set a fixed price", "sett fastpris", "precio fijo", "prix fixe", "preço fixo", "festpris".
+  - IMPORTANT: Extract the invoice percentage (e.g. "invoice 75%" → invoicePercentage: 75).
+- receipt_expense: fields: expenseName, departmentName, accountNumber
+  - Use when booking an expense from an attached receipt (image/PDF) to a department.
+  - Keywords: "from this receipt", "denne kvitteringen", "ce reçu", "this receipt", "diesen Beleg", "este recibo".
+  - The handler will read the receipt attachment and determine amounts/VAT.
 - unknown: For tasks that don't clearly match one of the above types. This includes but is not limited to:
-  bank reconciliation, asset management, timesheet entries, company settings, contacts, divisions, correcting/reversing entries,
-  activating modules, payment reversals, or any other complex Tripletex operation.
+  bank reconciliation, asset management, company settings, contacts, divisions, correcting/reversing entries,
+  activating modules, year-end closing, monthly closing, FX payments, ledger audits, or other complex operations.
   - Do NOT use "unknown" when a dedicated handler exists. Check all task types above first.
 
 Rules:
@@ -107,7 +128,7 @@ Rules:
 - Extract ALL field values mentioned. Use English field names.
 - If the prompt involves a chain of operations (e.g. "create a customer and send them an invoice"), return multiple tasks in the correct execution order.
 - IMPORTANT: Reuse references between tasks. If you create a customer "Acme Ltd" and then create an invoice for them, use the same customerName "Acme Ltd" in both tasks.
-- CRITICAL: Do NOT force tasks into a wrong type. If the prompt asks to create a "custom accounting dimension" or "regnskapsdimensjon", do NOT map it to create_department. Use "unknown" instead. The "unknown" handler is a full agentic system that can execute ANY Tripletex API operation.
+- CRITICAL: Do NOT force tasks into a wrong type. If the prompt asks to create a "custom accounting dimension" or "regnskapsdimensjon" or "rekneskapsdimensjon", use create_dimension (NOT create_department, NOT unknown). The create_dimension handler handles dimension creation + optional linked voucher in a single task.
 - For "unknown" tasks: extract ALL information from the prompt into the entities array — names, values, numbers, dates, amounts, descriptions, account numbers, dimension names, etc. Put everything you can extract in the entity fields using descriptive field names.
 
 Examples of correct parsing:
@@ -160,10 +181,38 @@ NOTE: The handler finds/creates the employee and uses voucher postings on salary
 Example 11 - Payroll with fallback instruction (STILL use create_payroll, not unknown):
 Prompt: "Kjør lønn for Erik Nilsen (erik.nilsen@example.org). Grunnlønn 53350 kr. Bonus 11050 kr. Dersom lønns-API-et ikke fungerer, bruk manuelle bilag."
 → tasks: [{ taskType: "create_payroll", entities: [{ employeeFirstName: "Erik", employeeLastName: "Nilsen", employeeEmail: "erik.nilsen@example.org", baseSalary: 53350, bonus: 11050 }] }]
-WRONG: [{ taskType: "create_employee" }, { taskType: "unknown" }] — create_payroll handles everything!`;
+WRONG: [{ taskType: "create_employee" }, { taskType: "unknown" }] — create_payroll handles everything!
+
+Example 12 - Supplier invoice in English (use create_supplier + create_supplier_invoice, NOT unknown):
+Prompt: "We have received invoice INV-2026-3749 from the supplier Ridgepoint Ltd (org no. 902484981) for 65850 NOK including VAT. The amount relates to office services (account 6590). Register the supplier invoice with the correct input VAT (25%)."
+→ tasks: [{ taskType: "create_supplier", entities: [{ name: "Ridgepoint Ltd", organizationNumber: "902484981" }] }, { taskType: "create_supplier_invoice", entities: [{ supplierName: "Ridgepoint Ltd", invoiceNumber: "INV-2026-3749", amount: 65850, amountIncludesVat: true, accountNumber: 6590, vatRate: 25, description: "office services" }] }]
+WRONG: [{ taskType: "unknown", ... }] — create_supplier_invoice is the dedicated handler for this!
+
+Example 13 - Nynorsk custom dimension (use create_dimension, NOT unknown or create_department):
+Prompt: "Opprett ein fri rekneskapsdimensjon \"Prosjekttype\" med verdiane \"Utvikling\" og \"Internt\". Bokfør deretter eit bilag på konto 7000 for 39700 kr, knytt til dimensjonsverdien \"Internt\"."
+→ tasks: [{ taskType: "create_dimension", entities: [{ dimensionName: "Prosjekttype", dimensionValues: ["Utvikling", "Internt"], accountNumber: 7000, amount: 39700, linkedDimensionValue: "Internt" }] }]
+WRONG: [{ taskType: "unknown", ... }] — create_dimension is the dedicated handler!
+WRONG: [{ taskType: "create_department" }, { taskType: "create_voucher" }] — dimensions are NOT departments!
+
+Example 14 - Payroll in English (use create_payroll, NOT unknown):
+Prompt: "Run payroll for Emily Lewis (emily.lewis@example.org) for this month. The base salary is 53400 NOK. Add a one-time bonus of 16900 NOK on top of the base salary."
+→ tasks: [{ taskType: "create_payroll", entities: [{ employeeFirstName: "Emily", employeeLastName: "Lewis", employeeEmail: "emily.lewis@example.org", baseSalary: 53400, bonus: 16900 }] }]
+WRONG: [{ taskType: "unknown", ... }] — create_payroll handles payroll!
+
+Example 15 - Reverse payment (bank returned the payment):
+Prompt: "Le paiement de Rivière SARL (nº org. 937044488) pour la facture \"Design web\" (33050 NOK HT) a été retourné par la banque. Annulez le paiement."
+→ tasks: [{ taskType: "create_customer", entities: [{ name: "Rivière SARL", organizationNumber: "937044488" }] }, { taskType: "reverse_payment", entities: [{ customerName: "Rivière SARL", organizationNumber: "937044488", amount: 33050, description: "Design web" }] }]
+
+Example 16 - Project fixed price with invoice percentage:
+Prompt: "Set a fixed price of 362300 NOK on the project \\"Cloud Migration\\" for Cascata Ltd (org no. 829637286). The project manager is Beatriz Rodrigues (beatriz@example.org). Invoice 75% of the fixed price."
+→ tasks: [{ taskType: "create_customer", entities: [{ name: "Cascata Ltd", organizationNumber: "829637286" }] }, { taskType: "project_fixed_price", entities: [{ projectName: "Cloud Migration", customerName: "Cascata Ltd", fixedPrice: 362300, invoicePercentage: 75, projectManagerFirstName: "Beatriz", projectManagerLastName: "Rodrigues", projectManagerEmail: "beatriz@example.org" }] }]
+
+Example 17 - Log hours on a project (timesheet):
+Prompt: "Register 7.5 hours for Maria Silva on the project \\"ERP Implementation\\", activity \\"Development\\", on 2026-03-15."
+→ tasks: [{ taskType: "create_timesheet", entities: [{ employeeFirstName: "Maria", employeeLastName: "Silva", hours: 7.5, projectName: "ERP Implementation", activityName: "Development", date: "2026-03-15" }] }]`;
 
 const SYSTEM_PROMPT_MINIMAL = `You parse Tripletex accounting prompts into JSON: tasks array (each with taskType and entities), and prompt language.
-Known task types: create_employee, update_employee, create_customer, update_customer, create_product, create_department, create_invoice, send_invoice, create_payment, create_credit_note, create_order, create_travel_expense, delete_travel_expense, create_project, create_voucher, create_supplier, create_payroll, create_supplier_invoice, create_dimension, unknown.
+Known task types: create_employee, update_employee, create_customer, update_customer, create_product, create_department, create_invoice, send_invoice, create_payment, create_credit_note, create_order, create_travel_expense, delete_travel_expense, create_project, create_voucher, create_supplier, create_payroll, create_supplier_invoice, create_dimension, reverse_payment, create_timesheet, project_fixed_price, receipt_expense, unknown.
 Return one entity per distinct object (e.g. each department separately). For multi-step operations, return multiple tasks in dependency order.
 Use create_payroll for salary/payroll tasks, create_supplier_invoice for incoming/supplier invoices, create_dimension for custom accounting dimensions.
 Use "unknown" only for operations not in the list above (bank reconciliation, assets, timesheet entries, payment reversals, etc.). Do NOT force into a wrong type. For unknown, extract all data into entities.`;
