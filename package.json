@@ -23,6 +23,7 @@
     "migrate": "tsx src/scripts/migrate-jsonl-to-sqlite.ts",
     "build-api-index": "tsx src/scripts/build-api-index.ts",
     "import-tasks": "tsx src/scripts/import-tasks.ts",
+    "task-types": "tsx src/scripts/task-type-info.ts",
     "probe": "tsx src/scripts/api-probe.ts",
     "ralph": "bash scripts/ralph-overnight.sh"
   },

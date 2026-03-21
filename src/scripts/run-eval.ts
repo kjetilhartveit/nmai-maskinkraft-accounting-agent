@@ -5,6 +5,7 @@ import { config } from "../lib/config.js";
 import { testCases } from "../eval/test-cases.js";
 import { runEval, summarize } from "../eval/runner.js";
 import { printEvalTable, findBaselineImprovements, printBaselineImprovements } from "../eval/reporter.js";
+import { pickOnePerTaskType, getTopFailingTaskTypes } from "../eval/task-type-analysis.js";
 import type { EvalConfig } from "../eval/types.js";
 
 const TEST_CASES_FILE = join(import.meta.dirname, "../eval/test-cases.ts");
@@ -17,6 +18,9 @@ function parseArgs(argv: string[]): {
   iterations?: number;
   filter?: string;
   tier?: number[];
+  taskType?: string;
+  onePerType?: boolean;
+  worst?: number;
   updateBaselines?: boolean;
 } {
   const out: ReturnType<typeof parseArgs> = {};
@@ -36,6 +40,12 @@ function parseArgs(argv: string[]): {
       out.filter = argv[++i];
     } else if (a === "--tier" && argv[i + 1]) {
       out.tier = argv[++i].split(",").map(Number);
+    } else if (a === "--task-type" && argv[i + 1]) {
+      out.taskType = argv[++i];
+    } else if (a === "--one-per-type") {
+      out.onePerType = true;
+    } else if (a === "--worst") {
+      out.worst = argv[i + 1] && !argv[i + 1].startsWith("--") ? parseInt(argv[++i], 10) : 5;
     } else if (a === "--update-baselines") {
       out.updateBaselines = true;
     }
@@ -79,6 +89,13 @@ async function main() {
   if (args.tier) {
     cases = cases.filter((tc) => args.tier!.includes(tc.tier));
   }
+  if (args.taskType) {
+    cases = cases.filter(
+      (tc) =>
+        tc.taskType === args.taskType ||
+        tc.taskTypeAlternatives?.includes(args.taskType! as any),
+    );
+  }
   if (args.filter) {
     cases = cases.filter(
       (tc) =>
@@ -87,12 +104,38 @@ async function main() {
         tc.prompt.toLowerCase().includes(args.filter!.toLowerCase()),
     );
   }
+  if (args.worst) {
+    const topFailing = getTopFailingTaskTypes(args.worst);
+    const failingTypes = new Set(topFailing.map((t) => t.taskType.split(" > ")[0]));
+    cases = cases.filter(
+      (tc) => failingTypes.has(tc.taskType) || tc.taskTypeAlternatives?.some((a) => failingTypes.has(a)),
+    );
+    console.log(`Top ${args.worst} failing task types from solve history:`);
+    for (const t of topFailing) {
+      const bar = t.successRate >= 80 ? "\x1b[32m" : t.successRate >= 50 ? "\x1b[33m" : "\x1b[31m";
+      console.log(`  ${bar}${t.successRate.toString().padStart(3)}%\x1b[0m  ${t.taskType}  (${t.passed}/${t.total})${t.lastError ? `  └─ ${t.lastError.slice(0, 80)}` : ""}`);
+    }
+    console.log("");
+  }
+  if (args.onePerType) {
+    cases = pickOnePerTaskType(cases);
+  }
+
+  if (cases.length === 0) {
+    console.error("No test cases match the given filters.");
+    process.exit(1);
+  }
 
   const iterations = args.iterations ?? 1;
   const serverUrl = args.serverUrl ?? process.env.SERVER_URL ?? "http://localhost:3000";
 
-  const tierLabel = args.tier ? ` (tier ${args.tier.join(",")})` : "";
-  console.log(`Evaluating ${cases.length} case(s) × ${iterations} iteration(s)${tierLabel} (server: ${serverUrl})`);
+  const labels: string[] = [];
+  if (args.tier) labels.push(`tier ${args.tier.join(",")}`);
+  if (args.taskType) labels.push(`task-type: ${args.taskType}`);
+  if (args.onePerType) labels.push("one-per-type");
+  if (args.worst) labels.push(`worst ${args.worst}`);
+  const filterLabel = labels.length > 0 ? ` (${labels.join(", ")})` : "";
+  console.log(`Evaluating ${cases.length} case(s) × ${iterations} iteration(s)${filterLabel} (server: ${serverUrl})`);
   console.log(`Model: ${evalConfig.model}${evalConfig.systemPromptVariant ? ` | system prompt variant: ${evalConfig.systemPromptVariant}` : ""}\n`);
 
   const results = await runEval(evalConfig, cases, {
