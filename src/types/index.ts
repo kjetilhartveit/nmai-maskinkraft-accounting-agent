@@ -25,39 +25,54 @@ export interface SolveResponse {
   status: "completed";
 }
 
+/**
+ * Exactly 30 task types — one per competition prompt template.
+ * No "unknown" fallback; every prompt maps to exactly one type.
+ */
 export type TaskType =
-  | "create_employee"
-  | "update_employee"
+  // Tier 1 — Simple CRUD
   | "create_customer"
-  | "update_customer"
-  | "create_product"
+  | "create_employee"
   | "create_department"
+  | "create_supplier"
+  | "create_product"
+  // Tier 2 — Multi-step
+  | "create_project"
   | "create_invoice"
   | "send_invoice"
+  | "create_order"
   | "create_payment"
   | "create_credit_note"
-  | "create_order"
   | "create_travel_expense"
-  | "delete_travel_expense"
-  | "create_project"
-  | "create_voucher"
-  | "create_supplier"
   | "create_payroll"
   | "create_supplier_invoice"
   | "create_dimension"
   | "reverse_payment"
-  | "create_timesheet"
   | "project_fixed_price"
+  | "create_timesheet"
+  // Tier 3 — Complex / file-based
   | "receipt_expense"
   | "employee_onboarding_pdf"
+  | "employee_contract_pdf"
+  | "supplier_invoice_pdf"
   | "bank_reconciliation"
   | "ledger_audit"
+  | "ledger_analysis"
   | "year_end_closing"
   | "monthly_closing"
   | "fx_payment"
   | "project_lifecycle"
-  | "reminder_fee"
-  | "unknown";
+  | "reminder_fee";
+
+export const ALL_TASK_TYPES: TaskType[] = [
+  "create_customer", "create_employee", "create_department", "create_supplier", "create_product",
+  "create_project", "create_invoice", "send_invoice", "create_order", "create_payment",
+  "create_credit_note", "create_travel_expense", "create_payroll", "create_supplier_invoice",
+  "create_dimension", "reverse_payment", "project_fixed_price", "create_timesheet",
+  "receipt_expense", "employee_onboarding_pdf", "employee_contract_pdf", "supplier_invoice_pdf",
+  "bank_reconciliation", "ledger_audit", "ledger_analysis", "year_end_closing", "monthly_closing",
+  "fx_payment", "project_lifecycle", "reminder_fee",
+];
 
 export interface ParsedTask {
   taskType: TaskType;
