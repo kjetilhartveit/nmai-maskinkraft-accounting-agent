@@ -7,6 +7,7 @@ import { executeTaskSequence } from "../handlers/index.js";
 import { resetCaches } from "../lib/tripletex-helpers.js";
 import { resetPaymentCache } from "../handlers/create-payment.js";
 import { resetTravelExpenseCache } from "../handlers/create-travel-expense.js";
+import { resetVoucherCache } from "../handlers/create-voucher.js";
 import { logSolveRequest, logRawRequest, type SolveLogEntry } from "../lib/solve-logger.js";
 import { config } from "../lib/config.js";
 
@@ -55,6 +56,7 @@ solveRouter.post("/solve", async (c) => {
   resetCaches();
   resetPaymentCache();
   resetTravelExpenseCache();
+  resetVoucherCache();
 
   try {
     const rawBody = await c.req.json();

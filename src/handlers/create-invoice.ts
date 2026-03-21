@@ -6,7 +6,6 @@ import {
   daysFromNow,
   findCustomerByName,
   findOrCreateProduct,
-  findVatTypeIdByRate,
   ensureBankAccountConfigured,
 } from "../lib/tripletex-helpers.js";
 

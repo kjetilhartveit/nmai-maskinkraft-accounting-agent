@@ -316,12 +316,11 @@ export async function findOrCreateProduct(
     return existing;
   }
 
-  const [departmentId, unitId] = await Promise.all([
+  const [departmentId, unitId, defaultVatTypeId] = await Promise.all([
     getDefaultDepartmentId(client),
     getDefaultProductUnitId(client),
+    vatTypeId ? Promise.resolve(vatTypeId) : getDefaultProductVatTypeId(client),
   ]);
-
-  const defaultVatTypeId = vatTypeId ?? await getDefaultProductVatTypeId(client);
 
   const body: Record<string, unknown> = {
     name,

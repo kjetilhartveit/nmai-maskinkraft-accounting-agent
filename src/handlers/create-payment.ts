@@ -137,18 +137,17 @@ export async function handleCreatePayment(
       entity.productName ?? entity.description ?? entity.service ?? "Service",
     );
 
-    // Create order + invoice
     const order = await client.post<{ id: number }>("/order", {
       customer: { id: customerId },
       orderDate: today(),
       deliveryDate: today(),
-      orderLines: [
-        {
-          description,
-          count: 1,
-          unitPriceExcludingVatCurrency: amount,
-        },
-      ],
+    });
+
+    await client.post("/order/orderline", {
+      order: { id: order.value.id },
+      description,
+      count: 1,
+      unitPriceExcludingVatCurrency: amount,
     });
 
     const inv = await client.post<Invoice>("/invoice", {

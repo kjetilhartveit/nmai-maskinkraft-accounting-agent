@@ -90,16 +90,15 @@ async function ensureExtendedAccess(
       dateOfBirth: emp.value.dateOfBirth ?? "1990-01-01",
       userType: "EXTENDED",
     });
-    const verify = await client.get<{ userType: string | null }>(`/employee/${employeeId}`);
-    if (verify.value.userType !== "EXTENDED") {
-      console.warn(`[Handler] Employee ${employeeId} userType is write-once; cannot upgrade to EXTENDED`);
-      return false;
-    }
     console.log(`[Handler] Upgraded employee ${employeeId} to EXTENDED access`);
     return true;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.warn(`[Handler] Failed to upgrade employee to EXTENDED: ${msg}`);
+    if (msg.includes("422")) {
+      console.warn(`[Handler] Employee ${employeeId} userType is write-once; cannot upgrade to EXTENDED`);
+    } else {
+      console.warn(`[Handler] Failed to upgrade employee to EXTENDED: ${msg}`);
+    }
     return false;
   }
 }
