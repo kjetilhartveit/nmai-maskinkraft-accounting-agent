@@ -7,11 +7,12 @@
  *   pnpm analyze -- --type <type>        Detailed view of a specific task type
  *   pnpm analyze -- --worst              Priority list of worst-performing types
  *   pnpm analyze -- --classify           Re-classify all solves using LLM
+ *   pnpm analyze -- --classify-non-eval  Re-classify only non-eval solves using LLM
  *   pnpm analyze -- --classify-missing   Only classify solves without a type (LLM)
  */
 import "dotenv/config";
 import db from "../lib/db.js";
-import { classifyPromptsBatch, detectLanguage } from "../lib/task-classifier.js";
+import { classifyPromptsBatch, classifyPromptRegex, detectLanguage } from "../lib/task-classifier.js";
 
 interface SolveRow {
   id: string;
@@ -38,7 +39,7 @@ async function classifyMissingSolves(): Promise<number> {
   if (solves.length === 0) return 0;
 
   console.log(`[Classifier] Classifying ${solves.length} unclassified solves via LLM...`);
-  const results = await classifyPromptsBatch(solves, { concurrency: 10, verbose: true });
+  const { results } = await classifyPromptsBatch(solves, { concurrency: 10, verbose: true });
 
   const update = db.prepare("UPDATE solves SET classified_type = ? WHERE id = ?");
   const tx = db.transaction(() => {
@@ -56,7 +57,7 @@ async function reclassifyAllSolves(): Promise<number> {
     .all() as { id: string; prompt: string }[];
 
   console.log(`[Classifier] Re-classifying all ${solves.length} solves via LLM...`);
-  const results = await classifyPromptsBatch(solves, { concurrency: 10, verbose: true });
+  const { results } = await classifyPromptsBatch(solves, { concurrency: 10, verbose: true });
 
   const update = db.prepare("UPDATE solves SET classified_type = ? WHERE id = ?");
   const tx = db.transaction(() => {
@@ -66,6 +67,58 @@ async function reclassifyAllSolves(): Promise<number> {
   });
   tx();
   return results.size;
+}
+
+async function reclassifyNonEvalSolves(): Promise<number> {
+  const solves = db
+    .prepare("SELECT id, prompt FROM solves WHERE source != 'eval'")
+    .all() as { id: string; prompt: string }[];
+
+  if (solves.length === 0) {
+    console.log("[Classifier] No non-eval solves to classify.");
+    return 0;
+  }
+
+  console.log(`[Classifier] Re-classifying ${solves.length} non-eval solves via LLM (no regex fallback)...`);
+  const { results, stats } = await classifyPromptsBatch(solves, { concurrency: 10, verbose: true, llmOnly: true });
+
+  const update = db.prepare("UPDATE solves SET classified_type = ? WHERE id = ?");
+  const tx = db.transaction(() => {
+    for (const [id, type] of results) {
+      update.run(type, id);
+    }
+  });
+  tx();
+
+  if (stats.skipped > 0) {
+    console.log(`[Classifier] ${stats.skipped} prompts skipped (LLM failed) — their classified_type unchanged.`);
+  }
+
+  return results.size;
+}
+
+function reclassifyWithRegex(filter: "all" | "non-eval"): number {
+  const query = filter === "non-eval"
+    ? "SELECT id, prompt FROM solves WHERE source != 'eval'"
+    : "SELECT id, prompt FROM solves";
+  const solves = db.prepare(query).all() as { id: string; prompt: string }[];
+
+  if (solves.length === 0) {
+    console.log("[Classifier] No solves to classify.");
+    return 0;
+  }
+
+  console.log(`[Classifier] Re-classifying ${solves.length} solves via regex...`);
+  const update = db.prepare("UPDATE solves SET classified_type = ? WHERE id = ?");
+  const tx = db.transaction(() => {
+    for (const solve of solves) {
+      const type = classifyPromptRegex(solve.prompt);
+      update.run(type, solve.id);
+    }
+  });
+  tx();
+  console.log(`[Classifier] Done — ${solves.length} solves classified via regex.`);
+  return solves.length;
 }
 
 // ── Data loading ────────────────────────────────────────────────────
@@ -347,14 +400,22 @@ Usage:
   pnpm analyze -- --type <type>             Detailed view of a specific task type
   pnpm analyze -- --worst                   Priority list of worst-performing types
   pnpm analyze -- --classify                Re-classify ALL solves using LLM
+  pnpm analyze -- --classify-non-eval       Re-classify only non-eval solves using LLM
   pnpm analyze -- --classify-missing        Classify only unclassified solves using LLM
 `);
     return;
   }
 
-  if (args.includes("--classify")) {
+  if (args.includes("--classify-regex")) {
+    const scope = args.includes("--non-eval") ? "non-eval" as const : "all" as const;
+    const count = reclassifyWithRegex(scope);
+    console.log(`Re-classified ${count} solves via regex.\n`);
+  } else if (args.includes("--classify")) {
     const count = await reclassifyAllSolves();
     console.log(`Re-classified ${count} solves via LLM.\n`);
+  } else if (args.includes("--classify-non-eval")) {
+    const count = await reclassifyNonEvalSolves();
+    console.log(`Re-classified ${count} non-eval solves via LLM.\n`);
   } else if (args.includes("--classify-missing")) {
     const count = await classifyMissingSolves();
     console.log(`Classified ${count} new solves via LLM.\n`);
