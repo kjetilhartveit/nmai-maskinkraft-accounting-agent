@@ -206,6 +206,53 @@ const KNOWN_BETA_PATTERNS = [
   "/incomingInvoice", "/documentArchive", "/company/salesmodules",
 ];
 
+// Blocked endpoints with directive fallback instructions
+// Messages are phrased as commands so the LLM immediately tries the alternative
+const BLOCKED_ENDPOINTS: Record<string, string> = {
+  "/incomingInvoice": "REDIRECT: This endpoint returns 403. DO THIS NOW: Call POST /ledger/voucher with 3 postings: (1) debit expense account, (2) debit 2710 (input VAT), (3) credit 2400 with supplier:{id} on that posting. Follow the SUPPLIER INVOICE recipe in system prompt.",
+  "/salary/transaction": "REDIRECT: This endpoint returns 403. DO THIS NOW: Call POST /ledger/voucher with 3 postings: (1) debit 5000 for salary, (2) debit 2780 for employer tax, (3) credit 1920 for bank. Follow the PAYROLL recipe in system prompt.",
+  "/salary/payslip": "REDIRECT: This endpoint returns 403. DO THIS NOW: Use the voucher-based PAYROLL recipe from the system prompt instead.",
+  "/customer/list": "REDIRECT: Batch endpoint returns 403. DO THIS NOW: Call POST /customer once per customer instead of using /list.",
+  "/invoice/list": "REDIRECT: Batch endpoint returns 403. DO THIS NOW: Call POST /invoice once per invoice instead of using /list.",
+  "/order/list": "REDIRECT: Batch endpoint returns 403. DO THIS NOW: Call POST /order once per order instead of using /list.",
+  "/project/list": "REDIRECT: Batch endpoint returns 403. DO THIS NOW: Call POST /project once per project instead of using /list.",
+  "/documentArchive": "NOT AVAILABLE: Document archive is not enabled in sandbox. Skip this step - the task can be completed without it.",
+  "/company/salesmodules": "NOT NEEDED: Modules are pre-enabled in sandbox. Skip this step and proceed with the actual task.",
+};
+
+// Normalize common LLM tool name mistakes
+function normalizeEndpoint(endpoint: string): string {
+  // Common typos and variations
+  const aliases: Record<string, string> = {
+    "/employees": "/employee",
+    "/customers": "/customer",
+    "/suppliers": "/supplier",
+    "/departments": "/department",
+    "/products": "/product",
+    "/invoices": "/invoice",
+    "/orders": "/order",
+    "/projects": "/project",
+    "/vouchers": "/ledger/voucher",
+    "/accounts": "/ledger/account",
+    "/account": "/ledger/account",
+  };
+  for (const [alias, correct] of Object.entries(aliases)) {
+    if (endpoint === alias || endpoint.startsWith(alias + "/") || endpoint.startsWith(alias + "?")) {
+      return endpoint.replace(alias, correct);
+    }
+  }
+  return endpoint;
+}
+
+function checkBlocked(endpoint: string): string | null {
+  for (const [pattern, msg] of Object.entries(BLOCKED_ENDPOINTS)) {
+    if (endpoint.includes(pattern)) {
+      return msg;
+    }
+  }
+  return null;
+}
+
 /**
  * Fix voucher postings that use row 0 (system-reserved, always causes 422).
  * Re-numbers rows starting at 1. Also strips extra fields from account objects
@@ -261,6 +308,7 @@ function enrich403Error(endpoint: string, errorMsg: string): string {
 
 export function resetGenericHandlerCache(): void {
   cachedDefaultDeptId = null;
+  // Note: sandbox data is cleared via clearSandboxData() in handlers/index.ts
 }
 
 export async function handleGenericTask(
@@ -293,9 +341,14 @@ export async function handleGenericTask(
         required: ["endpoint"],
       },
       execute: async (args) => {
-        const endpoint = args.endpoint as string;
+        let endpoint = normalizeEndpoint(args.endpoint as string);
         const params = args.params as Record<string, string> | undefined;
         console.log(`[GenericHandler] GET ${endpoint} ${params ? JSON.stringify(params) : ""}`);
+        const blocked = checkBlocked(endpoint);
+        if (blocked) {
+          console.warn(`[GenericHandler] REDIRECT: ${endpoint}`);
+          return { redirect: true, action: blocked };
+        }
         try {
           if (isIdEndpoint(endpoint)) {
             const result = await client.get<unknown>(endpoint, params);
@@ -333,8 +386,13 @@ export async function handleGenericTask(
         required: ["endpoint", "body"],
       },
       execute: async (args) => {
-        const endpoint = args.endpoint as string;
+        let endpoint = normalizeEndpoint(args.endpoint as string);
         const body = args.body as Record<string, unknown>;
+        const blocked = checkBlocked(endpoint);
+        if (blocked) {
+          console.warn(`[GenericHandler] REDIRECT: POST ${endpoint}`);
+          return { redirect: true, action: blocked };
+        }
         if (endpoint.includes("/ledger/voucher") && !endpoint.includes("/list")) {
           fixVoucherPostings(body);
         }
@@ -435,8 +493,13 @@ export async function handleGenericTask(
         required: ["endpoint", "body"],
       },
       execute: async (args) => {
-        const endpoint = args.endpoint as string;
+        let endpoint = normalizeEndpoint(args.endpoint as string);
         const body = args.body as Record<string, unknown>[];
+        const blocked = checkBlocked(endpoint);
+        if (blocked) {
+          console.warn(`[GenericHandler] REDIRECT: POST-LIST ${endpoint}`);
+          return { redirect: true, action: blocked };
+        }
         console.log(`[GenericHandler] POST-LIST ${endpoint} (${body.length} items)`);
         try {
           const result = await client.postList<unknown>(endpoint, body);
