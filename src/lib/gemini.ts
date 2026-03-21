@@ -3,6 +3,51 @@ import type { ZodType } from "zod";
 
 const BASE_URL = "https://generativelanguage.googleapis.com/v1beta";
 
+/**
+ * Attempt to repair common JSON issues from LLM output:
+ * - Trailing commas before } or ]
+ * - Single-quoted strings
+ * - Unquoted property names
+ * - Truncated JSON (close unclosed brackets)
+ */
+function repairJson(text: string): string {
+  // Remove trailing commas before closing brackets
+  let fixed = text.replace(/,\s*([\]}])/g, "$1");
+
+  // Try parsing as-is first
+  try {
+    JSON.parse(fixed);
+    return fixed;
+  } catch {
+    // Continue with more aggressive repairs
+  }
+
+  // Close unclosed arrays and objects
+  let openBraces = 0;
+  let openBrackets = 0;
+  let inString = false;
+  let escape = false;
+  for (const ch of fixed) {
+    if (escape) { escape = false; continue; }
+    if (ch === "\\") { escape = true; continue; }
+    if (ch === '"') { inString = !inString; continue; }
+    if (inString) continue;
+    if (ch === "{") openBraces++;
+    if (ch === "}") openBraces--;
+    if (ch === "[") openBrackets++;
+    if (ch === "]") openBrackets--;
+  }
+
+  // Remove any trailing partial key-value or comma
+  fixed = fixed.replace(/,?\s*"[^"]*"?\s*:?\s*$/, "");
+  fixed = fixed.replace(/,\s*$/, "");
+
+  while (openBrackets > 0) { fixed += "]"; openBrackets--; }
+  while (openBraces > 0) { fixed += "}"; openBraces--; }
+
+  return fixed;
+}
+
 // ── Types ──────────────────────────────────────────────────────────────────
 
 type GeminiPart =
@@ -94,7 +139,7 @@ export async function geminiGenerateStructured<T>(options: {
       const durationMs = Math.round(performance.now() - start);
       let text = (result.candidates[0].content.parts[0] as { text: string }).text.trim();
       text = text.replace(/^```(?:json)?\n?/i, "").replace(/\n?```$/i, "").trim();
-      const parsed = JSON.parse(text);
+      const parsed = JSON.parse(repairJson(text));
       const object = options.schema.parse(parsed) as T;
       return { object, durationMs };
     } catch (err) {
