@@ -1,17 +1,24 @@
 import type { TripletexClient } from "../lib/tripletex-client.js";
 import type { ParsedTask } from "../types/index.js";
 import type { SequenceContext } from "../lib/sequence-context.js";
-import { findEmployeeByName, today } from "../lib/tripletex-helpers.js";
+import { findEmployeeByName, findEmployeeByEmail, today } from "../lib/tripletex-helpers.js";
 
 interface PaymentType {
   id: number;
   name: string;
 }
 
+interface CostCategory {
+  id: number;
+  description: string;
+}
+
 let cachedPaymentTypeId: number | null = null;
+let cachedCostCategories: CostCategory[] | null = null;
 
 export function resetTravelExpenseCache(): void {
   cachedPaymentTypeId = null;
+  cachedCostCategories = null;
 }
 
 async function getDefaultPaymentTypeId(client: TripletexClient): Promise<number> {
@@ -23,7 +30,6 @@ async function getDefaultPaymentTypeId(client: TripletexClient): Promise<number>
   });
 
   if (result.values.length > 0) {
-    // Prefer "company card" or similar; otherwise take first
     const companyCard = result.values.find(
       (p) =>
         p.name?.toLowerCase().includes("company") ||
@@ -38,6 +44,46 @@ async function getDefaultPaymentTypeId(client: TripletexClient): Promise<number>
   return cachedPaymentTypeId;
 }
 
+async function getCostCategories(client: TripletexClient): Promise<CostCategory[]> {
+  if (cachedCostCategories !== null) return cachedCostCategories;
+
+  try {
+    const result = await client.list<CostCategory>("/travelExpense/costCategory", {
+      from: "0",
+      count: "100",
+    });
+    cachedCostCategories = result.values;
+    return cachedCostCategories;
+  } catch {
+    cachedCostCategories = [];
+    return cachedCostCategories;
+  }
+}
+
+function matchCostCategory(categories: CostCategory[], description: string): CostCategory | undefined {
+  const desc = description.toLowerCase();
+  const keywords: [string[], string][] = [
+    [["diett", "per diem", "diem", "dietas", "indemnité"], "diett"],
+    [["fly", "flight", "avion", "vuelo", "flug"], "fly"],
+    [["taxi"], "taxi"],
+    [["hotel", "hotell", "alojamiento", "hébergement", "unterkunft"], "hotel"],
+    [["parkering", "parking", "estacionamiento"], "parkering"],
+    [["tog", "train", "tren", "zug"], "tog"],
+    [["buss", "bus", "autobus", "autobús"], "buss"],
+  ];
+
+  for (const [terms, _label] of keywords) {
+    if (terms.some((t) => desc.includes(t))) {
+      const match = categories.find((c) =>
+        terms.some((t) => c.description?.toLowerCase().includes(t)),
+      );
+      if (match) return match;
+    }
+  }
+
+  return undefined;
+}
+
 export async function handleCreateTravelExpense(
   client: TripletexClient,
   task: ParsedTask,
@@ -47,9 +93,21 @@ export async function handleCreateTravelExpense(
 
   const firstName = String(entity.employeeFirstName ?? entity.firstName ?? "");
   const lastName = String(entity.employeeLastName ?? entity.lastName ?? "");
+  const email = String(entity.email ?? entity.employeeEmail ?? "");
 
   let employeeId: number | null = null;
-  if (firstName && lastName) {
+
+  if (email) {
+    employeeId = ctx.getEmployeeId(email) ?? null;
+    if (!employeeId) {
+      const emp = await findEmployeeByEmail(client, email);
+      if (emp) {
+        employeeId = emp.id;
+        ctx.registerEmployee(email, emp.id);
+      }
+    }
+  }
+  if (!employeeId && firstName && lastName) {
     employeeId = ctx.getEmployeeId(`${firstName} ${lastName}`) ?? null;
     if (!employeeId) {
       const employee = await findEmployeeByName(client, firstName, lastName);
@@ -118,7 +176,10 @@ export async function handleCreateTravelExpense(
   }
 
   if (costItems.length > 0) {
-    const paymentTypeId = await getDefaultPaymentTypeId(client);
+    const [paymentTypeId, costCategories] = await Promise.all([
+      getDefaultPaymentTypeId(client),
+      getCostCategories(client),
+    ]);
     const expenseDate = String(entity.date ?? today());
 
     for (const item of costItems) {
@@ -130,12 +191,29 @@ export async function handleCreateTravelExpense(
       };
       if (item.description) costBody.comments = item.description;
 
+      const category = matchCostCategory(costCategories, item.description);
+      if (category) {
+        costBody.costCategory = { id: category.id };
+        console.log(`[Handler] Matched cost category: "${category.description}" for "${item.description}"`);
+      }
+
       try {
         await client.post("/travelExpense/cost", costBody);
         console.log(`[Handler] Added cost to travel expense: ${item.amount} (${item.description || "no description"})`);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        console.warn(`[Handler] Failed to add cost line: ${msg}`);
+        // Retry without cost category if it causes issues
+        if (msg.includes("422") && costBody.costCategory) {
+          delete costBody.costCategory;
+          try {
+            await client.post("/travelExpense/cost", costBody);
+            console.log(`[Handler] Added cost (without category): ${item.amount}`);
+          } catch (retryErr) {
+            console.warn(`[Handler] Failed to add cost line on retry: ${retryErr}`);
+          }
+        } else {
+          console.warn(`[Handler] Failed to add cost line: ${msg}`);
+        }
       }
     }
   }

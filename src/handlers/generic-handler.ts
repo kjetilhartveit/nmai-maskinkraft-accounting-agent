@@ -161,6 +161,67 @@ PAYMENT REVERSAL (bank return):
   4. To reverse: POST /ledger/voucher debiting 1500 (accounts receivable) and crediting 1920 (bank).
   Total: 5-10 API calls.
 
+YEAR-END CLOSING / DEPRECIATION (annual closing):
+  The prompt will ask to: calculate depreciation for assets, reverse prepaid expenses, calculate tax provision.
+  For EACH depreciation:
+    1. Look up the asset account (e.g. 1230, 1210, 1250) and the depreciation expense account (e.g. 6010) and accumulated depreciation account (e.g. 1209).
+    2. Calculate: annualDepreciation = assetValue / usefulLifeYears (linear method).
+    3. POST /ledger/voucher with 2 postings: debit expense account (6010), credit accumulated depreciation (1209).
+    IMPORTANT: Each asset depreciation should be a SEPARATE voucher.
+  For prepaid expense reversal:
+    1. Look up prepaid account (e.g. 1700) and an appropriate expense account (e.g. 6300 or 7700).
+    2. POST /ledger/voucher: debit expense, credit prepaid account.
+  For tax provision (22% of taxable result):
+    1. Look up tax expense account (8700) and tax payable account (2920).
+    2. Calculate: taxProvision = round(taxableIncome * 0.22).
+       Taxable income = total income - total expenses (including depreciation booked above).
+       If you cannot determine taxable income from the prompt, use the amounts given.
+    3. POST /ledger/voucher: debit 8700, credit 2920.
+  Cache account lookups — many accounts are reused across vouchers.
+  Total: 15-25 API calls.
+
+FOREIGN CURRENCY PAYMENT WITH EXCHANGE RATE DIFFERENCE (DISAGIO/AGIO):
+  The prompt describes an invoice sent in foreign currency (e.g. EUR) at one exchange rate, but the customer pays at a different rate.
+  1. Create customer if needed: POST /customer.
+  2. Create invoice in NOK (use the original exchange rate × amount): order → invoice flow.
+     Example: 19074 EUR × 11.69 NOK/EUR = 222,975 NOK (this is the invoice amount in NOK).
+  3. Register payment for the amount actually received: amount × new rate.
+     Example: 19074 EUR × 11.28 NOK/EUR = 215,155 NOK.
+  4. Calculate exchange rate difference: original NOK - received NOK.
+     If difference > 0 → disagio (loss), book to account 8160 (valutakursdifferanse / exchange loss).
+     If difference < 0 → agio (gain), book to account 8060 (valutakursgevinst / exchange gain).
+  5. POST /ledger/voucher to book the difference:
+     If disagio (loss): debit 8160 (exchange loss), credit 1500 (accounts receivable).
+     If agio (gain): debit 1500, credit 8060.
+  IMPORTANT: The payment amount must match what the customer actually paid. The difference is handled via the voucher.
+  Total: 8-15 API calls.
+
+LEDGER ANALYSIS + PROJECT/ACTIVITY CREATION:
+  The prompt asks to analyze expense accounts across periods and create projects.
+  1. GET /ledger/account?from=0&count=1000 — get all accounts to find expense accounts (typically 4000-7999 range).
+  2. For the relevant period(s), use the resultBudget or sumAmount fields, or query:
+     GET /ledger/account?from=0&count=1000&yearFrom=2026&yearTo=2026&periodFrom=1&periodTo=1 for January.
+     GET /ledger/account?from=0&count=1000&yearFrom=2026&yearTo=2026&periodFrom=2&periodTo=2 for February.
+     Compare the sums to find the top 3 accounts with the biggest increase.
+  3. For each of the 3 identified accounts, create an internal project:
+     First, get employee for project manager: GET /employee?from=0&count=1 and GET /department?from=0&count=1.
+     POST /project {name: "<account name>", projectManager: {id}, department: {id}, isInternal: true, startDate: "2026-01-01"}.
+  4. For each project, create an activity:
+     POST /activity {name: "<account name>", number: <unique>, isProjectActivity: true, isGeneral: false}.
+  Total: 10-20 API calls.
+
+BANK RECONCILIATION (from CSV):
+  The prompt asks to match bank statement entries with invoices.
+  1. First, list all outstanding invoices: GET /invoice?invoiceDateFrom=2020-01-01&invoiceDateTo=2026-12-31&from=0&count=100
+  2. The CSV file contains payment entries. For each incoming payment:
+     - Match to a customer invoice by amount or customer name.
+     - Register payment: PUT /invoice/{id}/:payment with paymentDate, paymentTypeId, paidAmount.
+     - For partial payments, use the partial amount (paidAmount < invoice total).
+  3. For outgoing payments (to suppliers), these would be supplier invoice payments.
+     POST /ledger/voucher to book the payment: debit 2400 (accounts payable), credit 1920 (bank).
+  4. First get payment type: GET /invoice/paymentType?from=0&count=1
+  Total: varies widely based on number of entries.
+
 ${TRIPLETEX_API_REFERENCE}`;
 }
 

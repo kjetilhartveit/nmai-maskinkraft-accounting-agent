@@ -157,24 +157,23 @@ export async function handleCreateDimension(
     amountGrossCurrency: amount,
     description: `Kostnad ${dimensionName}`,
   };
+  const creditPosting: Record<string, unknown> = {
+    row: 2,
+    account: { id: bankAccount.id },
+    date: voucherDate,
+    amountGross: -amount,
+    amountGrossCurrency: -amount,
+    description: "Utbetaling",
+  };
   if (linkedValueId) {
     expensePosting[dimensionField] = { id: linkedValueId };
+    creditPosting[dimensionField] = { id: linkedValueId };
   }
 
   const body = {
     date: voucherDate,
     description: `Bilag ${dimensionName}`,
-    postings: [
-      expensePosting,
-      {
-        row: 2,
-        account: { id: bankAccount.id },
-        date: voucherDate,
-        amountGross: -amount,
-        amountGrossCurrency: -amount,
-        description: "Utbetaling",
-      },
-    ],
+    postings: [expensePosting, creditPosting],
   };
 
   const result = await client.post<{ id: number }>("/ledger/voucher", body);

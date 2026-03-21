@@ -288,25 +288,32 @@ export async function handleCreateInvoice(
     const email = entity.email as string | undefined;
     const fallbackEmail = "faktura@example.no";
     const sendEmail = email || fallbackEmail;
-    const qs = new URLSearchParams({
-      sendType: "EMAIL",
-      overrideEmailAddress: sendEmail,
-    });
 
-    try {
-      await client.put(`/invoice/${invoiceId}/:send?${qs.toString()}`, {});
-      console.log(`[Handler] Sent invoice: id=${invoiceId}`);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      console.warn(`[Handler] Failed to send invoice ${invoiceId} via EMAIL: ${msg}`);
-      // Retry with EHF if email-based send fails
+    // Try multiple send approaches since the sandbox may require a specific sendType
+    const sendAttempts: { sendType: string; overrideEmail?: string }[] = [
+      { sendType: "EMAIL", overrideEmail: sendEmail },
+      { sendType: "EMAIL" },
+      { sendType: "EHF" },
+    ];
+
+    let sent = false;
+    for (const attempt of sendAttempts) {
+      const params: Record<string, string> = { sendType: attempt.sendType };
+      if (attempt.overrideEmail) params.overrideEmailAddress = attempt.overrideEmail;
+      const qs = new URLSearchParams(params);
+
       try {
-        const ehfQs = new URLSearchParams({ sendType: "EHF" });
-        await client.put(`/invoice/${invoiceId}/:send?${ehfQs.toString()}`, {});
-        console.log(`[Handler] Sent invoice via EHF: id=${invoiceId}`);
-      } catch {
-        console.warn(`[Handler] EHF send also failed for invoice ${invoiceId}, invoice was created but not sent`);
+        await client.put(`/invoice/${invoiceId}/:send?${qs.toString()}`, {});
+        console.log(`[Handler] Sent invoice: id=${invoiceId} (${attempt.sendType})`);
+        sent = true;
+        break;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.warn(`[Handler] Send attempt (${attempt.sendType}) failed: ${msg}`);
       }
+    }
+    if (!sent) {
+      console.warn(`[Handler] All send attempts failed for invoice ${invoiceId}`);
     }
   }
 }
