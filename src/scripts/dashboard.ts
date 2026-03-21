@@ -4,8 +4,8 @@ import { serve } from "@hono/node-server";
 import { readFileSync, existsSync } from "fs";
 import { join } from "path";
 import db from "../lib/db.js";
-import { DEDICATED_HANDLER_TYPES, HANDLER_FILE_MAP } from "../handlers/index.js";
-import { TASK_TYPE_DEFINITIONS } from "../lib/task-classifier.js";
+import { ALL_TASK_TYPES } from "../types/index.js";
+import { PROMPT_TEMPLATES } from "../lib/task-classifier.js";
 import { testCases } from "../eval/test-cases.js";
 
 const PROMOTED_FILE = join(import.meta.dirname, "../../data/verified/promoted-test-cases.json");
@@ -242,30 +242,27 @@ app.get("/api/task-type-registry", (c) => {
     }
   }
 
-  const registry = TASK_TYPE_DEFINITIONS.map((def) => {
-    const isDedicated = DEDICATED_HANDLER_TYPES.has(def.id);
-    const stats = solveStatsByType[def.id];
+  const registry = ALL_TASK_TYPES.map((taskType) => {
+    const template = PROMPT_TEMPLATES.find((t: { taskType: string }) => t.taskType === taskType);
+    const stats = solveStatsByType[taskType];
     return {
-      taskType: def.id,
-      description: def.description,
-      handlerType: def.id === "unknown" ? "fallback" : isDedicated ? "dedicated" : "generic",
-      handlerFile: HANDLER_FILE_MAP[def.id] ?? null,
-      evalCases: evalCasesByType[def.id] ?? 0,
+      taskType,
+      description: template?.template?.slice(0, 100) ?? "",
+      handlerType: "dedicated" as const,
+      evalCases: evalCasesByType[taskType] ?? 0,
       solves: stats ?? { total: 0, passed: 0, failed: 0, avgMs: 0, avgCalls: 0, avgErrors: 0, bySource: {} },
     };
   });
 
-  registry.sort((a, b) => {
-    if (a.taskType === "unknown") return 1;
-    if (b.taskType === "unknown") return -1;
+  registry.sort((a: { solves: { failed: number; total: number } }, b: { solves: { failed: number; total: number } }) => {
     if (b.solves.failed !== a.solves.failed) return b.solves.failed - a.solves.failed;
     return b.solves.total - a.solves.total;
   });
 
   const totals = {
     types: registry.length,
-    dedicated: registry.filter((r) => r.handlerType === "dedicated").length,
-    generic: registry.filter((r) => r.handlerType === "generic").length,
+    dedicated: registry.length,
+    generic: 0,
     withEvals: registry.filter((r) => r.evalCases > 0).length,
     totalEvalCases: Object.values(evalCasesByType).reduce((s, v) => s + v, 0),
     totalSolves: solveRows.length,

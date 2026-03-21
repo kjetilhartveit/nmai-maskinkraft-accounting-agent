@@ -5,7 +5,8 @@ import { join } from "path";
 import { testCases as existingCases } from "../eval/test-cases.js";
 import db from "../lib/db.js";
 import type { TestCase } from "../eval/types.js";
-import type { TaskType } from "../types/index.js";
+// Uses string types for task mapping since this handles legacy data
+type LegacyTaskType = string;
 
 const EXTERNAL_DB_PATH = "C:/git/nmai-maskinkraft/tripletex/tasks.db";
 const PROMOTED_FILE = join(import.meta.dirname, "../../data/verified/promoted-test-cases.json");
@@ -32,12 +33,10 @@ interface PlanStep {
   args?: Record<string, unknown>;
 }
 
-const TOOL_TO_TASK: Record<string, TaskType> = {
+const TOOL_TO_TASK: Record<string, string> = {
   create_employee: "create_employee",
   create_employment: "create_employee",
-  update_employee: "update_employee",
   create_customer: "create_customer",
-  update_customer: "update_customer",
   create_department: "create_department",
   create_supplier: "create_supplier",
   create_product: "create_product",
@@ -48,18 +47,16 @@ const TOOL_TO_TASK: Record<string, TaskType> = {
   create_project: "create_project",
   create_project_invoice: "create_project",
   set_project_hourly_rate: "create_project",
-  create_voucher: "create_voucher",
-  delete_voucher: "create_voucher",
   create_travel_expense: "create_travel_expense",
   add_travel_cost: "create_travel_expense",
   create_credit_note: "create_credit_note",
   create_invoice_payment: "create_payment",
-  create_incoming_invoice: "unknown",
-  create_accounting_dimension: "unknown",
-  create_accounting_dimension_value: "unknown",
-  create_salary_transaction: "unknown",
-  create_timesheet_entry: "unknown",
-  reverse_voucher: "unknown",
+  create_incoming_invoice: "create_supplier_invoice",
+  create_accounting_dimension: "create_dimension",
+  create_accounting_dimension_value: "create_dimension",
+  create_salary_transaction: "create_payroll",
+  create_timesheet_entry: "create_timesheet",
+  reverse_voucher: "reverse_payment",
 };
 
 // These are "getter" tools that don't indicate the task type
@@ -85,7 +82,7 @@ function detectLanguage(prompt: string): string {
   return "en";
 }
 
-function detectPrimaryAction(prompt: string): TaskType {
+function detectPrimaryAction(prompt: string): LegacyTaskType {
   const lower = prompt.toLowerCase();
 
   // Payment patterns (most specific first)
@@ -162,8 +159,8 @@ function detectPrimaryAction(prompt: string): TaskType {
   return "unknown";
 }
 
-function detectTaskTypesFromPlan(plan: PlanStep[]): TaskType[] {
-  const types: TaskType[] = [];
+function detectTaskTypesFromPlan(plan: PlanStep[]): LegacyTaskType[] {
+  const types: LegacyTaskType[] = [];
   for (const step of plan) {
     if (GETTER_TOOLS.has(step.tool)) continue;
     if (step.tool === "enable_module") continue;
@@ -175,7 +172,7 @@ function detectTaskTypesFromPlan(plan: PlanStep[]): TaskType[] {
   return types;
 }
 
-function extractEntities(prompt: string, primaryType: TaskType): Record<string, unknown>[] {
+function extractEntities(prompt: string, primaryType: LegacyTaskType): Record<string, unknown>[] {
   const entities: Record<string, unknown>[] = [];
 
   const orgMatch = prompt.match(/(?:org\.?\s*(?:n[ºo°r]\.?|nr\.?|no\.?|number|nummer|número))\s*[:\s]?\s*(\d{9})/i);
@@ -303,7 +300,7 @@ function extractEntities(prompt: string, primaryType: TaskType): Record<string, 
   return entities;
 }
 
-function determineTier(primaryType: TaskType, allTypes: TaskType[], prompt: string): 1 | 2 | 3 {
+function determineTier(primaryType: LegacyTaskType, allTypes: LegacyTaskType[], prompt: string): 1 | 2 | 3 {
   if (allTypes.length >= 3) return 3;
 
   if (primaryType === "unknown") return 3;
@@ -333,10 +330,10 @@ function determineTier(primaryType: TaskType, allTypes: TaskType[], prompt: stri
 }
 
 function buildExpectedSequence(
-  primaryType: TaskType,
-  allTypes: TaskType[],
+  primaryType: LegacyTaskType,
+  allTypes: LegacyTaskType[],
   prompt: string,
-): { taskType: TaskType; entities: Record<string, unknown>[] }[] | undefined {
+): { taskType: LegacyTaskType; entities: Record<string, unknown>[] }[] | undefined {
   const lower = prompt.toLowerCase();
   const orgMatch = prompt.match(/(?:org\.?\s*(?:n[ºo°r]\.?|nr\.?|no\.?|number|nummer|número))\s*[:\s]?\s*(\d{9})/i);
   const companyMatch = prompt.match(/([A-ZÆØÅÄÖÜ][\w\s]+?(?:AS|Ltd|GmbH|SL|Lda|SARL|AB))\b/);
@@ -360,7 +357,7 @@ function buildExpectedSequence(
 
   // create_credit_note: needs customer + invoice + credit note
   if (primaryType === "create_credit_note" && customerName) {
-    const seq: { taskType: TaskType; entities: Record<string, unknown>[] }[] = [];
+    const seq: { taskType: LegacyTaskType; entities: Record<string, unknown>[] }[] = [];
     if (orgMatch) {
       seq.push({ taskType: "create_customer", entities: [{ name: customerName, organizationNumber: orgMatch[1] }] });
     }
@@ -393,7 +390,7 @@ function buildExpectedSequence(
   return undefined;
 }
 
-function makeId(prompt: string, language: string, primaryType: TaskType, index: number): string {
+function makeId(prompt: string, language: string, primaryType: LegacyTaskType, index: number): string {
   const shortType = primaryType
     .replace("create_", "")
     .replace("send_", "send-")
@@ -483,7 +480,7 @@ async function main() {
     const task = uniqueTasks[i];
 
     // Parse winning plan if available
-    let planTypes: TaskType[] = [];
+    let planTypes: LegacyTaskType[] = [];
     if (task.winning_plan) {
       try {
         const plan = JSON.parse(task.winning_plan) as PlanStep[];
@@ -494,11 +491,9 @@ async function main() {
     const language = detectLanguage(task.prompt);
     const primaryAction = detectPrimaryAction(task.prompt);
 
-    // Use plan types if available, with primary action as the lead
-    let allTypes: TaskType[];
+    let allTypes: LegacyTaskType[];
     if (planTypes.length > 0) {
       allTypes = planTypes;
-      // Make sure primary action is consistent
       if (!planTypes.includes(primaryAction) && primaryAction !== "unknown") {
         allTypes = [primaryAction, ...planTypes.filter(t => t !== primaryAction)];
       }
@@ -527,18 +522,18 @@ async function main() {
     }
     usedIds.add(id);
 
-    const tc: TestCase = {
+    const tc = {
       id,
       prompt: task.prompt,
       language,
       tier,
       taskType: primaryType,
-      ...(taskTypeAlts.length > 0 ? { taskTypeAlternatives: taskTypeAlts as TaskType[] } : {}),
+      ...(taskTypeAlts.length > 0 ? { taskTypeAlternatives: taskTypeAlts } : {}),
       expectedEntities: entities,
       ...(expectedSequence ? { expectedTaskSequence: expectedSequence } : {}),
       expectedApiCalls: { max: maxCalls, maxErrors },
       ...(task.notes ? { notes: task.notes.slice(0, 200) } : {}),
-    };
+    } as TestCase;
 
     results.push(tc);
     console.log(`  [${i + 1}/${uniqueTasks.length}] ${id} | ${primaryType} | tier:${tier} | max:${maxCalls}/${maxErrors}`);
