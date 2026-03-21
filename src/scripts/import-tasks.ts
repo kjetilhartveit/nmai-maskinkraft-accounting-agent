@@ -186,12 +186,22 @@ function extractEntities(prompt: string, primaryType: TaskType): Record<string, 
     || prompt.match(/(?:por|für|pour|for|over|über|de|à)\s+(\d[\d\s]*\d)\s*(?:NOK|kr)/i);
 
   const companyPatterns = [
-    /([A-ZÆØÅÄÖÜ][\w\s]+?(?:AS|Ltd|GmbH|SL|Lda|SARL|AB))\b/,
+    /([A-ZÆØÅÄÖÜ][a-zæøåäöü]+(?:\s[A-ZÆØÅÄÖÜ][a-zæøåäöü]*)*)\s+(AS|Ltd|GmbH|SL|Lda|SARL|AB)\b/,
   ];
   let companyName: string | null = null;
   for (const p of companyPatterns) {
     const m = prompt.match(p);
-    if (m) { companyName = m[1].trim(); break; }
+    if (m) {
+      const words = m[1].split(/\s+/);
+      const nonName = new Set(["den", "dem", "der", "die", "das", "the", "kunden", "kunde", "cliente", "client", "customer", "el", "la", "le", "o", "a"]);
+      const clean: string[] = [];
+      for (const w of [...words].reverse()) {
+        if (nonName.has(w.toLowerCase()) && clean.length >= 1) break;
+        clean.unshift(w);
+      }
+      companyName = `${clean.join(" ")} ${m[2]}`.trim();
+      break;
+    }
   }
 
   const personMatch = prompt.match(/(?:employee|funcionário|ansatt|Mitarbeiter|employé|para|for|de)\s+([A-ZÆØÅÄÖÜ][a-zæøåäöü]+)\s+([A-ZÆØÅÄÖÜ][a-zæøåäöü]+)/i);
