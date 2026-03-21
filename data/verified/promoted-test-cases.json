@@ -781,7 +781,7 @@
     "prompt": "Registrer 7 timar for Liv Brekke (liv.brekke@example.org) på aktiviteten \"Design\" i prosjektet \"Datamigrering\" for Strandvik AS (org.nr 962818684). Timesats: 1650 kr/t. Generer ein prosjektfaktura til kunden basert på dei registrerte timane.",
     "language": "no",
     "tier": 3,
-    "taskType": "unknown",
+    "taskType": "create_timesheet",
     "expectedEntities": [
       {
         "name": "Design"
@@ -817,7 +817,7 @@
     "prompt": "Betalinga frå Dalheim AS (org.nr 979527578) for fakturaen \"Systemutvikling\" (14550 kr ekskl. MVA) vart returnert av banken. Reverser betalinga slik at fakturaen igjen viser uteståande beløp.",
     "language": "nn",
     "tier": 3,
-    "taskType": "unknown",
+    "taskType": "reverse_payment",
     "expectedEntities": [
       {
         "name": "Systemutvikling"
@@ -875,7 +875,7 @@
     "prompt": "Establezca un precio fijo de 266550 NOK en el proyecto \"Seguridad de datos\" para Montaña SL (org. nº 865036981). El director del proyecto es Sofía Pérez (sofia.perez@example.org). Facture al cliente el 50 % del precio fijo como pago parcial.",
     "language": "es",
     "tier": 3,
-    "taskType": "unknown",
+    "taskType": "project_fixed_price",
     "expectedEntities": [
       {
         "name": "Seguridad de datos"
@@ -943,7 +943,7 @@
     "prompt": "Enregistrez 38 heures pour Camille Petit (camille.petit@example.org) sur l'activité \"Design\" du projet \"Audit de sécurité\" pour Cascade SARL (nº org. 824869383). Taux horaire : 1400 NOK/h. Générez une facture de projet au client basée sur les heures enregistrées.",
     "language": "fr",
     "tier": 3,
-    "taskType": "unknown",
+    "taskType": "create_timesheet",
     "expectedEntities": [
       {
         "name": "Design"
@@ -1051,7 +1051,7 @@
     "prompt": "Le paiement de Colline SARL (nº org. 804499180) pour la facture \"Heures de conseil\" (8850 NOK HT) a été retourné par la banque. Annulez le paiement afin que la facture affiche à nouveau le montant impayé.",
     "language": "fr",
     "tier": 3,
-    "taskType": "unknown",
+    "taskType": "reverse_payment",
     "expectedEntities": [
       {
         "name": "Heures de conseil"
@@ -1153,7 +1153,7 @@
     "prompt": "Set a fixed price of 202150 NOK on the project \"Cloud Migration\" for Clearwater Ltd (org no. 872682023). The project manager is Oliver Brown (oliver.brown@example.org). Invoice the customer for 25% of the fixed price as a milestone payment.",
     "language": "en",
     "tier": 3,
-    "taskType": "unknown",
+    "taskType": "project_fixed_price",
     "expectedEntities": [
       {
         "name": "Cloud Migration"
@@ -1321,11 +1321,7 @@
     "prompt": "Le paiement de Colline SARL (nº org. 916057903) pour la facture \"Maintenance\" (8300 NOK HT) a été retourné par la banque. Annulez le paiement afin que la facture affiche à nouveau le montant impayé.",
     "language": "fr",
     "tier": 3,
-    "taskType": "unknown",
-    "taskTypeAlternatives": [
-      "create_order",
-      "create_invoice"
-    ],
+    "taskType": "reverse_payment",
     "expectedEntities": [
       {
         "name": "Maintenance"
@@ -1334,22 +1330,8 @@
         "amount": 8300
       }
     ],
-    "expectedTaskSequence": [
-      {
-        "taskType": "create_order",
-        "entities": [
-          {}
-        ]
-      },
-      {
-        "taskType": "create_invoice",
-        "entities": [
-          {}
-        ]
-      }
-    ],
     "expectedApiCalls": {
-      "max": 9,
+      "max": 15,
       "maxErrors": 3
     }
   },
@@ -1415,9 +1397,6 @@
     "language": "nn",
     "tier": 3,
     "taskType": "create_order",
-    "taskTypeAlternatives": [
-      "unknown"
-    ],
     "expectedEntities": [
       {
         "customerName": "Vestfjord AS"
@@ -1526,13 +1505,22 @@
     "prompt": "Realice el cierre anual simplificado de 2025: 1) Calcule y contabilice la depreciación anual de tres activos: Kjøretøy (61850 NOK, 3 años lineales, cuenta 1230), IT-utstyr (64150 NOK, 9 años, cuenta 1210), Programvare (64950 NOK, 3 años, cuenta 1250). Use cuenta 6010 para gasto de depreciación y 1209 para depreciación acumulada. 2) Revierta gastos prepagados (total 25750 NOK en cuenta 1700). 3) Calcule y contabilice la provisión de impuestos (22 % del resultado imponible) en cuenta 8700/2920. Registre cada depreciación como un comprobante separado.",
     "language": "es",
     "tier": 3,
-    "taskType": "unknown",
+    "taskType": "year_end_closing",
     "expectedEntities": [
-      { "amount": 61850 },
-      { "amount": 64150 },
-      { "amount": 64950 }
+      {
+        "amount": 61850
+      },
+      {
+        "amount": 64150
+      },
+      {
+        "amount": 64950
+      }
     ],
-    "expectedApiCalls": { "max": 30, "maxErrors": 2 },
+    "expectedApiCalls": {
+      "max": 30,
+      "maxErrors": 2
+    },
     "notes": "Complex: Year-end closing with 3 depreciation vouchers, prepaid reversal, and tax provision. Requires multiple account lookups and voucher creation. Generic handler with recipe."
   },
   {
@@ -1540,12 +1528,20 @@
     "prompt": "Enviámos uma fatura de 19074 EUR ao Oceano Lda (org. nº 966853204) quando a taxa de câmbio era 11.69 NOK/EUR. O cliente pagou agora, mas a taxa é 11.28 NOK/EUR. Registe o pagamento e lance a diferença cambial (disagio) na conta correta.",
     "language": "pt",
     "tier": 3,
-    "taskType": "unknown",
+    "taskType": "fx_payment",
     "expectedEntities": [
-      { "name": "Oceano Lda", "organizationNumber": "966853204" },
-      { "amount": 19074 }
+      {
+        "name": "Oceano Lda",
+        "organizationNumber": "966853204"
+      },
+      {
+        "amount": 19074
+      }
     ],
-    "expectedApiCalls": { "max": 20, "maxErrors": 2 },
+    "expectedApiCalls": {
+      "max": 20,
+      "maxErrors": 2
+    },
     "notes": "Complex: Foreign currency invoice with exchange rate loss (disagio). Must create customer+invoice in EUR at old rate, register payment at new rate, book exchange difference. Accounts: 1500/3000 for receivable, 8160 for disagio."
   },
   {
@@ -1553,9 +1549,12 @@
     "prompt": "Die Gesamtkosten sind von Januar bis Februar 2026 deutlich gestiegen. Analysieren Sie das Hauptbuch und identifizieren Sie die drei Aufwandskonten mit dem größten Anstieg. Erstellen Sie für jedes der drei Konten ein internes Projekt mit dem Kontonamen. Erstellen Sie außerdem eine Aktivität für jedes Projekt.",
     "language": "de",
     "tier": 3,
-    "taskType": "unknown",
+    "taskType": "ledger_analysis",
     "expectedEntities": [],
-    "expectedApiCalls": { "max": 25, "maxErrors": 2 },
+    "expectedApiCalls": {
+      "max": 25,
+      "maxErrors": 2
+    },
     "notes": "Complex: Analytical task. Read ledger for Jan and Feb, compare expense accounts (4000-7999 range), find top 3 increases. Then create 3 internal projects (each named after an account) and 1 activity per project. Requires GET /ledger/account, comparing sums, POST /project x3, POST /activity x3."
   },
   {
@@ -1563,9 +1562,12 @@
     "prompt": "Reconcilie o extrato bancario (CSV anexo) com as faturas em aberto no Tripletex. Relacione os pagamentos recebidos com as faturas de clientes e os pagamentos efetuados com as faturas de fornecedores. Trate os pagamentos parciais corretamente.",
     "language": "pt",
     "tier": 3,
-    "taskType": "unknown",
+    "taskType": "bank_reconciliation",
     "expectedEntities": [],
-    "expectedApiCalls": { "max": 25, "maxErrors": 5 },
+    "expectedApiCalls": {
+      "max": 25,
+      "maxErrors": 5
+    },
     "notes": "Complex: Bank reconciliation from CSV attachment. Match incoming payments to customer invoices and outgoing payments to supplier invoices. Handle partial payments. Requires reading CSV, listing invoices, registering payments."
   },
   {
@@ -1575,9 +1577,18 @@
     "tier": 3,
     "taskType": "create_payroll",
     "expectedEntities": [
-      { "employeeFirstName": "Emily", "employeeLastName": "Lewis", "employeeEmail": "emily.lewis@example.org", "baseSalary": 53400, "bonus": 16900 }
+      {
+        "employeeFirstName": "Emily",
+        "employeeLastName": "Lewis",
+        "employeeEmail": "emily.lewis@example.org",
+        "baseSalary": 53400,
+        "bonus": 16900
+      }
     ],
-    "expectedApiCalls": { "max": 7, "maxErrors": 0 },
+    "expectedApiCalls": {
+      "max": 7,
+      "maxErrors": 0
+    },
     "notes": "Should parse as create_payroll (dedicated handler). Was misclassified as unknown in competition (29 calls, 11 errors). Dedicated handler does 5-7 calls with 0 errors."
   },
   {
@@ -1586,15 +1597,39 @@
     "language": "en",
     "tier": 3,
     "taskType": "create_supplier_invoice",
-    "taskTypeAlternatives": ["create_supplier"],
+    "taskTypeAlternatives": [
+      "create_supplier"
+    ],
     "expectedEntities": [
-      { "supplierName": "Ridgepoint Ltd", "organizationNumber": "902484981", "amount": 65850, "amountIncludesVat": true }
+      {
+        "supplierName": "Ridgepoint Ltd",
+        "organizationNumber": "902484981",
+        "amount": 65850,
+        "amountIncludesVat": true
+      }
     ],
     "expectedTaskSequence": [
-      { "taskType": "create_supplier", "entities": [{ "name": "Ridgepoint Ltd" }] },
-      { "taskType": "create_supplier_invoice", "entities": [{ "supplierName": "Ridgepoint Ltd" }] }
+      {
+        "taskType": "create_supplier",
+        "entities": [
+          {
+            "name": "Ridgepoint Ltd"
+          }
+        ]
+      },
+      {
+        "taskType": "create_supplier_invoice",
+        "entities": [
+          {
+            "supplierName": "Ridgepoint Ltd"
+          }
+        ]
+      }
     ],
-    "expectedApiCalls": { "max": 6, "maxErrors": 0 },
+    "expectedApiCalls": {
+      "max": 6,
+      "maxErrors": 0
+    },
     "notes": "Should parse as create_supplier + create_supplier_invoice. Was misclassified as unknown in competition (30 calls, 17 errors). Dedicated handler does 5 calls with 0 errors."
   },
   {
@@ -1604,9 +1639,21 @@
     "tier": 3,
     "taskType": "create_dimension",
     "expectedEntities": [
-      { "dimensionName": "Prosjekttype", "dimensionValues": ["Utvikling", "Internt"], "accountNumber": 7000, "amount": 39700, "linkedDimensionValue": "Internt" }
+      {
+        "dimensionName": "Prosjekttype",
+        "dimensionValues": [
+          "Utvikling",
+          "Internt"
+        ],
+        "accountNumber": 7000,
+        "amount": 39700,
+        "linkedDimensionValue": "Internt"
+      }
     ],
-    "expectedApiCalls": { "max": 8, "maxErrors": 0 },
+    "expectedApiCalls": {
+      "max": 8,
+      "maxErrors": 0
+    },
     "notes": "Should parse as create_dimension. Was misclassified as unknown in competition (12 calls, 5 errors). Dedicated handler does 5-8 calls with 0 errors."
   },
   {
@@ -1616,9 +1663,143 @@
     "tier": 3,
     "taskType": "create_payment",
     "expectedEntities": [
-      { "customerName": "Estrela Lda", "amount": 13650 }
+      {
+        "customerName": "Estrela Lda",
+        "amount": 13650
+      }
     ],
-    "expectedApiCalls": { "max": 6, "maxErrors": 1 },
+    "expectedApiCalls": {
+      "max": 6,
+      "maxErrors": 1
+    },
     "notes": "Should parse as ONLY create_payment (invoice already exists). Was misclassified as create_invoice + create_payment in competition (31 calls, 16 errors). Keyword: 'fatura pendente' means pending invoice."
+  },
+  {
+    "id": "monthly-closing-pt-marco",
+    "prompt": "Realize o encerramento mensal de março de 2026. Registe a reversão de acréscimos (11950 NOK por mês da conta 1710 para despesa). Registe a depreciação mensal de um ativo fixo com custo de aquisição 255000 NOK e vida útil 8 anos (depreciação linear para conta 6010). Verifique se o balancete está a zero. Registe também uma provisão salarial (débito conta de despesas salariais 5000, crédito conta de salários acumulados 2900).",
+    "language": "pt",
+    "tier": 3,
+    "taskType": "monthly_closing",
+    "expectedEntities": [
+      {
+        "amount": 11950
+      },
+      {
+        "amount": 255000
+      }
+    ],
+    "expectedApiCalls": {
+      "max": 15,
+      "maxErrors": 3
+    },
+    "notes": "Complex: Monthly closing with accrual reversal, depreciation, and salary provision. From competition."
+  },
+  {
+    "id": "project-lifecycle-pt-floresta",
+    "prompt": "Execute o ciclo de vida completo do projeto 'Migração Cloud Floresta' (Floresta Lda, org. nº 909990343): 1) O projeto tem um orçamento de 407800 NOK. 2) Registe horas: Lucas Martins (gestor de projeto, lucas.martins@example.org) 28 horas e Bruno Costa (consultor, bruno.costa@example.org) 135 horas. 3) Registe custo de fornecedor de 70700 NOK de Luz do Sol Lda (org. nº 920920012). 4) Crie uma fatura ao cliente para o projeto.",
+    "language": "pt",
+    "tier": 3,
+    "taskType": "project_lifecycle",
+    "expectedEntities": [
+      {
+        "name": "Migração Cloud Floresta"
+      },
+      {
+        "amount": 407800
+      }
+    ],
+    "expectedApiCalls": {
+      "max": 25,
+      "maxErrors": 5
+    },
+    "notes": "Complex: Full project lifecycle. 0/2 pass rate in DB — handler likely needs work. From competition."
+  },
+  {
+    "id": "reminder-fee-es-vencida",
+    "prompt": "Uno de sus clientes tiene una factura vencida. Encuentre la factura vencida y registre un cargo por recordatorio de 50 NOK. Debito cuentas por cobrar (1500), credito ingresos por recordatorio (3400). También cree una factura por la tarifa de recordatorio al cliente y envíela. Además, registre un pago parcial de 5000 NOK en la factura vencida.",
+    "language": "es",
+    "tier": 3,
+    "taskType": "reminder_fee",
+    "expectedEntities": [
+      {
+        "amount": 50
+      }
+    ],
+    "expectedApiCalls": {
+      "max": 20,
+      "maxErrors": 4
+    },
+    "notes": "Complex: Find overdue invoice + add reminder fee voucher + create reminder invoice + partial payment. From competition."
+  },
+  {
+    "id": "receipt-expense-no-whiteboard",
+    "prompt": "Vi trenger Whiteboard fra denne kvitteringen bokført på avdeling Lager. Bruk riktig utgiftskonto basert på kjøpet, og sørg for korrekt MVA-behandling.",
+    "language": "no",
+    "tier": 3,
+    "taskType": "receipt_expense",
+    "expectedEntities": [],
+    "expectedApiCalls": {
+      "max": 10,
+      "maxErrors": 2
+    },
+    "notes": "Requires file attachment (receipt image). Will fail without file. From competition."
+  },
+  {
+    "id": "employee-onboarding-pdf-de",
+    "prompt": "Sie haben ein Angebotsschreiben erhalten (siehe beigefügte PDF) für einen neuen Mitarbeiter. Führen Sie das vollständige Onboarding durch: erstellen Sie den Mitarbeiter, weisen Sie die richtige Abteilung zu, richten Sie die Beschäftigungsdetails mit Prozentsatz und Jahresgehalt ein, und konfigurieren Sie die Standardarbeitszeit.",
+    "language": "de",
+    "tier": 3,
+    "taskType": "employee_onboarding_pdf",
+    "expectedEntities": [],
+    "expectedApiCalls": {
+      "max": 15,
+      "maxErrors": 3
+    },
+    "notes": "Requires PDF file attachment. Will fail without file. From competition."
+  },
+  {
+    "id": "ledger-audit-en-corrections",
+    "prompt": "We have discovered errors in the general ledger for January and February 2026. Review all vouchers and find the 4 errors: a posting on the wrong account, a duplicate voucher, a missing VAT line, and an incorrect amount. Correct all errors with corrective entries.",
+    "language": "en",
+    "tier": 3,
+    "taskType": "ledger_audit",
+    "expectedEntities": [
+      {}
+    ],
+    "expectedApiCalls": {
+      "max": 20,
+      "maxErrors": 5
+    },
+    "notes": "Complex: find and correct 4 ledger errors. High API call budget."
+  },
+  {
+    "id": "employee-contract-pdf-es",
+    "prompt": "Has recibido un contrato de trabajo (ver PDF adjunto). Crea el empleado en Tripletex con todos los datos del contrato: número de identidad, fecha de nacimiento, departamento, código de ocupación, salario, porcentaje de empleo y fecha de inicio.",
+    "language": "es",
+    "tier": 3,
+    "taskType": "employee_contract_pdf",
+    "expectedEntities": [
+      {}
+    ],
+    "expectedApiCalls": {
+      "max": 10,
+      "maxErrors": 3
+    },
+    "notes": "PDF-based: parse employment contract and create employee."
+  },
+  {
+    "id": "supplier-invoice-pdf-en",
+    "prompt": "You received a supplier invoice (see attached PDF). Register the invoice in Tripletex. Create the supplier if it does not exist. Use the correct expense account and input VAT.",
+    "language": "en",
+    "tier": 3,
+    "taskType": "supplier_invoice_pdf",
+    "expectedEntities": [
+      {}
+    ],
+    "expectedApiCalls": {
+      "max": 10,
+      "maxErrors": 3
+    },
+    "notes": "PDF-based: parse supplier invoice and register."
   }
 ]

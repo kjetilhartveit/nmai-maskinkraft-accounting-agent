@@ -6,9 +6,16 @@
     "tier": 1,
     "taskType": "create_employee",
     "expectedEntities": [
-      { "firstName": "Astrid", "lastName": "Nilsen", "email": "astrid.nilsen@example.org" }
+      {
+        "firstName": "Astrid",
+        "lastName": "Nilsen",
+        "email": "astrid.nilsen@example.org"
+      }
     ],
-    "expectedApiCalls": { "max": 3, "maxErrors": 0 },
+    "expectedApiCalls": {
+      "max": 3,
+      "maxErrors": 0
+    },
     "notes": "Norwegian: single employee creation"
   },
   {
@@ -17,11 +24,20 @@
     "language": "no",
     "tier": 2,
     "taskType": "create_invoice",
-    "taskTypeAlternatives": ["create_customer", "create_invoice"],
-    "expectedEntities": [
-      { "name": "Fossekraft AS", "organizationNumber": "913494253" }
+    "taskTypeAlternatives": [
+      "create_customer",
+      "create_invoice"
     ],
-    "expectedApiCalls": { "max": 10, "maxErrors": 1 },
+    "expectedEntities": [
+      {
+        "name": "Fossekraft AS",
+        "organizationNumber": "913494253"
+      }
+    ],
+    "expectedApiCalls": {
+      "max": 10,
+      "maxErrors": 1
+    },
     "notes": "Norwegian (Nynorsk): invoice with 3 product lines, may create customer first"
   },
   {
@@ -30,11 +46,20 @@
     "language": "de",
     "tier": 2,
     "taskType": "create_credit_note",
-    "taskTypeAlternatives": ["create_customer", "create_credit_note"],
-    "expectedEntities": [
-      { "name": "Sonnental GmbH", "organizationNumber": "809303829" }
+    "taskTypeAlternatives": [
+      "create_customer",
+      "create_credit_note"
     ],
-    "expectedApiCalls": { "max": 8, "maxErrors": 1 },
+    "expectedEntities": [
+      {
+        "name": "Sonnental GmbH",
+        "organizationNumber": "809303829"
+      }
+    ],
+    "expectedApiCalls": {
+      "max": 8,
+      "maxErrors": 1
+    },
     "notes": "German: credit note for complaint"
   },
   {
@@ -43,11 +68,20 @@
     "language": "pt",
     "tier": 2,
     "taskType": "create_credit_note",
-    "taskTypeAlternatives": ["create_customer", "create_credit_note"],
-    "expectedEntities": [
-      { "name": "Luz do Sol Lda", "organizationNumber": "821149517" }
+    "taskTypeAlternatives": [
+      "create_customer",
+      "create_credit_note"
     ],
-    "expectedApiCalls": { "max": 8, "maxErrors": 1 },
+    "expectedEntities": [
+      {
+        "name": "Luz do Sol Lda",
+        "organizationNumber": "821149517"
+      }
+    ],
+    "expectedApiCalls": {
+      "max": 8,
+      "maxErrors": 1
+    },
     "notes": "Portuguese: credit note for complaint"
   },
   {
@@ -56,11 +90,21 @@
     "language": "no",
     "tier": 2,
     "taskType": "create_travel_expense",
-    "taskTypeAlternatives": ["create_employee", "create_travel_expense"],
-    "expectedEntities": [
-      { "firstName": "Torbjørn", "lastName": "Brekke", "email": "torbjrn.brekke@example.org" }
+    "taskTypeAlternatives": [
+      "create_employee",
+      "create_travel_expense"
     ],
-    "expectedApiCalls": { "max": 8, "maxErrors": 1 },
+    "expectedEntities": [
+      {
+        "firstName": "Torbjørn",
+        "lastName": "Brekke",
+        "email": "torbjrn.brekke@example.org"
+      }
+    ],
+    "expectedApiCalls": {
+      "max": 8,
+      "maxErrors": 1
+    },
     "notes": "Norwegian (Nynorsk): travel expense with multiple costs"
   },
   {
@@ -69,11 +113,21 @@
     "language": "en",
     "tier": 2,
     "taskType": "create_payment",
-    "taskTypeAlternatives": ["create_customer", "send_invoice", "create_payment"],
-    "expectedEntities": [
-      { "name": "Windmill Ltd", "organizationNumber": "830362894" }
+    "taskTypeAlternatives": [
+      "create_customer",
+      "send_invoice",
+      "create_payment"
     ],
-    "expectedApiCalls": { "max": 8, "maxErrors": 1 },
+    "expectedEntities": [
+      {
+        "name": "Windmill Ltd",
+        "organizationNumber": "830362894"
+      }
+    ],
+    "expectedApiCalls": {
+      "max": 8,
+      "maxErrors": 1
+    },
     "notes": "English: payment registration"
   },
   {
@@ -82,11 +136,18 @@
     "language": "en",
     "tier": 3,
     "taskType": "create_dimension",
-    "taskTypeAlternatives": ["create_voucher"],
-    "expectedEntities": [
-      { "name": "Marked" }
+    "taskTypeAlternatives": [
+      "create_voucher"
     ],
-    "expectedApiCalls": { "max": 10, "maxErrors": 1 },
+    "expectedEntities": [
+      {
+        "name": "Marked"
+      }
+    ],
+    "expectedApiCalls": {
+      "max": 10,
+      "maxErrors": 1
+    },
     "notes": "English: custom dimension + voucher. Handler creates dimension and voucher in single task."
   },
   {
@@ -95,11 +156,20 @@
     "language": "fr",
     "tier": 2,
     "taskType": "create_invoice",
-    "taskTypeAlternatives": ["create_customer", "create_invoice"],
-    "expectedEntities": [
-      { "name": "Prairie SARL", "organizationNumber": "834343096" }
+    "taskTypeAlternatives": [
+      "create_customer",
+      "create_invoice"
     ],
-    "expectedApiCalls": { "max": 10, "maxErrors": 1 },
+    "expectedEntities": [
+      {
+        "name": "Prairie SARL",
+        "organizationNumber": "834343096"
+      }
+    ],
+    "expectedApiCalls": {
+      "max": 10,
+      "maxErrors": 1
+    },
     "notes": "French: invoice with 3 product lines"
   },
   {
@@ -109,9 +179,16 @@
     "tier": 1,
     "taskType": "create_product",
     "expectedEntities": [
-      { "name": "Stockage cloud", "number": "8912", "priceExcludingVat": 26850 }
+      {
+        "name": "Stockage cloud",
+        "number": "8912",
+        "priceExcludingVat": 26850
+      }
     ],
-    "expectedApiCalls": { "max": 4, "maxErrors": 1 },
+    "expectedApiCalls": {
+      "max": 4,
+      "maxErrors": 1
+    },
     "notes": "French: single product creation"
   },
   {
@@ -120,11 +197,21 @@
     "language": "fr",
     "tier": 2,
     "taskType": "create_payment",
-    "taskTypeAlternatives": ["create_customer", "send_invoice", "create_payment"],
-    "expectedEntities": [
-      { "name": "Montagne SARL", "organizationNumber": "893135979" }
+    "taskTypeAlternatives": [
+      "create_customer",
+      "send_invoice",
+      "create_payment"
     ],
-    "expectedApiCalls": { "max": 8, "maxErrors": 1 },
+    "expectedEntities": [
+      {
+        "name": "Montagne SARL",
+        "organizationNumber": "893135979"
+      }
+    ],
+    "expectedApiCalls": {
+      "max": 8,
+      "maxErrors": 1
+    },
     "notes": "French: payment registration"
   },
   {
@@ -133,11 +220,20 @@
     "language": "pt",
     "tier": 2,
     "taskType": "create_supplier_invoice",
-    "taskTypeAlternatives": ["create_supplier", "create_voucher"],
-    "expectedEntities": [
-      { "name": "Luz do Sol Lda", "organizationNumber": "895339016" }
+    "taskTypeAlternatives": [
+      "create_supplier",
+      "create_voucher"
     ],
-    "expectedApiCalls": { "max": 6, "maxErrors": 1 },
+    "expectedEntities": [
+      {
+        "name": "Luz do Sol Lda",
+        "organizationNumber": "895339016"
+      }
+    ],
+    "expectedApiCalls": {
+      "max": 6,
+      "maxErrors": 1
+    },
     "notes": "Portuguese: supplier invoice as voucher"
   },
   {
@@ -147,9 +243,16 @@
     "tier": 1,
     "taskType": "create_product",
     "expectedEntities": [
-      { "name": "Servicio de red", "number": "6866", "priceExcludingVat": 19100 }
+      {
+        "name": "Servicio de red",
+        "number": "6866",
+        "priceExcludingVat": 19100
+      }
     ],
-    "expectedApiCalls": { "max": 4, "maxErrors": 1 },
+    "expectedApiCalls": {
+      "max": 4,
+      "maxErrors": 1
+    },
     "notes": "Spanish: single product creation"
   },
   {
@@ -159,11 +262,20 @@
     "tier": 2,
     "taskType": "create_department",
     "expectedEntities": [
-      { "name": "Utvikling" },
-      { "name": "Innkjøp" },
-      { "name": "Økonomi" }
+      {
+        "name": "Utvikling"
+      },
+      {
+        "name": "Innkjøp"
+      },
+      {
+        "name": "Økonomi"
+      }
     ],
-    "expectedApiCalls": { "max": 1, "maxErrors": 0 },
+    "expectedApiCalls": {
+      "max": 1,
+      "maxErrors": 0
+    },
     "notes": "German: batch create 3 departments"
   },
   {
@@ -172,11 +284,18 @@
     "language": "no",
     "tier": 3,
     "taskType": "create_dimension",
-    "taskTypeAlternatives": ["create_voucher"],
-    "expectedEntities": [
-      { "name": "Region" }
+    "taskTypeAlternatives": [
+      "create_voucher"
     ],
-    "expectedApiCalls": { "max": 10, "maxErrors": 1 },
+    "expectedEntities": [
+      {
+        "name": "Region"
+      }
+    ],
+    "expectedApiCalls": {
+      "max": 10,
+      "maxErrors": 1
+    },
     "notes": "Norwegian (Nynorsk): custom dimension + voucher. Handler creates dimension and voucher in single task."
   },
   {
@@ -185,11 +304,21 @@
     "language": "fr",
     "tier": 3,
     "taskType": "create_payroll",
-    "taskTypeAlternatives": ["create_employee", "create_voucher"],
-    "expectedEntities": [
-      { "firstName": "Manon", "lastName": "Durand", "email": "manon.durand@example.org" }
+    "taskTypeAlternatives": [
+      "create_employee",
+      "create_voucher"
     ],
-    "expectedApiCalls": { "max": 8, "maxErrors": 1 },
+    "expectedEntities": [
+      {
+        "firstName": "Manon",
+        "lastName": "Durand",
+        "email": "manon.durand@example.org"
+      }
+    ],
+    "expectedApiCalls": {
+      "max": 8,
+      "maxErrors": 1
+    },
     "notes": "French: payroll as voucher"
   },
   {
@@ -198,11 +327,21 @@
     "language": "es",
     "tier": 3,
     "taskType": "create_travel_expense",
-    "taskTypeAlternatives": ["create_employee", "create_travel_expense"],
-    "expectedEntities": [
-      { "firstName": "Miguel", "lastName": "Pérez", "email": "miguel.perez@example.org" }
+    "taskTypeAlternatives": [
+      "create_employee",
+      "create_travel_expense"
     ],
-    "expectedApiCalls": { "max": 8, "maxErrors": 1 },
+    "expectedEntities": [
+      {
+        "firstName": "Miguel",
+        "lastName": "Pérez",
+        "email": "miguel.perez@example.org"
+      }
+    ],
+    "expectedApiCalls": {
+      "max": 8,
+      "maxErrors": 1
+    },
     "notes": "Spanish: travel expense with multiple costs"
   },
   {
@@ -211,11 +350,20 @@
     "language": "fr",
     "tier": 2,
     "taskType": "create_invoice",
-    "taskTypeAlternatives": ["create_customer", "create_invoice"],
-    "expectedEntities": [
-      { "name": "Océan SARL", "organizationNumber": "974909103" }
+    "taskTypeAlternatives": [
+      "create_customer",
+      "create_invoice"
     ],
-    "expectedApiCalls": { "max": 10, "maxErrors": 1 },
+    "expectedEntities": [
+      {
+        "name": "Océan SARL",
+        "organizationNumber": "974909103"
+      }
+    ],
+    "expectedApiCalls": {
+      "max": 10,
+      "maxErrors": 1
+    },
     "notes": "French: invoice with 3 product lines"
   },
   {
@@ -224,11 +372,20 @@
     "language": "no",
     "tier": 2,
     "taskType": "create_credit_note",
-    "taskTypeAlternatives": ["create_customer", "create_credit_note"],
-    "expectedEntities": [
-      { "name": "Nordhav AS", "organizationNumber": "996887898" }
+    "taskTypeAlternatives": [
+      "create_customer",
+      "create_credit_note"
     ],
-    "expectedApiCalls": { "max": 8, "maxErrors": 1 },
+    "expectedEntities": [
+      {
+        "name": "Nordhav AS",
+        "organizationNumber": "996887898"
+      }
+    ],
+    "expectedApiCalls": {
+      "max": 8,
+      "maxErrors": 1
+    },
     "notes": "Norwegian (Nynorsk): credit note for complaint"
   },
   {
@@ -237,11 +394,20 @@
     "language": "es",
     "tier": 2,
     "taskType": "create_invoice",
-    "taskTypeAlternatives": ["create_customer", "create_invoice"],
-    "expectedEntities": [
-      { "name": "Dorada SL", "organizationNumber": "929580206" }
+    "taskTypeAlternatives": [
+      "create_customer",
+      "create_invoice"
     ],
-    "expectedApiCalls": { "max": 10, "maxErrors": 1 },
+    "expectedEntities": [
+      {
+        "name": "Dorada SL",
+        "organizationNumber": "929580206"
+      }
+    ],
+    "expectedApiCalls": {
+      "max": 10,
+      "maxErrors": 1
+    },
     "notes": "Spanish: invoice with 3 product lines"
   },
   {
@@ -250,11 +416,20 @@
     "language": "no",
     "tier": 3,
     "taskType": "send_invoice",
-    "taskTypeAlternatives": ["create_customer", "send_invoice"],
-    "expectedEntities": [
-      { "name": "Nordhav AS", "organizationNumber": "876520427" }
+    "taskTypeAlternatives": [
+      "create_customer",
+      "send_invoice"
     ],
-    "expectedApiCalls": { "max": 8, "maxErrors": 1 },
+    "expectedEntities": [
+      {
+        "name": "Nordhav AS",
+        "organizationNumber": "876520427"
+      }
+    ],
+    "expectedApiCalls": {
+      "max": 8,
+      "maxErrors": 1
+    },
     "notes": "Norwegian (Nynorsk): create and send invoice"
   },
   {
@@ -264,9 +439,15 @@
     "tier": 1,
     "taskType": "create_customer",
     "expectedEntities": [
-      { "name": "Sonnental GmbH", "organizationNumber": "929940016" }
+      {
+        "name": "Sonnental GmbH",
+        "organizationNumber": "929940016"
+      }
     ],
-    "expectedApiCalls": { "max": 2, "maxErrors": 0 },
+    "expectedApiCalls": {
+      "max": 2,
+      "maxErrors": 0
+    },
     "notes": "German: single customer creation with address"
   },
   {
@@ -275,11 +456,21 @@
     "language": "no",
     "tier": 2,
     "taskType": "create_payroll",
-    "taskTypeAlternatives": ["create_employee", "create_voucher"],
-    "expectedEntities": [
-      { "firstName": "Lars", "lastName": "Berg", "email": "lars.berg@example.org" }
+    "taskTypeAlternatives": [
+      "create_employee",
+      "create_voucher"
     ],
-    "expectedApiCalls": { "max": 8, "maxErrors": 1 },
+    "expectedEntities": [
+      {
+        "firstName": "Lars",
+        "lastName": "Berg",
+        "email": "lars.berg@example.org"
+      }
+    ],
+    "expectedApiCalls": {
+      "max": 8,
+      "maxErrors": 1
+    },
     "notes": "Norwegian: payroll as voucher"
   },
   {
@@ -288,11 +479,20 @@
     "language": "en",
     "tier": 2,
     "taskType": "create_supplier_invoice",
-    "taskTypeAlternatives": ["create_supplier", "create_voucher"],
-    "expectedEntities": [
-      { "name": "Ridgepoint Ltd", "organizationNumber": "891424817" }
+    "taskTypeAlternatives": [
+      "create_supplier",
+      "create_voucher"
     ],
-    "expectedApiCalls": { "max": 6, "maxErrors": 1 },
+    "expectedEntities": [
+      {
+        "name": "Ridgepoint Ltd",
+        "organizationNumber": "891424817"
+      }
+    ],
+    "expectedApiCalls": {
+      "max": 6,
+      "maxErrors": 1
+    },
     "notes": "English: supplier invoice as voucher"
   },
   {
@@ -301,16 +501,48 @@
     "language": "pt",
     "tier": 3,
     "taskType": "create_project",
-    "taskTypeAlternatives": ["create_customer", "create_employee", "create_project"],
+    "taskTypeAlternatives": [
+      "create_customer",
+      "create_employee",
+      "create_project"
+    ],
     "expectedEntities": [
-      { "name": "Migração Montanha" }
+      {
+        "name": "Migração Montanha"
+      }
     ],
     "expectedTaskSequence": [
-      { "taskType": "create_customer", "entities": [{ "name": "Montanha Lda", "organizationNumber": "986713344" }] },
-      { "taskType": "create_employee", "entities": [{ "firstName": "Helena", "lastName": "Costa" }] },
-      { "taskType": "create_project", "entities": [{ "name": "Migração Montanha" }] }
+      {
+        "taskType": "create_customer",
+        "entities": [
+          {
+            "name": "Montanha Lda",
+            "organizationNumber": "986713344"
+          }
+        ]
+      },
+      {
+        "taskType": "create_employee",
+        "entities": [
+          {
+            "firstName": "Helena",
+            "lastName": "Costa"
+          }
+        ]
+      },
+      {
+        "taskType": "create_project",
+        "entities": [
+          {
+            "name": "Migração Montanha"
+          }
+        ]
+      }
     ],
-    "expectedApiCalls": { "max": 10, "maxErrors": 2 },
+    "expectedApiCalls": {
+      "max": 10,
+      "maxErrors": 2
+    },
     "notes": "Portuguese: multi-task project creation"
   },
   {
@@ -320,9 +552,15 @@
     "tier": 1,
     "taskType": "create_customer",
     "expectedEntities": [
-      { "name": "Bergwerk GmbH", "organizationNumber": "946768693" }
+      {
+        "name": "Bergwerk GmbH",
+        "organizationNumber": "946768693"
+      }
     ],
-    "expectedApiCalls": { "max": 2, "maxErrors": 0 },
+    "expectedApiCalls": {
+      "max": 2,
+      "maxErrors": 0
+    },
     "notes": "German: single customer creation with address"
   },
   {
@@ -332,9 +570,16 @@
     "tier": 1,
     "taskType": "create_employee",
     "expectedEntities": [
-      { "firstName": "Henry", "lastName": "Smith", "email": "henry.smith@example.org" }
+      {
+        "firstName": "Henry",
+        "lastName": "Smith",
+        "email": "henry.smith@example.org"
+      }
     ],
-    "expectedApiCalls": { "max": 3, "maxErrors": 0 },
+    "expectedApiCalls": {
+      "max": 3,
+      "maxErrors": 0
+    },
     "notes": "English: single employee creation"
   },
   {
@@ -343,11 +588,20 @@
     "language": "es",
     "tier": 2,
     "taskType": "create_order",
-    "taskTypeAlternatives": ["create_customer", "create_order"],
-    "expectedEntities": [
-      { "name": "Luna SL", "organizationNumber": "800572525" }
+    "taskTypeAlternatives": [
+      "create_customer",
+      "create_order"
     ],
-    "expectedApiCalls": { "max": 10, "maxErrors": 1 },
+    "expectedEntities": [
+      {
+        "name": "Luna SL",
+        "organizationNumber": "800572525"
+      }
+    ],
+    "expectedApiCalls": {
+      "max": 10,
+      "maxErrors": 1
+    },
     "notes": "Spanish: order with 3 product lines"
   },
   {
@@ -356,11 +610,20 @@
     "language": "en",
     "tier": 2,
     "taskType": "create_order",
-    "taskTypeAlternatives": ["create_customer", "create_order"],
-    "expectedEntities": [
-      { "name": "Ridgepoint Ltd", "organizationNumber": "925103489" }
+    "taskTypeAlternatives": [
+      "create_customer",
+      "create_order"
     ],
-    "expectedApiCalls": { "max": 10, "maxErrors": 1 },
+    "expectedEntities": [
+      {
+        "name": "Ridgepoint Ltd",
+        "organizationNumber": "925103489"
+      }
+    ],
+    "expectedApiCalls": {
+      "max": 10,
+      "maxErrors": 1
+    },
     "notes": "English: order with 3 product lines"
   },
   {
@@ -370,9 +633,15 @@
     "tier": 1,
     "taskType": "create_customer",
     "expectedEntities": [
-      { "name": "Rio Azul Lda", "organizationNumber": "865253443" }
+      {
+        "name": "Rio Azul Lda",
+        "organizationNumber": "865253443"
+      }
     ],
-    "expectedApiCalls": { "max": 2, "maxErrors": 0 },
+    "expectedApiCalls": {
+      "max": 2,
+      "maxErrors": 0
+    },
     "notes": "Portuguese: single customer creation with address"
   },
   {
@@ -381,11 +650,18 @@
     "language": "es",
     "tier": 3,
     "taskType": "create_dimension",
-    "taskTypeAlternatives": ["create_voucher"],
-    "expectedEntities": [
-      { "name": "Produktlinje" }
+    "taskTypeAlternatives": [
+      "create_voucher"
     ],
-    "expectedApiCalls": { "max": 10, "maxErrors": 1 },
+    "expectedEntities": [
+      {
+        "name": "Produktlinje"
+      }
+    ],
+    "expectedApiCalls": {
+      "max": 10,
+      "maxErrors": 1
+    },
     "notes": "Spanish: custom dimension + voucher. Handler creates dimension and voucher in single task."
   },
   {
@@ -395,11 +671,20 @@
     "tier": 2,
     "taskType": "create_department",
     "expectedEntities": [
-      { "name": "Økonomi" },
-      { "name": "Regnskap" },
-      { "name": "Kvalitet" }
+      {
+        "name": "Økonomi"
+      },
+      {
+        "name": "Regnskap"
+      },
+      {
+        "name": "Kvalitet"
+      }
     ],
-    "expectedApiCalls": { "max": 1, "maxErrors": 0 },
+    "expectedApiCalls": {
+      "max": 1,
+      "maxErrors": 0
+    },
     "notes": "German: batch create 3 departments"
   },
   {
@@ -408,11 +693,21 @@
     "language": "de",
     "tier": 2,
     "taskType": "create_payroll",
-    "taskTypeAlternatives": ["create_employee", "create_voucher"],
-    "expectedEntities": [
-      { "firstName": "Mia", "lastName": "Hoffmann", "email": "mia.hoffmann@example.org" }
+    "taskTypeAlternatives": [
+      "create_employee",
+      "create_voucher"
     ],
-    "expectedApiCalls": { "max": 8, "maxErrors": 1 },
+    "expectedEntities": [
+      {
+        "firstName": "Mia",
+        "lastName": "Hoffmann",
+        "email": "mia.hoffmann@example.org"
+      }
+    ],
+    "expectedApiCalls": {
+      "max": 8,
+      "maxErrors": 1
+    },
     "notes": "German: payroll as voucher"
   },
   {
@@ -422,9 +717,15 @@
     "tier": 1,
     "taskType": "create_customer",
     "expectedEntities": [
-      { "name": "Skogheim AS", "organizationNumber": "893718729" }
+      {
+        "name": "Skogheim AS",
+        "organizationNumber": "893718729"
+      }
     ],
-    "expectedApiCalls": { "max": 2, "maxErrors": 0 },
+    "expectedApiCalls": {
+      "max": 2,
+      "maxErrors": 0
+    },
     "notes": "Norwegian: single customer creation with address"
   },
   {
@@ -433,11 +734,20 @@
     "language": "en",
     "tier": 2,
     "taskType": "create_credit_note",
-    "taskTypeAlternatives": ["create_customer", "create_credit_note"],
-    "expectedEntities": [
-      { "name": "Greenfield Ltd", "organizationNumber": "918318070" }
+    "taskTypeAlternatives": [
+      "create_customer",
+      "create_credit_note"
     ],
-    "expectedApiCalls": { "max": 8, "maxErrors": 1 },
+    "expectedEntities": [
+      {
+        "name": "Greenfield Ltd",
+        "organizationNumber": "918318070"
+      }
+    ],
+    "expectedApiCalls": {
+      "max": 8,
+      "maxErrors": 1
+    },
     "notes": "English: credit note for complaint"
   },
   {
@@ -446,16 +756,48 @@
     "language": "en",
     "tier": 3,
     "taskType": "create_project",
-    "taskTypeAlternatives": ["create_customer", "create_employee", "create_project"],
+    "taskTypeAlternatives": [
+      "create_customer",
+      "create_employee",
+      "create_project"
+    ],
     "expectedEntities": [
-      { "name": "Analysis Oakwood" }
+      {
+        "name": "Analysis Oakwood"
+      }
     ],
     "expectedTaskSequence": [
-      { "taskType": "create_customer", "entities": [{ "name": "Oakwood Ltd", "organizationNumber": "912345678" }] },
-      { "taskType": "create_employee", "entities": [{ "firstName": "Emma", "lastName": "Wilson" }] },
-      { "taskType": "create_project", "entities": [{ "name": "Analysis Oakwood" }] }
+      {
+        "taskType": "create_customer",
+        "entities": [
+          {
+            "name": "Oakwood Ltd",
+            "organizationNumber": "912345678"
+          }
+        ]
+      },
+      {
+        "taskType": "create_employee",
+        "entities": [
+          {
+            "firstName": "Emma",
+            "lastName": "Wilson"
+          }
+        ]
+      },
+      {
+        "taskType": "create_project",
+        "entities": [
+          {
+            "name": "Analysis Oakwood"
+          }
+        ]
+      }
     ],
-    "expectedApiCalls": { "max": 10, "maxErrors": 2 },
+    "expectedApiCalls": {
+      "max": 10,
+      "maxErrors": 2
+    },
     "notes": "English: multi-task project creation"
   }
 ]
