@@ -27,8 +27,6 @@ function buildEmployeeBody(
   if (entity.email) {
     body.email = entity.email;
     body.userType = "EXTENDED";
-  } else {
-    body.userType = "NO_ACCESS";
   }
 
   if (entity.phoneNumber) body.phoneNumberMobile = entity.phoneNumber;
@@ -126,17 +124,18 @@ export async function grantProjectManagerEntitlement(
   client: TripletexClient,
   employeeId: number,
   knownExtended = false,
-): Promise<void> {
+): Promise<boolean> {
   if (!knownExtended) {
     const ok = await ensureExtendedAccess(client, employeeId);
     if (!ok) {
       console.warn(`[Handler] Skipping PM entitlement — employee ${employeeId} does not have EXTENDED access`);
-      return;
+      return false;
     }
   }
   const companyId = await getCompanyId(client);
-  await grantEntitlement(client, employeeId, ENTITLEMENT_CREATE_PROJECT, companyId, "AUTH_CREATE_PROJECT");
-  await grantEntitlement(client, employeeId, ENTITLEMENT_PM, companyId, "AUTH_PROJECT_MANAGER");
+  const ok1 = await grantEntitlement(client, employeeId, ENTITLEMENT_CREATE_PROJECT, companyId, "AUTH_CREATE_PROJECT");
+  const ok2 = await grantEntitlement(client, employeeId, ENTITLEMENT_PM, companyId, "AUTH_PROJECT_MANAGER");
+  return ok1 && ok2;
 }
 
 async function createEmployment(

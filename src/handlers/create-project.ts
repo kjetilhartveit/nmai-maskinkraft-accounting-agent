@@ -56,7 +56,7 @@ export async function handleCreateProject(
   const grantedPMs = new Set<number>();
 
   for (const entity of task.entities) {
-    const projectManagerId = await resolveProjectManagerId(client, entity, ctx);
+    let projectManagerId = await resolveProjectManagerId(client, entity, ctx);
 
     if (!projectManagerId) {
       console.warn("[Handler] No employee with project manager rights found, skipping entity");
@@ -65,8 +65,16 @@ export async function handleCreateProject(
 
     if (!grantedPMs.has(projectManagerId)) {
       const knownExtended = ctx.isEmployeeExtended(projectManagerId);
-      await grantProjectManagerEntitlement(client, projectManagerId, knownExtended);
+      const granted = await grantProjectManagerEntitlement(client, projectManagerId, knownExtended);
       grantedPMs.add(projectManagerId);
+      
+      if (!granted) {
+        console.warn(`[Handler] Failed to grant PM rights to ${projectManagerId}. Falling back to default PM.`);
+        const fallbackPM = await getProjectManagerEmployeeId(client);
+        if (fallbackPM) {
+            projectManagerId = fallbackPM;
+        }
+      }
     }
 
     const body: Record<string, unknown> = {
