@@ -124,6 +124,54 @@ app.get("/api/stats", (c) => {
   });
 });
 
+app.get("/api/task-analysis", (c) => {
+  const solves = loadSolves();
+  const byTaskType: Record<string, { total: number; passed: number; failed: number; avgMs: number; avgCalls: number; avgErrors: number; solves: SolveEntry[] }> = {};
+
+  for (const s of solves) {
+    const tasks = s.parsedSequence?.tasks;
+    const key = tasks?.map(t => t.taskType).join(" > ") ?? "unknown";
+    if (!byTaskType[key]) {
+      byTaskType[key] = { total: 0, passed: 0, failed: 0, avgMs: 0, avgCalls: 0, avgErrors: 0, solves: [] };
+    }
+    const group = byTaskType[key];
+    group.total++;
+    if (s.success) group.passed++;
+    else group.failed++;
+    group.solves.push(s);
+  }
+
+  for (const [, group] of Object.entries(byTaskType)) {
+    group.avgMs = Math.round(group.solves.reduce((s, e) => s + e.elapsedMs, 0) / group.total);
+    group.avgCalls = Math.round(group.solves.reduce((s, e) => s + (e.apiCallStats?.total ?? 0), 0) / group.total * 10) / 10;
+    group.avgErrors = Math.round(group.solves.reduce((s, e) => s + (e.apiCallStats?.errors ?? 0), 0) / group.total * 10) / 10;
+  }
+
+  const sorted = Object.entries(byTaskType)
+    .map(([taskType, data]) => ({
+      taskType,
+      ...data,
+      successRate: data.total > 0 ? Math.round((data.passed / data.total) * 100) : 0,
+      solves: data.solves.slice(0, 10).map(s => ({
+        id: s.id,
+        timestamp: s.timestamp,
+        success: s.success,
+        apiCalls: s.apiCallStats?.total ?? 0,
+        errors: s.apiCallStats?.errors ?? 0,
+        elapsedMs: s.elapsedMs,
+        error: s.error,
+        prompt: s.prompt?.slice(0, 100),
+        source: s.source,
+      })),
+    }))
+    .sort((a, b) => {
+      if (a.failed !== b.failed) return b.failed - a.failed;
+      return b.total - a.total;
+    });
+
+  return c.json(sorted);
+});
+
 app.get("/api/stream", (c) => {
   let lastCount = (db.prepare("SELECT COUNT(*) as cnt FROM solves").get() as { cnt: number }).cnt;
 
@@ -248,6 +296,7 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
     <div class="tab active" data-tab="competition" onclick="switchTab('competition')">Competition <span class="count" id="comp-count">0</span></div>
     <div class="tab" data-tab="all" onclick="switchTab('all')">All Solves <span class="count" id="all-count">0</span></div>
     <div class="tab" data-tab="eval" onclick="switchTab('eval')">Eval <span class="count" id="eval-count">0</span></div>
+    <div class="tab" data-tab="tasks" onclick="switchTab('tasks')">Task Analysis <span class="count" id="tasks-count">0</span></div>
     <div class="tab" data-tab="raw" onclick="switchTab('raw')">Raw Requests <span class="count" id="raw-count">0</span></div>
   </div>
 
@@ -278,6 +327,12 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
       </tr></thead>
       <tbody id="eval-body"></tbody>
     </table>
+  </div>
+
+  <div class="tab-content" id="tab-tasks">
+    <h2 style="margin-bottom:12px;">Task Type Analysis</h2>
+    <p style="color:var(--muted);font-size:0.82rem;margin-bottom:16px;">Solves grouped by task type pipeline. Sorted by failure count (worst first). Click a row to see recent solves.</p>
+    <div id="tasks-body"></div>
   </div>
 
   <div class="tab-content" id="tab-raw">
@@ -401,6 +456,11 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
       return [tr, detailRow];
     }
 
+    window.toggleTaskSolves = function(el) {
+      const solves = el.parentElement.querySelector('.task-solves');
+      solves.style.display = solves.style.display === 'none' ? '' : 'none';
+    };
+
     window.toggleDetails = function(btn) {
       const detailDiv = btn.closest('tr').nextElementSibling.querySelector('.details');
       detailDiv.classList.toggle('open');
@@ -477,6 +537,54 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
       }
     }
 
+    async function loadTaskAnalysis() {
+      try {
+        const res = await fetch('/api/task-analysis');
+        const groups = await res.json();
+        const container = document.getElementById('tasks-body');
+        document.getElementById('tasks-count').textContent = groups.length;
+        if (groups.length === 0) {
+          container.innerHTML = '<div class="empty-state">No solves to analyze yet.</div>';
+          return;
+        }
+        container.innerHTML = groups.map(g => {
+          const rate = g.successRate;
+          const rateClass = rate >= 80 ? 'success' : rate >= 50 ? 'warn' : 'failure';
+          const bar = '<div style="background:var(--border);border-radius:4px;height:8px;width:120px;display:inline-block;vertical-align:middle;margin-left:8px;"><div style="background:' + (rate >= 80 ? 'var(--green)' : rate >= 50 ? 'var(--yellow)' : 'var(--red)') + ';height:8px;border-radius:4px;width:' + rate + '%;"></div></div>';
+
+          const solvesHtml = g.solves.map(s =>
+            '<div style="display:flex;gap:8px;align-items:center;padding:4px 0;font-size:0.78rem;border-bottom:1px solid var(--border);">' +
+            '<span class="mono" style="min-width:130px;color:var(--muted);">' + esc(new Date(s.timestamp).toLocaleString('nb-NO', {month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'})) + '</span>' +
+            (s.success ? '<span class="badge ok">OK</span>' : '<span class="badge err">FAIL</span>') +
+            '<span class="badge ' + (s.source === 'competition' ? 'comp' : s.source === 'eval' ? 'eval' : 'manual') + '">' + esc(s.source) + '</span>' +
+            '<span class="mono">' + s.apiCalls + ' calls</span>' +
+            (s.errors > 0 ? '<span class="mono failure">' + s.errors + ' err</span>' : '') +
+            '<span class="mono" style="color:var(--muted);">' + (s.elapsedMs / 1000).toFixed(1) + 's</span>' +
+            (s.error ? '<span style="color:var(--red);font-size:0.72rem;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + esc(s.error) + '">' + esc(s.error.slice(0, 60)) + '</span>' : '') +
+            '</div>'
+          ).join('');
+
+          return '<div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:12px;">' +
+            '<div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;" onclick="toggleTaskSolves(this)">' +
+            '<div>' +
+            '<span class="mono" style="font-size:0.95rem;font-weight:600;">' + esc(g.taskType) + '</span>' +
+            '<span style="margin-left:12px;font-size:0.78rem;color:var(--muted);">' + g.total + ' solves</span>' +
+            '</div>' +
+            '<div style="display:flex;gap:16px;align-items:center;">' +
+            '<span class="' + rateClass + '" style="font-weight:700;font-size:1.1rem;">' + rate + '%</span>' + bar +
+            '<span class="success" style="font-size:0.82rem;">' + g.passed + ' ok</span>' +
+            '<span class="failure" style="font-size:0.82rem;">' + g.failed + ' fail</span>' +
+            '<span class="mono" style="font-size:0.78rem;color:var(--muted);">' + g.avgCalls + ' avg calls | ' + g.avgErrors + ' avg err | ' + (g.avgMs / 1000).toFixed(1) + 's avg</span>' +
+            '</div></div>' +
+            '<div class="task-solves" style="display:none;margin-top:12px;padding-top:8px;border-top:1px solid var(--border);">' +
+            solvesHtml +
+            '</div></div>';
+        }).join('');
+      } catch (e) {
+        console.error('Failed to load task analysis:', e);
+      }
+    }
+
     async function loadInitial() {
       const [statsRes, solvesRes] = await Promise.all([fetch('/api/stats'), fetch('/api/solves')]);
       const stats = await statsRes.json();
@@ -485,6 +593,7 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
       renderStats(stats);
       refreshTables();
       loadRawRequests();
+      loadTaskAnalysis();
     }
 
     function connectSSE() {
@@ -499,6 +608,7 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
             switchTab('competition');
           }
           loadRawRequests();
+          loadTaskAnalysis();
         }
       };
       evtSource.onerror = () => {
