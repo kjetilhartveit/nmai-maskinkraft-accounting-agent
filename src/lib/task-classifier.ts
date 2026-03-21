@@ -6,7 +6,7 @@
  */
 
 import { z } from "zod";
-import { geminiGenerateStructured } from "./gemini.js";
+import { geminiGenerateStructured, type GeminiJsonSchema } from "./gemini.js";
 
 // ── Task type registry ──────────────────────────────────────────────
 
@@ -177,106 +177,164 @@ export type ClassifiedTaskType = (typeof TASK_TYPE_DEFINITIONS)[number]["id"];
 // ── LLM classifier ─────────────────────────────────────────────────
 
 const ClassificationSchema = z.object({
-  taskType: z.string(),
-  confidence: z.number().min(0).max(1),
+  taskType: z.string().optional().default(""),
+  task_type: z.string().optional(),
+  confidence: z.number().min(0).max(1).optional().default(0.5),
 });
 
-const CLASSIFIER_SYSTEM_PROMPT = `You classify accounting task prompts into exactly one task type.
+// JSON Schema for Gemini's controlled generation - guarantees valid JSON output
+const CLASSIFICATION_JSON_SCHEMA: GeminiJsonSchema = {
+  type: "object",
+  properties: {
+    taskType: {
+      type: "string",
+      description: "The task type ID from the available list",
+    },
+    confidence: {
+      type: "number",
+      description: "Confidence score between 0 and 1",
+    },
+  },
+  required: ["taskType"],
+};
 
-Available task types:
-${TASK_TYPE_DEFINITIONS.map((t) => `- ${t.id}: ${t.description}`).join("\n")}
+const CLASSIFIER_SYSTEM_PROMPT = `Classify the prompt into a task type. Respond with ONLY a JSON object, nothing else.
+
+Task types: ${TASK_TYPE_IDS.join(", ")}
+
+Response format: {"taskType":"<id>","confidence":<0-1>}
 
 Rules:
-- Pick the SINGLE most specific type that matches the prompt's primary action.
-- The prompt may be in Norwegian (Bokmål or Nynorsk), English, German, French, Spanish, or Portuguese.
-- If the prompt involves multiple steps (e.g. "create customer and send invoice"), classify by the FINAL/primary goal (send_invoice in that example).
-- "send_invoice" vs "create_invoice": use send_invoice ONLY when the prompt explicitly says to send/deliver.
-- "create_payment" vs "reverse_payment": reverse_payment is specifically when a payment was returned/rejected by the bank.
-- "create_dimension" is for custom accounting dimensions, NOT departments.
-- "project_fixed_price" is when both a fixed price AND invoicing percentage are mentioned for a project.
-- Only use "unknown" when no type is a reasonable match.
-- Return the exact id string from the list above, plus your confidence (0-1).`;
+- Pick the most specific type matching the primary action
+- Multi-step prompts: classify by the final goal
+- send_invoice: only if explicitly asked to send/deliver
+- reverse_payment: only for returned/rejected bank payments
+- create_dimension: for custom accounting dimensions (not departments)
+- project_fixed_price: requires both fixed price AND invoice percentage
+
+Output ONLY the JSON. No prose. No "Here is". Just JSON.`;
+
+export type ClassificationMethod = "llm" | "regex";
+
+export interface ClassificationResult {
+  type: ClassifiedTaskType;
+  method: ClassificationMethod;
+}
 
 /**
- * Classify a prompt using the LLM. Returns the task type id.
+ * Classify a prompt using the LLM. Returns the task type id and method used.
  * Falls back to regex-based classification if the LLM call fails or times out.
  */
 export async function classifyPrompt(
   prompt: string
-): Promise<ClassifiedTaskType> {
+): Promise<ClassificationResult> {
   try {
     const llmPromise = geminiGenerateStructured({
-      model: "gemini-3.1-pro",
+      model: "gemini-3.1-pro-preview",
       system: CLASSIFIER_SYSTEM_PROMPT,
       prompt: prompt.slice(0, 2000),
       schema: ClassificationSchema,
-      maxTokens: 128,
-      maxRetries: 1,
+      jsonSchema: CLASSIFICATION_JSON_SCHEMA,
+      maxTokens: 256,
+      maxRetries: 2,
     });
 
     const timeoutPromise = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error("Classification timeout")), 10_000)
+      setTimeout(() => reject(new Error("Classification timeout")), 8_000)
     );
 
     const { object } = await Promise.race([llmPromise, timeoutPromise]);
 
-    const taskType = object.taskType;
+    // Accept both camelCase (taskType) and snake_case (task_type) from LLM
+    const taskType = object.taskType || object.task_type || "";
     if (TASK_TYPE_IDS.includes(taskType)) {
-      return taskType;
+      return { type: taskType, method: "llm" };
     }
 
     // LLM returned an unexpected type — find the closest match
     const lower = taskType.toLowerCase().replace(/[- ]/g, "_");
     const match = TASK_TYPE_IDS.find((id) => id === lower);
-    if (match) return match;
+    if (match) return { type: match, method: "llm" };
 
-    console.warn(
-      `[Classifier] LLM returned unknown type "${taskType}", falling back to regex`
-    );
-    return classifyPromptRegex(prompt);
-  } catch (err) {
-    console.warn(
-      `[Classifier] LLM classification failed: ${
-        err instanceof Error ? err.message : err
-      }`
-    );
-    return classifyPromptRegex(prompt);
+    // LLM returned invalid type, fall back to regex
+    return { type: classifyPromptRegex(prompt), method: "regex" };
+  } catch {
+    // LLM failed, fall back to regex
+    return { type: classifyPromptRegex(prompt), method: "regex" };
   }
+}
+
+export interface BatchClassificationStats {
+  total: number;
+  llm: number;
+  regex: number;
 }
 
 /**
  * Classify a batch of prompts efficiently.
  * Uses one LLM call per prompt but runs them concurrently with rate limiting.
+ * Returns both the results map and statistics about classification methods.
  */
 export async function classifyPromptsBatch(
   prompts: { id: string; prompt: string }[],
   options?: { concurrency?: number; verbose?: boolean }
-): Promise<Map<string, ClassifiedTaskType>> {
-  const concurrency = options?.concurrency ?? 10;
+): Promise<{
+  results: Map<string, ClassifiedTaskType>;
+  stats: BatchClassificationStats;
+}> {
+  const concurrency = options?.concurrency ?? 5;
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
   const results = new Map<string, ClassifiedTaskType>();
 
   let completed = 0;
+  let llmCount = 0;
+  let regexCount = 0;
   const total = prompts.length;
 
   async function processOne(item: {
     id: string;
     prompt: string;
   }): Promise<void> {
-    const type = await classifyPrompt(item.prompt);
+    const { type, method } = await classifyPrompt(item.prompt);
     results.set(item.id, type);
-    completed++;
-    if (options?.verbose && completed % 50 === 0) {
-      console.log(`[Classifier] ${completed}/${total} classified...`);
+
+    if (method === "llm") {
+      llmCount++;
+    } else {
+      regexCount++;
     }
+
+    completed++;
+    const methodTag = method === "llm" ? "LLM" : "regex";
+    console.log(
+      `[${completed}/${total}] ${type.padEnd(25)} (${methodTag}) | ${item.prompt
+        .slice(0, 60)
+        .replace(/\n/g, " ")}`
+    );
   }
 
-  // Process in chunks to limit concurrency
+  // Process in chunks with cooldown to avoid rate limiting
   for (let i = 0; i < prompts.length; i += concurrency) {
     const chunk = prompts.slice(i, i + concurrency);
     await Promise.all(chunk.map(processOne));
+    if (i + concurrency < prompts.length) {
+      await sleep(150);
+    }
   }
 
-  return results;
+  const stats: BatchClassificationStats = {
+    total,
+    llm: llmCount,
+    regex: regexCount,
+  };
+
+  const llmPct = total > 0 ? ((llmCount / total) * 100).toFixed(1) : "0";
+  const regexPct = total > 0 ? ((regexCount / total) * 100).toFixed(1) : "0";
+  console.log(
+    `[Classifier] Done: ${llmCount} LLM (${llmPct}%), ${regexCount} regex (${regexPct}%)`
+  );
+
+  return { results, stats };
 }
 
 // ── Regex fallback (used when LLM is unavailable) ───────────────────
@@ -285,7 +343,7 @@ function re(pattern: string): RegExp {
   return new RegExp(pattern, "i");
 }
 
-function classifyPromptRegex(prompt: string): ClassifiedTaskType {
+export function classifyPromptRegex(prompt: string): ClassifiedTaskType {
   const p = prompt.toLowerCase();
 
   if (/^test\b/.test(p.trim()) && p.trim().length < 30) return "unknown";
