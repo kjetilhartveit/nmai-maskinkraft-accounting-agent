@@ -22,6 +22,41 @@ function repairJson(text: string): string {
     // Continue with more aggressive repairs
   }
 
+  // Replace single-quoted strings with double-quoted (outside of double-quoted strings)
+  {
+    let result = "";
+    let inDouble = false;
+    let inSingle = false;
+    let esc = false;
+    for (let i = 0; i < fixed.length; i++) {
+      const ch = fixed[i];
+      if (esc) { result += ch; esc = false; continue; }
+      if (ch === "\\") { result += ch; esc = true; continue; }
+      if (ch === '"' && !inSingle) { inDouble = !inDouble; result += ch; continue; }
+      if (ch === "'" && !inDouble) {
+        inSingle = !inSingle;
+        result += '"';
+        continue;
+      }
+      result += ch;
+    }
+    fixed = result;
+  }
+
+  // Fix unquoted property names: word before colon outside strings
+  fixed = fixed.replace(/(?<=[\{,]\s*)([a-zA-Z_]\w*)(?=\s*:)/g, '"$1"');
+
+  // Remove trailing commas again after other fixes
+  fixed = fixed.replace(/,\s*([\]}])/g, "$1");
+
+  // Try parsing after string/key repairs
+  try {
+    JSON.parse(fixed);
+    return fixed;
+  } catch {
+    // Continue with structural repairs
+  }
+
   // Close unclosed arrays and objects
   let openBraces = 0;
   let openBrackets = 0;

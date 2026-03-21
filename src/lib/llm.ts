@@ -20,6 +20,9 @@ const TASK_TYPES: TaskType[] = [
   "create_project",
   "create_voucher",
   "create_supplier",
+  "create_payroll",
+  "create_supplier_invoice",
+  "create_dimension",
   "unknown",
 ];
 
@@ -67,20 +70,33 @@ Task types and their entity fields:
 - create_credit_note: fields: customerName, organizationNumber, amount, productName/description (what the original invoice was for), date (YYYY-MM-DD), comment/reason
   - The handler will find or create the customer's invoice and issue a credit note against it.
   - IMPORTANT: If the prompt mentions a customer who "complained" or "reclaimed" an invoice, output create_customer (with org number) THEN create_credit_note. The credit note handler needs the customer to exist first.
-- create_travel_expense: fields: employeeFirstName, employeeLastName, date (YYYY-MM-DD), amount, description, paymentType (COMPANY_CARD or EMPLOYEE_PAID)
+- create_travel_expense: First entity is trip metadata: employeeFirstName, employeeLastName, date (YYYY-MM-DD), description (trip title). Additional entities are INDIVIDUAL cost items: amount, description (cost name, e.g. "Flybillett", "Taxi", "Diett"). Always separate each expense into its own entity.
+  For per-diem/diett: ALWAYS compute the total (days × daily rate) and put the result as "amount". Do NOT use "comment" — the API field is "title" for the trip description.
+  Example for "Reisen varte 4 dager med diett (dagsats 800 kr). Utlegg: flybillett 3800 kr og taxi 200 kr":
+  → entities: [{employeeFirstName: "...", employeeLastName: "...", description: "Trip title"}, {amount: 3200, description: "Diett"}, {amount: 3800, description: "Flybillett"}, {amount: 200, description: "Taxi"}]
 - delete_travel_expense: fields: employeeFirstName, employeeLastName OR travelExpenseId
 - create_project: fields: name, projectManagerFirstName, projectManagerLastName, startDate (YYYY-MM-DD), endDate (YYYY-MM-DD), customerName, description
 - create_voucher: fields: date (YYYY-MM-DD), description. Plus extra entities for postings: accountNumber, amount, type (DEBIT/CREDIT), description.
   - IMPORTANT: If the voucher must be LINKED to a custom dimension, accounting dimension, or other non-standard entity, use "unknown" for the ENTIRE task (dimension creation + voucher) so the agentic handler can maintain context.
 - create_supplier: fields: name, email, organizationNumber, phoneNumber
   - IMPORTANT: "Register a supplier" / "Registrer leverandøren" / "Enregistrez le fournisseur" / "Registre o fornecedor" / "Registrieren Sie den Lieferanten" / "Registre el proveedor" = create_supplier. Do NOT use "unknown" for simple supplier creation.
+- create_payroll: fields: employeeFirstName, employeeLastName, employeeEmail, baseSalary, bonus
+  - ALWAYS use for payroll/salary processing tasks. The handler finds/creates the employee AND creates the voucher. Do NOT output a separate create_employee task before create_payroll — it handles employee lookup internally.
+  - Keywords: "run payroll", "process salary", "exécutez la paie", "ejecute la nómina", "processe o salário", "führen Sie die Gehaltsabrechnung durch", "kjør lønn", "Gehaltsabrechnung", "lønnskostnad".
+  - Extract baseSalary and bonus as separate numbers. If the prompt says "in addition to the base salary", the bonus is extra.
+  - IMPORTANT: Even if the prompt mentions fallback strategies or alternative approaches (e.g. "if the salary API doesn't work, use manual vouchers"), STILL use create_payroll. The handler already implements the correct approach internally. Do NOT use "unknown" for payroll tasks.
+- create_supplier_invoice: fields: supplierName, amount, amountIncludesVat (boolean), accountNumber, vatRate, invoiceNumber, description, organizationNumber
+  - Use for registering incoming/supplier invoices. The handler creates a voucher (debit expense + debit input VAT + credit accounts payable with supplier reference).
+  - Keywords: "register supplier invoice", "incoming invoice", "received invoice from supplier", "factura del proveedor", "facture fournisseur", "leverandørfaktura", "Lieferantenrechnung".
+  - IMPORTANT: When both supplier creation AND supplier invoice registration are needed, split into create_supplier THEN create_supplier_invoice. The supplier must exist before the voucher.
+- create_dimension: fields: dimensionName, dimensionValues (array of strings), accountNumber, amount, linkedDimensionValue
+  - Use for creating custom accounting dimensions (optionally with a linked voucher).
+  - When a prompt asks to create a custom dimension AND then create a voucher linked to it, return a SINGLE create_dimension task containing ALL information. Do NOT split into separate tasks.
+  - Keywords: "custom accounting dimension", "benutzerdefinierte Buchhaltungsdimension", "dimension comptable", "dimensión contable", "regnskapsdimensjon", "dimensão contábil".
 - unknown: For tasks that don't clearly match one of the above types. This includes but is not limited to:
-  custom accounting dimensions (even when combined with vouchers — the ENTIRE prompt should be ONE "unknown" task),
-  bank reconciliation, incoming invoices, supplier invoices (with VAT/account details), salary operations, asset management,
-  timesheet entries, company settings, contacts, divisions, correcting/reversing entries,
-  activating modules, or any other complex Tripletex operation.
-  - When a prompt asks to create a custom dimension AND then do something with it (like create a voucher linked to it), return a SINGLE "unknown" task containing ALL information. Do NOT split into unknown + create_voucher.
-  - Do NOT use "unknown" when a dedicated handler exists. If the prompt says "create/register a supplier/customer/department/employee", use the dedicated task type.
+  bank reconciliation, asset management, timesheet entries, company settings, contacts, divisions, correcting/reversing entries,
+  activating modules, payment reversals, or any other complex Tripletex operation.
+  - Do NOT use "unknown" when a dedicated handler exists. Check all task types above first.
 
 Rules:
 - PRESERVE all Unicode characters exactly as they appear in the prompt (e.g. å, ø, æ, ü, ö, ñ, é, ã). Do NOT transliterate or anglicize names.
@@ -105,9 +121,9 @@ Example 2 - Customer + invoice (MUST create customer first for fresh sandbox):
 Prompt: "Crie e envie uma fatura ao cliente Porto Alegre Lda (org. nº 842889154) por 11200 NOK."
 → tasks: [{ taskType: "create_customer", entities: [{ name: "Porto Alegre Lda", organizationNumber: "842889154" }] }, { taskType: "send_invoice", entities: [{ customerName: "Porto Alegre Lda", amount: 11200 }] }]
 
-Example 3 - Custom dimension + voucher (SINGLE unknown task):
+Example 3 - Custom dimension + voucher (SINGLE create_dimension task):
 Prompt: "Cree una dimensión contable personalizada Region con valores Nord-Norge y Vestlandet. Registre un asiento en cuenta 7100 por 34350 NOK vinculado a Nord-Norge."
-→ tasks: [{ taskType: "unknown", entities: [{ dimensionName: "Region", dimensionValues: ["Nord-Norge", "Vestlandet"], accountNumber: 7100, amount: 34350, linkedDimensionValue: "Nord-Norge" }] }]
+→ tasks: [{ taskType: "create_dimension", entities: [{ dimensionName: "Region", dimensionValues: ["Nord-Norge", "Vestlandet"], accountNumber: 7100, amount: 34350, linkedDimensionValue: "Nord-Norge" }] }]
 
 Example 4 - Employee with admin role:
 Prompt: "Create employee Maria Svensson (maria@test.com) as an administrator."
@@ -129,12 +145,28 @@ WRONG: [{ taskType: "unknown", ... }] — this is a simple supplier creation, us
 
 Example 8 - Three departments (batch in one task):
 Prompt: "Erstellen Sie drei Abteilungen in Tripletex: Økonomi, Logistikk und Produksjon."
-→ tasks: [{ taskType: "create_department", entities: [{ name: "Økonomi" }, { name: "Logistikk" }, { name: "Produksjon" }] }]`;
+→ tasks: [{ taskType: "create_department", entities: [{ name: "Økonomi" }, { name: "Logistikk" }, { name: "Produksjon" }] }]
+
+Example 9 - Supplier invoice / incoming invoice (create_supplier THEN create_supplier_invoice):
+Prompt: "Hemos recibido la factura INV-2026-9187 del proveedor Montaña SL (org. nº 884646979) por 19500 NOK con IVA incluido. Servicios de oficina (cuenta 7300). Registre con IVA soportado (25 %)."
+→ tasks: [{ taskType: "create_supplier", entities: [{ name: "Montaña SL", organizationNumber: "884646979" }] }, { taskType: "create_supplier_invoice", entities: [{ supplierName: "Montaña SL", invoiceNumber: "INV-2026-9187", amount: 19500, amountIncludesVat: true, accountNumber: 7300, vatRate: 25, description: "servicios de oficina" }] }]
+NOTE: Always split supplier invoices into create_supplier + create_supplier_invoice. The supplier must exist before the voucher.
+
+Example 10 - Payroll/salary processing:
+Prompt: "Kjør lønn for Erik Nilsen (erik.nilsen@example.org) for denne måneden. Grunnlønn er 53350 kr. Legg til en engangsbonus på 11050 kr."
+→ tasks: [{ taskType: "create_payroll", entities: [{ employeeFirstName: "Erik", employeeLastName: "Nilsen", employeeEmail: "erik.nilsen@example.org", baseSalary: 53350, bonus: 11050 }] }]
+NOTE: The handler finds/creates the employee and uses voucher postings on salary accounts. Do NOT add a separate create_employee task before create_payroll.
+
+Example 11 - Payroll with fallback instruction (STILL use create_payroll, not unknown):
+Prompt: "Kjør lønn for Erik Nilsen (erik.nilsen@example.org). Grunnlønn 53350 kr. Bonus 11050 kr. Dersom lønns-API-et ikke fungerer, bruk manuelle bilag."
+→ tasks: [{ taskType: "create_payroll", entities: [{ employeeFirstName: "Erik", employeeLastName: "Nilsen", employeeEmail: "erik.nilsen@example.org", baseSalary: 53350, bonus: 11050 }] }]
+WRONG: [{ taskType: "create_employee" }, { taskType: "unknown" }] — create_payroll handles everything!`;
 
 const SYSTEM_PROMPT_MINIMAL = `You parse Tripletex accounting prompts into JSON: tasks array (each with taskType and entities), and prompt language.
-Known task types: create_employee, update_employee, create_customer, update_customer, create_product, create_department, create_invoice, send_invoice, create_payment, create_credit_note, create_order, create_travel_expense, delete_travel_expense, create_project, create_voucher, create_supplier, unknown.
+Known task types: create_employee, update_employee, create_customer, update_customer, create_product, create_department, create_invoice, send_invoice, create_payment, create_credit_note, create_order, create_travel_expense, delete_travel_expense, create_project, create_voucher, create_supplier, create_payroll, create_supplier_invoice, create_dimension, unknown.
 Return one entity per distinct object (e.g. each department separately). For multi-step operations, return multiple tasks in dependency order.
-Use "unknown" for any operation not in the list above (accounting dimensions, bank reconciliation, salary, assets, etc.). Do NOT force into a wrong type. For unknown, extract all data into entities.`;
+Use create_payroll for salary/payroll tasks, create_supplier_invoice for incoming/supplier invoices, create_dimension for custom accounting dimensions.
+Use "unknown" only for operations not in the list above (bank reconciliation, assets, timesheet entries, payment reversals, etc.). Do NOT force into a wrong type. For unknown, extract all data into entities.`;
 
 export const SYSTEM_PROMPT_VARIANTS = {
   default: SYSTEM_PROMPT,
@@ -168,7 +200,10 @@ const TASK_PRIORITY: Record<string, number> = {
   create_project: 3,
   create_voucher: 3,
   create_travel_expense: 3,
-  unknown: 3, // after entity creation but before invoicing; unknown tasks may depend on customers/suppliers
+  create_payroll: 3,
+  create_supplier_invoice: 3,
+  create_dimension: 3,
+  unknown: 3,
   create_invoice: 4,
   send_invoice: 4,
   delete_travel_expense: 4,
