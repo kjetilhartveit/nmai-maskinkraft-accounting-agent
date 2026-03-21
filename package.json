@@ -28,7 +28,8 @@
     "ralph": "bash scripts/ralph-overnight.sh",
     "score-manager": "tsx src/scripts/score-manager.ts",
     "collect-scores": "tsx src/scripts/collect-scores.ts",
-    "analyze": "tsx src/scripts/analyze-tasks.ts"
+    "analyze": "tsx src/scripts/analyze-tasks.ts",
+    "test-pipeline": "tsx src/scripts/test-pipeline.ts"
   },
   "dependencies": {
     "@ai-sdk/openai": "^1.3.22",
