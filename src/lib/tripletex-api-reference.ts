@@ -23,7 +23,8 @@ Many endpoints marked [BETA] in the Tripletex API return 403 Forbidden in the co
 
 ### Employee
 - GET /employee — list/search. Params: firstName, lastName, email, fields, from, count
-- POST /employee — create. Body: { firstName, lastName, email, dateOfBirth?, phoneNumberMobile?, employeeNumber?, userType? }
+- POST /employee — create. Body: { firstName, lastName, department: {id}, email?, dateOfBirth?, phoneNumberMobile?, employeeNumber?, userType? }
+  - department: {id} is REQUIRED. Look up via GET /department first.
   - userType: "NO_ACCESS" | "STANDARD" | "EXTENDED". Use "EXTENDED" for users who need admin or PM roles.
   - Note: "ADMINISTRATOR" is NOT a valid userType — admin is granted via entitlements.
 - PUT /employee/{id} — update (include id, version, and changed fields)
@@ -33,6 +34,7 @@ Many endpoints marked [BETA] in the Tripletex API return 403 Forbidden in the co
 ### Customer
 - GET /customer — list/search. Params: name, email, organizationNumber, from, count
 - POST /customer — create. Body: { name, email?, organizationNumber?, phoneNumber?, isCustomer: true, postalAddress?: { addressLine1, postalCode, city } }
+  - IMPORTANT: postalAddress MUST be an object like {"addressLine1": "Testgate 1", "postalCode": "0001", "city": "Oslo"}, NEVER a string. Passing a string causes 422.
 - PUT /customer/{id} — update
 - ~~DELETE /customer/{id}~~ — [BETA, returns 403] customers cannot be deleted
 - ~~POST /customer/list~~ — [BETA, returns 403] use repeated POST /customer instead
@@ -44,7 +46,10 @@ Many endpoints marked [BETA] in the Tripletex API return 403 Forbidden in the co
 
 ### Product
 - GET /product — list/search. Params: name, number, from, count
-- POST /product — create. Body: { name, priceExcludingVatCurrency?, department: {id}, productUnit?: {id}, vatType?: {id} }
+- POST /product — create. Body: { name, number?, priceExcludingVatCurrency?, department: {id}, productUnit?: {id}, vatType: {id} }
+  - vatType MUST be {id: <number>} where id comes from GET /ledger/vatType. It is NOT the percentage.
+  - Common VAT type IDs (look up to confirm): 25% standard output VAT, 15% food/beverage, 0% exempt.
+  - ALWAYS call GET /ledger/vatType?from=0&count=100 first to find the correct id.
 - GET /product/unit — list product units (stk, kg, etc.)
 
 ### Department
@@ -100,36 +105,46 @@ Many endpoints marked [BETA] in the Tripletex API return 403 Forbidden in the co
 
 ### Travel Expense
 - GET /travelExpense — list. Params: employeeId, from, count
-- POST /travelExpense — create. Body: { employee: {id}, title, department?: {id}, project?: {id}, costs: [{ date, description, amountCurrencyIncVat, paymentType: "company_card"|"employee_paid", vatType?: {id}, currency?: {id}, category?: {id} }] }
-  - costs.paymentType must be one of the valid payment types
+- POST /travelExpense — create. Body: { employee: {id}, title, date (YYYY-MM-DD) }
+  - IMPORTANT: The field is "title", NOT "comment". There is NO "comment" field on travelExpense — it causes 422.
+  - Do NOT include "costs" inline — add them separately via POST /travelExpense/cost after creation.
 - DELETE /travelExpense/{id} — delete
 - PUT /travelExpense/:deliver — deliver for approval
-- POST /travelExpense/cost — add a cost line. Body: { travelExpense: {id}, date, description, amountCurrencyIncVat, paymentType, currency: {id} }
+- POST /travelExpense/cost — add a cost line. Body: { travelExpense: {id}, paymentType: {id}, date (YYYY-MM-DD), amountCurrencyIncVat, comments? }
+  - IMPORTANT: The text field is "comments", NOT "description". Using "description" causes 422.
+  - Get paymentType IDs from: GET /travelExpense/paymentType
 
 ### Voucher (Ledger)
 - GET /ledger/voucher — list. Params: dateFrom, dateTo, from, count
-- POST /ledger/voucher — create. Body: { date (YYYY-MM-DD), description, postings: [{ account: {id}, date (YYYY-MM-DD), amountGross, amountGrossCurrency, description? }] }
-  - IMPORTANT: amountGross and amountGrossCurrency MUST be set to the SAME value. Positive = debit, negative = credit.
-  - Postings MUST balance (sum to zero).
-  - Posting body fields: account, date, amountGross, amountGrossCurrency, description. No dimension fields.
-  - For a simple debit/credit pair: [{ account: debitAccount, amountGross: X, amountGrossCurrency: X }, { account: creditAccount, amountGross: -X, amountGrossCurrency: -X }]
+- POST /ledger/voucher — create.
+  EXACT body format:
+  { "date": "YYYY-MM-DD", "description": "text", "postings": [
+    {"row": 1, "account": {"id": <ID>}, "date": "YYYY-MM-DD", "amountGross": 1000, "amountGrossCurrency": 1000, "description": "Debit line"},
+    {"row": 2, "account": {"id": <ID>}, "date": "YYYY-MM-DD", "amountGross": -1000, "amountGrossCurrency": -1000, "description": "Credit line"}
+  ]}
+  RULES:
+  - row MUST start at 1, then 2, 3, etc. NEVER use row 0 (system-reserved, causes 422).
+  - Standard fields per posting: row, account, date, amountGross, amountGrossCurrency, description.
+  - NEVER add guiRow, dimension fields, supplierId, or any dimension fields.
+  - EXCEPTION: Postings to account 2400 (accounts payable) MUST include "supplier": {"id": <supplierId>}. Omitting it causes 422.
+  - amountGross = amountGrossCurrency (always identical). Positive = debit, negative = credit.
+  - All amountGross values MUST sum to 0.
+  - Get account IDs via GET /ledger/account?number=XXXX, then use the returned "id" field.
 - DELETE /ledger/voucher/{id} — delete/reverse a voucher
-- POST /ledger/voucher/{voucherId}/attachment — upload attachment (multipart)
 
 ### Ledger Account
 - GET /ledger/account — list/search. Params: number, from, count, fields
   - Use ?number=<accountNumber> to find by account number (e.g. 1920, 3000, 4000)
 
 ### Accounting Dimensions (Custom/Free Dimensions)
-- GET /ledger/accountingDimensionName — list dimension definitions
-- POST /ledger/accountingDimensionName — create. Body: { dimensionName, description?, active: true }
-  - Creates a free dimension (max 3: indices 1, 2, 3). Returns the dimensionIndex.
-- GET /ledger/accountingDimensionValue — list dimension values. Params: dimensionIndex, from, count
-- POST /ledger/accountingDimensionValue — create. Body: { dimensionIndex, displayName, number?, active: true, showInVoucherRegistration: true }
-- IMPORTANT: Voucher postings (POST /ledger/voucher) do NOT have freeDimension fields. 
-  The Posting body accepts: { account, date, amountGross, amountGrossCurrency, description, department?, project?, customer? }
-  Do NOT try to add dimension1, freeDimension1, accountingDimension1, or customDimension1 fields to posting bodies — they will fail with 422.
-  Create the dimension and its values, then create the voucher with balanced postings. The dimension link is managed by Tripletex internally.
+- GET /ledger/accountingDimensionName — list ALL existing dimensions. ALWAYS call this first to check if dimension exists.
+- POST /ledger/accountingDimensionName — create. Body: { dimensionName, active: true }
+  - ONLY create if GET shows the dimension doesn't exist. "Navnet er i bruk" = name already taken.
+  - Max 3 dimensions (indices 1, 2, 3). Returns the dimensionIndex.
+- GET /ledger/accountingDimensionValue?dimensionIndex=X — list values for a dimension. ALWAYS call to check before creating.
+- POST /ledger/accountingDimensionValue — create. Body: { dimensionIndex, displayName, active: true, showInVoucherRegistration: true }
+  - ONLY create if GET shows the value doesn't exist for this dimension.
+- IMPORTANT: Voucher postings do NOT reference dimensions. Create dimensions/values separately, then create the voucher with standard balanced postings.
 
 ### VAT Types
 - GET /ledger/vatType — list all VAT types. Params: from, count
@@ -149,7 +164,7 @@ Many endpoints marked [BETA] in the Tripletex API return 403 Forbidden in the co
 ### Incoming Invoice [BETA — returns 403]
 - ~~POST /incomingInvoice~~ — [BETA] not available in sandbox
 - ~~POST /incomingInvoice/{voucherId}/addPayment~~ — [BETA] not available
-- Alternative: Create a voucher with balanced postings on the correct accounts to record incoming invoices.
+- Alternative: Create a voucher with balanced postings. The credit posting to account 2400 MUST include supplier: {id: supplierId}.
 
 ### Supplier Invoice
 - GET /supplierInvoice — list
@@ -166,9 +181,10 @@ Many endpoints marked [BETA] in the Tripletex API return 403 Forbidden in the co
   - IMPORTANT: employee must have userType "EXTENDED" to receive entitlements. AUTH_PROJECT_MANAGER requires AUTH_CREATE_PROJECT (45) first.
   - WARNING: These endpoints are [BETA]. If they return 403, the entitlement cannot be granted via API. The first employee in the sandbox usually already has project manager rights.
 
-### Salary
-- POST /salary/transaction — create salary voucher. Body: { date (YYYY-MM-DD), year (number), month (number), payslips: [...] }
-  - IMPORTANT: If this endpoint returns 403 or 422, do NOT retry. Use a manual ledger voucher (POST /ledger/voucher) instead.
+### Salary [BETA — returns 403]
+- ~~POST /salary/transaction~~ — [BETA] returns 403 in sandbox. Do NOT use.
+- ~~GET /salary/payslip~~ — [BETA] returns 403 in sandbox. Do NOT use.
+- For payroll tasks, ALWAYS use POST /ledger/voucher with salary accounts (see PAYROLL recipe in system prompt).
 
 ### Timesheet
 - POST /timesheet/entry — create timesheet entry. Body: { employee: {id}, project: {id}, activity: {id}, date, hours, comment? }

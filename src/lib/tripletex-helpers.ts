@@ -194,7 +194,7 @@ export async function findVatTypeIdByRate(
   // Match by the standard Norwegian VAT number first (most reliable)
   const expectedNumber = OUTGOING_VAT_NUMBER_BY_RATE[ratePercent];
   if (expectedNumber) {
-    const byNumber = vatTypes.find((v) => v.number === expectedNumber);
+    const byNumber = vatTypes.find((v) => String(v.number) === expectedNumber);
     if (byNumber) {
       console.log(`[Helper] VAT ${ratePercent}%: id=${byNumber.id} (code ${byNumber.number}: ${byNumber.name})`);
       return byNumber.id;
@@ -203,7 +203,7 @@ export async function findVatTypeIdByRate(
 
   // For 0%: also try code "5" (Ingen utgående avgift innenfor mva-loven)
   if (ratePercent === 0) {
-    const code5 = vatTypes.find((v) => v.number === "5");
+    const code5 = vatTypes.find((v) => String(v.number) === "5");
     if (code5) {
       console.log(`[Helper] VAT 0%: id=${code5.id} (code 5: ${code5.name})`);
       return code5.id;
@@ -211,12 +211,21 @@ export async function findVatTypeIdByRate(
   }
 
   // Fallback: match by percentage on outgoing types
-  const match = vatTypes.find(
+  const outgoing = vatTypes.find(
     (v) => v.percentage === ratePercent && v.name?.toLowerCase().includes("utgående"),
   );
-  if (match) {
-    console.log(`[Helper] VAT ${ratePercent}%: id=${match.id} (${match.name})`);
-    return match.id;
+  if (outgoing) {
+    console.log(`[Helper] VAT ${ratePercent}%: id=${outgoing.id} (${outgoing.name})`);
+    return outgoing.id;
+  }
+
+  // Broader fallback: any type with matching percentage (some sandboxes lack outgoing middels/lav)
+  const anyMatch = vatTypes.find(
+    (v) => v.percentage === ratePercent && !v.name?.toLowerCase().includes("direktepostert"),
+  );
+  if (anyMatch) {
+    console.log(`[Helper] VAT ${ratePercent}% (broad match): id=${anyMatch.id} (${anyMatch.name})`);
+    return anyMatch.id;
   }
 
   console.log(`[Helper] No VAT type found for ${ratePercent}%, falling back to default 25%`);
@@ -304,19 +313,40 @@ export async function findProductByName(
   return result.values[0] ?? null;
 }
 
+let helperVatTypeBroken = false;
+
+export function resetHelperVatTypeFlag(): void {
+  helperVatTypeBroken = false;
+}
+
+/**
+ * Warm the product-creation caches (department, unit, vatType) in a single
+ * parallel batch so that subsequent findOrCreateProduct calls hit cache.
+ */
+export async function warmProductCaches(client: TripletexClient): Promise<void> {
+  await Promise.all([
+    getDefaultDepartmentId(client),
+    getDefaultProductUnitId(client),
+    getDefaultProductVatTypeId(client),
+  ]);
+}
+
 export async function findOrCreateProduct(
   client: TripletexClient,
   name: string,
   unitPriceExcVat: number,
   vatTypeId?: number,
+  skipSearch?: boolean,
 ): Promise<Product> {
-  const existing = await findProductByName(client, name);
-  if (existing) {
-    console.log(`[Helper] Found existing product: ${name} (id=${existing.id})`);
-    return existing;
+  if (!skipSearch) {
+    const existing = await findProductByName(client, name);
+    if (existing) {
+      console.log(`[Helper] Found existing product: ${name} (id=${existing.id})`);
+      return existing;
+    }
   }
 
-  const [departmentId, unitId, defaultVatTypeId] = await Promise.all([
+  const [departmentId, unitId, resolvedVatTypeId] = await Promise.all([
     getDefaultDepartmentId(client),
     getDefaultProductUnitId(client),
     vatTypeId ? Promise.resolve(vatTypeId) : getDefaultProductVatTypeId(client),
@@ -327,12 +357,44 @@ export async function findOrCreateProduct(
     priceExcludingVatCurrency: unitPriceExcVat,
     department: { id: departmentId },
     productUnit: { id: unitId },
-    vatType: { id: defaultVatTypeId },
   };
+  if (!helperVatTypeBroken) {
+    body.vatType = { id: resolvedVatTypeId };
+  }
 
-  const created = await client.post<Product>("/product", body);
-  console.log(`[Helper] Created product: ${name} (id=${created.value.id})`);
-  return created.value;
+  try {
+    const created = await client.post<Product>("/product", body);
+    console.log(`[Helper] Created product: ${name} (id=${created.value.id})`);
+    return created.value;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+
+    if (msg.includes("allerede registrert") || msg.includes("already registered")) {
+      console.warn(`[Helper] Product "${name}" already exists, looking it up`);
+      const existing = await findProductByName(client, name);
+      if (existing) return existing;
+    }
+
+    if (msg.includes("vatTypeId") && !helperVatTypeBroken) {
+      console.warn(`[Helper] vatType ${resolvedVatTypeId} rejected, retrying without vatType`);
+      helperVatTypeBroken = true;
+      delete body.vatType;
+      try {
+        const created = await client.post<Product>("/product", body);
+        console.log(`[Helper] Created product: ${name} (id=${created.value.id}) without vatType`);
+        return created.value;
+      } catch (retryErr) {
+        const retryMsg = retryErr instanceof Error ? retryErr.message : String(retryErr);
+        if (retryMsg.includes("allerede registrert") || retryMsg.includes("already registered")) {
+          console.warn(`[Helper] Product "${name}" already exists (on retry), looking it up`);
+          const existing = await findProductByName(client, name);
+          if (existing) return existing;
+        }
+        throw retryErr;
+      }
+    }
+    throw err;
+  }
 }
 
 /** Returns today's date as YYYY-MM-DD */
@@ -356,6 +418,7 @@ export function resetCaches(): void {
   cachedCompanyId = null;
   bankAccountConfigured = false;
   cachedProjectManagerId = null;
+  helperVatTypeBroken = false;
 }
 
 // === Bank Account Configuration ===
