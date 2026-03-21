@@ -1,0 +1,21 @@
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.17",
+  "base_commit_sha": "b193e4b5f51b3ce37fbf3a914d902cb3b63f7c5e",
+  "prompts": {
+    "466d55fc79af85d8": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "9edd1cc0-5af3-4fee-9ed0-254ca16ed782",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Kjetil Hårtveit <kjetil_runescape@hotmail.com>",
+      "messages": [],
+      "total_additions": 518,
+      "total_deletions": 178,
+      "accepted_lines": 516,
+      "overriden_lines": 0
+    }
+  }
+}
