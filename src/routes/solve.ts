@@ -17,7 +17,6 @@ import { config } from "../lib/config.js";
 import { createSolveTrace } from "../lib/solve-trace.js";
 import { classifyPrompt } from "../lib/task-classifier.js";
 import { extractEntities, buildTaskSequence } from "../lib/entity-extractor.js";
-import { consultCouncil, shouldConsultCouncil } from "../lib/llm-council.js";
 
 export const solveRouter = new Hono();
 
@@ -150,26 +149,7 @@ solveRouter.post("/solve", async (c) => {
     // ══════════════════════════════════════════════════════════════════
     // STEP 3: Build task sequence (with prerequisites)
     // ══════════════════════════════════════════════════════════════════
-    let tasks = buildTaskSequence(taskType, extraction, prompt);
-
-    // ══════════════════════════════════════════════════════════════════
-    // STEP 4: Consult LLM council for unknown/complex tasks
-    // ══════════════════════════════════════════════════════════════════
-    if (shouldConsultCouncil(taskType)) {
-      trace.debug("council", "Consulting LLM council for unknown task");
-
-      const councilResult = await consultCouncil(prompt, taskType, extraction.entities, trace);
-
-      // If council suggests a built-in handler, rebuild task sequence
-      if (councilResult.decision.finalDecision === "builtin" && councilResult.suggestedTask) {
-        trace.debug("council", `Council recommends: ${councilResult.suggestedTask.taskType}`);
-        tasks = buildTaskSequence(
-          councilResult.suggestedTask.taskType,
-          extraction,
-          prompt,
-        );
-      }
-    }
+    const tasks = buildTaskSequence(taskType, extraction, prompt);
 
     sequence = {
       tasks,
@@ -186,7 +166,7 @@ solveRouter.post("/solve", async (c) => {
     // STEP 5: Execute the task sequence
     // ══════════════════════════════════════════════════════════════════
     for (const task of sequence.tasks) {
-      trace.logHandlerStart(task.taskType, task.taskType === "unknown" ? "generic" : "dedicated");
+      trace.logHandlerStart(task.taskType, "dedicated");
     }
 
     await executeTaskSequence(client, sequence);

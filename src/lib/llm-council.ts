@@ -12,7 +12,7 @@ import { z } from "zod";
 import { geminiGenerateStructured, type GeminiJsonSchema } from "./gemini.js";
 import type { SolveTrace, LLMReasoning, CouncilDecision } from "./solve-trace.js";
 import type { ParsedTask, TaskType } from "../types/index.js";
-import { TASK_TYPE_DEFINITIONS } from "./task-classifier.js";
+import { PROMPT_TEMPLATES } from "./task-classifier.js";
 
 // ── Schemas ──────────────────────────────────────────────────────────
 
@@ -87,7 +87,7 @@ const COUNCIL_MEMBERS: CouncilMember[] = [
 // ── System Prompts ───────────────────────────────────────────────────
 
 function buildReasoningPrompt(member: CouncilMember): string {
-  const taskTypeList = TASK_TYPE_DEFINITIONS.map(t => `- ${t.id}: ${t.description}`).join("\n");
+  const taskTypeList = PROMPT_TEMPLATES.map((t: { taskType: string; template: string }) => `- ${t.taskType}: ${t.template.slice(0, 80)}`).join("\n");
 
   return `You are the "${member.name}" in a council of AI advisors solving a Tripletex accounting task.
 
@@ -240,8 +240,7 @@ export async function consultCouncil(
 /**
  * Quick check if a task should go to council.
  */
-export function shouldConsultCouncil(taskType: TaskType): boolean {
-  // Currently only consult for unknown tasks
-  // Could expand to include low-confidence classifications
-  return taskType === "unknown";
+export function shouldConsultCouncil(_taskType: TaskType): boolean {
+  // No longer used — all 30 types have dedicated handlers
+  return false;
 }
