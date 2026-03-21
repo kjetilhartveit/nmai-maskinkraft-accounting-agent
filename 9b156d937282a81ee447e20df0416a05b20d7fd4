@@ -1,0 +1,23 @@
+scripts/ralph-overnight.sh
+  b6a80d62a7df98e8 58,60,62
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.17",
+  "base_commit_sha": "9b156d937282a81ee447e20df0416a05b20d7fd4",
+  "prompts": {
+    "b6a80d62a7df98e8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ed16e8b6-9b58-4f77-bcc2-09a3895d83b3",
+        "model": "claude-opus-4-5-20251101"
+      },
+      "human_author": "Kjetil Hårtveit <kjetil_runescape@hotmail.com>",
+      "messages": [],
+      "total_additions": 172,
+      "total_deletions": 85,
+      "accepted_lines": 169,
+      "overriden_lines": 0
+    }
+  }
+}
