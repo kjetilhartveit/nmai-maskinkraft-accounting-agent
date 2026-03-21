@@ -167,7 +167,8 @@ Many endpoints marked [BETA] in the Tripletex API return 403 Forbidden in the co
   - WARNING: These endpoints are [BETA]. If they return 403, the entitlement cannot be granted via API. The first employee in the sandbox usually already has project manager rights.
 
 ### Salary
-- POST /salary/transaction — create salary voucher. Body: { date, year, month, payslips: [...] }
+- POST /salary/transaction — create salary voucher. Body: { date (YYYY-MM-DD), year (number), month (number), payslips: [...] }
+  - IMPORTANT: If this endpoint returns 403 or 422, do NOT retry. Use a manual ledger voucher (POST /ledger/voucher) instead.
 
 ### Timesheet
 - POST /timesheet/entry — create timesheet entry. Body: { employee: {id}, project: {id}, activity: {id}, date, hours, comment? }

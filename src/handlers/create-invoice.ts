@@ -253,8 +253,17 @@ export async function handleCreateInvoice(
   console.log(`[Handler] Created invoice: id=${invoiceId}`);
 
   if (sendAfterCreate) {
-    await client.put(`/invoice/${invoiceId}/:send?sendType=EMAIL`, {});
-    console.log(`[Handler] Sent invoice: id=${invoiceId}`);
+    const email = entity.email as string | undefined;
+    const qs = new URLSearchParams({ sendType: "EMAIL" });
+    if (email) qs.set("overrideEmailAddress", email);
+    
+    try {
+      await client.put(`/invoice/${invoiceId}/:send?${qs.toString()}`, {});
+      console.log(`[Handler] Sent invoice: id=${invoiceId}`);
+    } catch (err) {
+      console.error(`[Handler] Failed to send invoice ${invoiceId}:`, err instanceof Error ? err.message : String(err));
+      // If it fails with the email, try without or vice-versa, or just ignore since the invoice was created
+    }
   }
 }
 

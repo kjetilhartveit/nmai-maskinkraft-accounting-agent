@@ -30,7 +30,7 @@ IMPORTANT RULES:
 4. All dates MUST be in YYYY-MM-DD format. Use 2026 as the year (current year).
 5. Voucher postings MUST balance (debits = credits).
 6. When creating resources, use the MINIMUM required fields to avoid validation errors.
-7. If a POST/PUT fails with 422, read the error message carefully — it tells you which field is wrong. Fix it and retry.
+7. If a POST/PUT fails with 422, read the error message carefully. If it says "Verdien er ikke av korrekt type for dette feltet." for a date field, it means you must provide the date as a YYYY-MM-DD string, NOT a timestamp or object.
 8. For custom accounting dimensions: create the dimension name first, then create values using the returned dimensionIndex.
 9. The sandbox MAY have pre-existing data for certain tasks (like invoices for payment tasks). ALWAYS search for existing resources first.
 10. Be efficient: minimize the number of API calls. Use tripletex_post_list for batch creation ONLY for non-beta /list endpoints (e.g. /department/list, /product/list, /employee/list, /supplier/list).
