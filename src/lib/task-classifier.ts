@@ -221,13 +221,20 @@ export interface ClassificationResult {
   method: ClassificationMethod;
 }
 
+export interface ClassifyOptions {
+  /** If true, skip regex fallback and return null on LLM failure */
+  llmOnly?: boolean;
+}
+
 /**
  * Classify a prompt using the LLM. Returns the task type id and method used.
- * Falls back to regex-based classification if the LLM call fails or times out.
+ * Falls back to regex-based classification if the LLM call fails or times out,
+ * unless llmOnly is true (then returns null on failure).
  */
 export async function classifyPrompt(
-  prompt: string
-): Promise<ClassificationResult> {
+  prompt: string,
+  options?: ClassifyOptions
+): Promise<ClassificationResult | null> {
   try {
     const llmPromise = geminiGenerateStructured({
       model: "gemini-3.1-pro-preview",
@@ -256,10 +263,12 @@ export async function classifyPrompt(
     const match = TASK_TYPE_IDS.find((id) => id === lower);
     if (match) return { type: match, method: "llm" };
 
-    // LLM returned invalid type, fall back to regex
+    // LLM returned invalid type
+    if (options?.llmOnly) return null;
     return { type: classifyPromptRegex(prompt), method: "regex" };
   } catch {
-    // LLM failed, fall back to regex
+    // LLM failed
+    if (options?.llmOnly) return null;
     return { type: classifyPromptRegex(prompt), method: "regex" };
   }
 }
@@ -268,6 +277,14 @@ export interface BatchClassificationStats {
   total: number;
   llm: number;
   regex: number;
+  skipped: number;
+}
+
+export interface BatchClassifyOptions {
+  concurrency?: number;
+  verbose?: boolean;
+  /** If true, skip regex fallback — prompts that fail LLM will not be included in results */
+  llmOnly?: boolean;
 }
 
 /**
@@ -277,25 +294,40 @@ export interface BatchClassificationStats {
  */
 export async function classifyPromptsBatch(
   prompts: { id: string; prompt: string }[],
-  options?: { concurrency?: number; verbose?: boolean }
+  options?: BatchClassifyOptions
 ): Promise<{
   results: Map<string, ClassifiedTaskType>;
   stats: BatchClassificationStats;
 }> {
   const concurrency = options?.concurrency ?? 5;
+  const llmOnly = options?.llmOnly ?? false;
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
   const results = new Map<string, ClassifiedTaskType>();
 
   let completed = 0;
   let llmCount = 0;
   let regexCount = 0;
+  let skippedCount = 0;
   const total = prompts.length;
 
   async function processOne(item: {
     id: string;
     prompt: string;
   }): Promise<void> {
-    const { type, method } = await classifyPrompt(item.prompt);
+    const result = await classifyPrompt(item.prompt, { llmOnly });
+    completed++;
+
+    if (result === null) {
+      skippedCount++;
+      console.log(
+        `[${completed}/${total}] ${"(skipped)".padEnd(25)} (LLM failed) | ${item.prompt
+          .slice(0, 60)
+          .replace(/\n/g, " ")}`
+      );
+      return;
+    }
+
+    const { type, method } = result;
     results.set(item.id, type);
 
     if (method === "llm") {
@@ -304,7 +336,6 @@ export async function classifyPromptsBatch(
       regexCount++;
     }
 
-    completed++;
     const methodTag = method === "llm" ? "LLM" : "regex";
     console.log(
       `[${completed}/${total}] ${type.padEnd(25)} (${methodTag}) | ${item.prompt
@@ -326,12 +357,15 @@ export async function classifyPromptsBatch(
     total,
     llm: llmCount,
     regex: regexCount,
+    skipped: skippedCount,
   };
 
   const llmPct = total > 0 ? ((llmCount / total) * 100).toFixed(1) : "0";
   const regexPct = total > 0 ? ((regexCount / total) * 100).toFixed(1) : "0";
+  const skippedPct = total > 0 ? ((skippedCount / total) * 100).toFixed(1) : "0";
   console.log(
-    `[Classifier] Done: ${llmCount} LLM (${llmPct}%), ${regexCount} regex (${regexPct}%)`
+    `[Classifier] Done: ${llmCount} LLM (${llmPct}%), ${regexCount} regex (${regexPct}%)` +
+      (skippedCount > 0 ? `, ${skippedCount} skipped (${skippedPct}%)` : "")
   );
 
   return { results, stats };
