@@ -25,7 +25,8 @@
     "import-tasks": "tsx src/scripts/import-tasks.ts",
     "task-types": "tsx src/scripts/task-type-info.ts",
     "probe": "tsx src/scripts/api-probe.ts",
-    "ralph": "bash scripts/ralph-overnight.sh"
+    "ralph": "bash scripts/ralph-overnight.sh",
+    "score-manager": "tsx src/scripts/score-manager.ts"
   },
   "dependencies": {
     "@ai-sdk/openai": "^1.3.22",

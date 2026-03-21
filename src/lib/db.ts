@@ -28,7 +28,9 @@ db.exec(`
     elapsed_ms       INTEGER,
     success          INTEGER NOT NULL DEFAULT 0,
     error            TEXT,
-    source           TEXT NOT NULL
+    source           TEXT NOT NULL,
+    score_earned     REAL,
+    score_max        REAL
   );
 
   CREATE TABLE IF NOT EXISTS raw_requests (
@@ -57,6 +59,16 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_solves_prompt ON solves(prompt);
   CREATE INDEX IF NOT EXISTS idx_raw_requests_timestamp ON raw_requests(timestamp DESC);
 `);
+
+// Migration: add new columns if they don't exist (for existing databases)
+const columns = db.pragma("table_info(solves)") as { name: string }[];
+const columnNames = new Set(columns.map((c) => c.name));
+if (!columnNames.has("score_earned")) {
+  db.exec("ALTER TABLE solves ADD COLUMN score_earned REAL");
+}
+if (!columnNames.has("score_max")) {
+  db.exec("ALTER TABLE solves ADD COLUMN score_max REAL");
+}
 
 export default db;
 export { DB_PATH };

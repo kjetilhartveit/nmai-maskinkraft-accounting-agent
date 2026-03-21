@@ -13,7 +13,11 @@ import { resetPayrollCache } from "../handlers/create-payroll.js";
 import { resetSupplierInvoiceCache } from "../handlers/create-supplier-invoice.js";
 import { resetDimensionCache } from "../handlers/create-dimension.js";
 import { resetGenericHandlerCache } from "../handlers/generic-handler.js";
-import { logSolveRequest, logRawRequest, type SolveLogEntry } from "../lib/solve-logger.js";
+import {
+  logSolveRequest,
+  logRawRequest,
+  type SolveLogEntry,
+} from "../lib/solve-logger.js";
 import { config } from "../lib/config.js";
 
 export const solveRouter = new Hono();

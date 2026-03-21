@@ -68,3 +68,44 @@ export function logSolveRequest(entry: SolveLogEntry): void {
     console.error("[Logger] Failed to write solve log:", err);
   }
 }
+
+/** Update competition score for a solve (after seeing leaderboard) */
+export function updateScore(solveId: string, earned: number, max: number): boolean {
+  try {
+    const result = db.prepare("UPDATE solves SET score_earned = ?, score_max = ? WHERE id = ?").run(
+      earned,
+      max,
+      solveId,
+    );
+    return result.changes > 0;
+  } catch (err) {
+    console.error("[Logger] Failed to update score:", err);
+    return false;
+  }
+}
+
+/** Get recent competition solves (for score entry) */
+export function getRecentCompetitionSolves(limit = 20): {
+  id: string;
+  timestamp: string;
+  prompt: string;
+  score_earned: number | null;
+  score_max: number | null;
+  success: number;
+  api_call_errors: number;
+}[] {
+  return db
+    .prepare(
+      `SELECT id, timestamp, prompt, score_earned, score_max, success, api_call_errors
+       FROM solves WHERE source = 'competition' ORDER BY timestamp DESC LIMIT ?`,
+    )
+    .all(limit) as {
+    id: string;
+    timestamp: string;
+    prompt: string;
+    score_earned: number | null;
+    score_max: number | null;
+    success: number;
+    api_call_errors: number;
+  }[];
+}
