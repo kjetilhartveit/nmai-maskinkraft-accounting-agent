@@ -45,7 +45,9 @@ After analysis, make targeted improvements. Run pnpm eval after changes to verif
 
 Do not submit towards the competition, we are only improving the tasks and the system.
 
-Clean-up inaccurate documentation and slop. Leave the repository in a good/better shape for the next iteration."
+Clean-up inaccurate documentation and slop. Leave the repository in a good/better shape for the next iteration.
+
+Group changes logically and commit and push."
 
 for i in $(seq 1 $ITERATIONS); do
     echo "=========================================="
