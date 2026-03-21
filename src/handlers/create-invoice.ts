@@ -209,7 +209,7 @@ export async function handleCreateInvoice(
 
   // Only try to find an existing un-specified order if we have NO product lines.
   // If we have product lines, we should always create a new order for this invoice.
-  if (!order && customerName && !customerFromCtx && productLines.length === 0) {
+  if (!order && customerName && productLines.length === 0) {
     order = await findOrderByCustomerName(client, customerName);
   }
 

@@ -49,7 +49,8 @@ CRITICAL — BETA ENDPOINT RULES:
   * PUT /project/{id} → projects cannot be updated via API
   * DELETE /project/{id} → projects cannot be deleted
   * POST /company/salesmodules → modules cannot be activated via API
-  * All /incomingInvoice/* endpoints → not available
+  * All /incomingInvoice/* endpoints → not available. If the task is to register an incoming invoice/supplier invoice, you MUST create a VOUCHER (POST /voucher) instead! Credit the supplier's ledger account (e.g., 2400) and debit the expense account, including VAT calculations.
+  * All /salary/transaction or /salary/payslip endpoints → often fail due to missing module access. For payroll/salary tasks, create a manual VOUCHER (POST /voucher) using salary accounts (e.g., 5000-series).
   * All /documentArchive/* endpoints → not available
 - SAFE BATCH ENDPOINTS (non-beta): /department/list, /product/list, /employee/list, /supplier/list, /ledger/account/list
 - When the api_search tool returns results, endpoints marked [BETA] will be flagged. Prefer non-beta alternatives.

@@ -87,8 +87,8 @@ export async function geminiGenerateStructured<T>(options: {
   });
 
   const durationMs = Math.round(performance.now() - start);
-  let text = (result.candidates[0].content.parts[0] as { text: string }).text;
-  text = text.replace(/^```(?:json)?\n?/i, "").replace(/\n?```$/i, "");
+  let text = (result.candidates[0].content.parts[0] as { text: string }).text.trim();
+  text = text.replace(/^```(?:json)?\n?/i, "").replace(/\n?```$/i, "").trim();
   const parsed = JSON.parse(text);
   const object = options.schema.parse(parsed) as T;
 

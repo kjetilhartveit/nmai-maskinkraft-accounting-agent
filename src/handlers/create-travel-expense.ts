@@ -59,8 +59,14 @@ export async function handleCreateTravelExpense(
   if (!employeeId && entity.employeeId) employeeId = Number(entity.employeeId);
 
   if (!employeeId) {
-    console.warn("[Handler] No employee found for travel expense");
-    return;
+    console.warn("[Handler] No employee found for travel expense by name, using fallback");
+    const fallbackEmployees = await client.list<{ id: number }>("/employee", { from: "0", count: "1" });
+    if (fallbackEmployees.values.length > 0) {
+      employeeId = fallbackEmployees.values[0].id;
+    } else {
+      console.warn("[Handler] No fallback employee available");
+      return;
+    }
   }
 
   const travelExpenseBody: Record<string, unknown> = {
