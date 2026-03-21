@@ -41,37 +41,74 @@ export type TaskHandler = (
   ctx: SequenceContext,
 ) => Promise<void>;
 
+/**
+ * Dedicated handlers for each task type.
+ *
+ * Each handler is responsible for executing a specific task type with minimal API calls.
+ * The generic handler (handleGenericTask) is used as fallback for unknown task types.
+ */
 const handlers: Record<string, TaskHandler> = {
+  // 2-3 calls: dept lookup + dedup check + POST /employee
   create_employee: handleCreateEmployee,
+  // 2-3 calls: find by name + GET + PUT
   update_employee: handleUpdateEmployee,
+  // 1-2 calls: POST /customer, retry without address on 422
   create_customer: handleCreateCustomer,
+  // 2-3 calls: find by name + GET + PUT
   update_customer: handleUpdateCustomer,
+  // 1 call: batch POST /department/list
   create_department: handleCreateDepartment,
+  // 1 call: POST /supplier or batch
   create_supplier: handleCreateSupplier,
+  // 3-5 calls: dept + VAT + unit + POST, retries without vatType on rejection
   create_product: handleCreateProduct,
+  // 3-8 calls: customer + products + order + lines
   create_order: handleCreateOrder,
+  // 5-7 calls: bank config + order + invoice + send
   create_invoice: handleCreateInvoice,
+  // 5-7 calls: bank config + order + invoice + send (same as create_invoice)
   send_invoice: handleSendInvoice,
+  // 4-7 calls: employee + POST + paymentType + costs
   create_travel_expense: handleCreateTravelExpense,
+  // 1-2 calls: find + DELETE
   delete_travel_expense: handleDeleteTravelExpense,
+  // 3-8 calls: PM entitlements + POST /project
   create_project: handleCreateProject,
+  // 2-5 calls: account lookups + POST /ledger/voucher
   create_voucher: handleCreateVoucher,
+  // 3-5 calls: find invoice + payment type + PUT
   create_payment: handleCreatePayment,
+  // 6-8 calls: find/create invoice + credit
   create_credit_note: handleCreateCreditNote,
+  // 5-7 calls: employee + 3 accounts + voucher
   create_payroll: handleCreatePayroll,
+  // 4-5 calls: 3 accounts + voucher, supplier from ctx
   create_supplier_invoice: handleCreateSupplierInvoice,
+  // 5-8 calls: dimension + values + 2 accounts + voucher with dimension link
   create_dimension: handleCreateDimension,
+  // 4-6 calls: find invoice + reverse payment
   reverse_payment: handleReversePayment,
+  // 5-8 calls: project + fixed price + invoice percentage
   project_fixed_price: handleProjectFixedPrice,
+  // 4-6 calls: employee + project + activity + timesheet
   create_timesheet: handleCreateTimesheet,
+  // 3-5 calls: read receipt + voucher
   receipt_expense: handleReceiptExpense,
+  // 3-5 calls: parse PDF + create employee
   employee_onboarding_pdf: handleEmployeeOnboardingPdf,
+  // 5-10 calls: bank transactions + ledger matching
   bank_reconciliation: handleBankReconciliation,
+  // 5-10 calls: find errors + correcting vouchers
   ledger_audit: handleLedgerAudit,
+  // 5-10 calls: depreciation + accruals + closing entries
   year_end_closing: handleYearEndClosing,
+  // 3-6 calls: monthly accruals + depreciation
   monthly_closing: handleMonthlyClosing,
+  // 4-6 calls: FX conversion + supplier invoice voucher
   fx_payment: handleFxPayment,
+  // 8-15 calls: create project + register hours + invoice
   project_lifecycle: handleProjectLifecycle,
+  // 4-6 calls: find overdue invoice + add reminder fee
   reminder_fee: handleReminderFee,
 };
 
