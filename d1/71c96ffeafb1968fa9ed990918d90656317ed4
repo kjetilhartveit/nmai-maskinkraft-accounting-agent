@@ -1,0 +1,43 @@
+src/handlers/create-product.ts
+  466d55fc79af85d8 107-108,139
+src/lib/tripletex-helpers.ts
+  466d55fc79af85d8 378
+AGENTS.md
+  466d55fc79af85d8 130-176,179,182-230
+src/handlers/create-invoice.ts
+  466d55fc79af85d8 289-295,300-309
+src/handlers/generic-handler.ts
+  466d55fc79af85d8 227-252,262-265,341
+data/verified/imported-test-cases.json
+  466d55fc79af85d8 90,175,180,384,389
+src/eval/match.ts
+  466d55fc79af85d8 24,28-30
+src/routes/solve.ts
+  466d55fc79af85d8 15,69
+src/handlers/create-employee.ts
+  466d55fc79af85d8 207-228
+src/handlers/create-voucher.ts
+  466d55fc79af85d8 95-116
+src/handlers/create-project.ts
+  466d55fc79af85d8 98-105,108-124,127
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.17",
+  "base_commit_sha": "d171c96ffeafb1968fa9ed990918d90656317ed4",
+  "prompts": {
+    "466d55fc79af85d8": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "9edd1cc0-5af3-4fee-9ed0-254ca16ed782",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Kjetil Hårtveit <kjetil_runescape@hotmail.com>",
+      "messages": [],
+      "total_additions": 2890,
+      "total_deletions": 2718,
+      "accepted_lines": 2851,
+      "overriden_lines": 0
+    }
+  }
+}
