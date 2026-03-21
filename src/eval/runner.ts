@@ -50,15 +50,38 @@ export async function runEvalCase(
   }
 
   const start = performance.now();
-  const res = await fetch(`${serverUrl.replace(/\/+$/, "")}/solve`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify({
-      prompt: tc.prompt,
-      files: [],
-      tripletex_credentials: creds,
-    }),
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 240_000);
+
+  let res: Response;
+  try {
+    res = await fetch(`${serverUrl.replace(/\/+$/, "")}/solve`, {
+      method: "POST",
+      headers,
+      signal: controller.signal,
+      body: JSON.stringify({
+        prompt: tc.prompt,
+        files: [],
+        tripletex_credentials: creds,
+      }),
+    });
+  } catch (err) {
+    clearTimeout(timeout);
+    const elapsed = Math.round(performance.now() - start);
+    const msg = err instanceof Error ? err.message : String(err);
+    return {
+      testCaseId: tc.id,
+      config: evalConfig,
+      apiCalls: { count: 0, errors: 0 },
+      elapsedMs: elapsed,
+      success: false,
+      serverReportedSuccess: false,
+      parseMatch: false,
+      error: `Fetch failed (timeout/network): ${msg}`,
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
 
   const elapsedRoundtrip = Math.round(performance.now() - start);
   const json: unknown = await res.json();
@@ -80,19 +103,24 @@ export async function runEvalCase(
   const total = json.apiCallStats.total;
   const errors = json.apiCallStats.errors;
 
-  const parseMatch =
-    taskTypeMatches(tc, parsedSequence) &&
-    languageMatches(tc, parsedSequence) &&
-    sequenceEntitiesMatch(tc, parsedSequence);
+  const taskTypeOk = taskTypeMatches(tc, parsedSequence);
+  const langOk = languageMatches(tc, parsedSequence);
+  const entitiesOk = sequenceEntitiesMatch(tc, parsedSequence);
+  const parseMatch = taskTypeOk && langOk && entitiesOk;
 
   const boundsOk = apiBoundsSatisfied(tc, total, errors);
-  // A test passes if:
-  // 1. Parse is correct (task types, language, entities match)
-  // 2. API bounds are satisfied (within maxErrors threshold)
-  // 3. HTTP response was OK
-  // Note: json.success may be false if API errors occurred, but if those errors
-  // are within the expected bounds (maxErrors), the test should still pass.
   const success = parseMatch && boundsOk && res.ok;
+
+  if (!success && parseMatch && boundsOk) {
+    console.warn(`[Eval] ${tc.id}: parse OK, bounds OK, but res.ok=${res.ok} (status=${res.status})`);
+  }
+  if (!success && !parseMatch) {
+    const parts = [];
+    if (!taskTypeOk) parts.push("taskType");
+    if (!langOk) parts.push(`language(expected=${tc.language}, got=${parsedSequence?.language})`);
+    if (!entitiesOk) parts.push("entities");
+    console.warn(`[Eval] ${tc.id}: parse failed: ${parts.join(", ")}`);
+  }
 
   return {
     testCaseId: tc.id,
