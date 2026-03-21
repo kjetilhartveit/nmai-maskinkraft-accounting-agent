@@ -4,12 +4,16 @@
  * can reference them without redundant API lookups.
  */
 export class SequenceContext {
-  private departments = new Map<string, number>(); // name → id
-  private customers = new Map<string, number>();    // name → id
-  private employees = new Map<string, number>();    // "firstName lastName" or email → id
-  private suppliers = new Map<string, number>();    // name → id
-  private products = new Map<string, number>();     // name or number → id
-  private extendedEmployees = new Set<number>();    // employees known to have EXTENDED access
+  private departments = new Map<string, number>();
+  private customers = new Map<string, number>();
+  private employees = new Map<string, number>();
+  private suppliers = new Map<string, number>();
+  private products = new Map<string, number>();
+  private extendedEmployees = new Set<number>();
+  private orders = new Map<string, number>();     // customerName → orderId
+  private invoices = new Map<string, number>();   // customerName → invoiceId
+  private lastOrderId: number | null = null;
+  private lastInvoiceId: number | null = null;
 
   registerDepartment(name: string, id: number): void {
     this.departments.set(name.toLowerCase(), id);
@@ -57,5 +61,31 @@ export class SequenceContext {
 
   isEmployeeExtended(id: number): boolean {
     return this.extendedEmployees.has(id);
+  }
+
+  registerOrder(customerName: string, orderId: number): void {
+    this.orders.set(customerName.toLowerCase(), orderId);
+    this.lastOrderId = orderId;
+  }
+
+  getOrderId(customerName: string): number | undefined {
+    return this.orders.get(customerName.toLowerCase());
+  }
+
+  getLastOrderId(): number | null {
+    return this.lastOrderId;
+  }
+
+  registerInvoice(customerName: string, invoiceId: number): void {
+    this.invoices.set(customerName.toLowerCase(), invoiceId);
+    this.lastInvoiceId = invoiceId;
+  }
+
+  getInvoiceId(customerName: string): number | undefined {
+    return this.invoices.get(customerName.toLowerCase());
+  }
+
+  getLastInvoiceId(): number | null {
+    return this.lastInvoiceId;
   }
 }
