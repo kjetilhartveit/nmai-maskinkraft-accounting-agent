@@ -1,0 +1,29 @@
+src/handlers/generic-handler.ts
+  ae9a30006539c421 52-53
+src/handlers/create-travel-expense.ts
+  ae9a30006539c421 62-69
+src/handlers/create-invoice.ts
+  ae9a30006539c421 212
+src/lib/gemini.ts
+  ae9a30006539c421 90-91
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.17",
+  "base_commit_sha": "cfe1bca738f0e445a256366f9c3d2263bf5e596d",
+  "prompts": {
+    "ae9a30006539c421": {
+      "agent_id": {
+        "tool": "gemini",
+        "id": "e3fa6d4c-db27-4467-99ab-2f3a75438782",
+        "model": "gemini-3.1-pro-preview-customtools"
+      },
+      "human_author": "Kjetil Hårtveit <kjetil_runescape@hotmail.com>",
+      "messages": [],
+      "total_additions": 396,
+      "total_deletions": 389,
+      "accepted_lines": 396,
+      "overriden_lines": 0
+    }
+  }
+}
