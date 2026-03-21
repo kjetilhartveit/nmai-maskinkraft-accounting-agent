@@ -1520,5 +1520,105 @@
       "max": 1,
       "maxErrors": 0
     }
+  },
+  {
+    "id": "complex-annual-closing-es",
+    "prompt": "Realice el cierre anual simplificado de 2025: 1) Calcule y contabilice la depreciación anual de tres activos: Kjøretøy (61850 NOK, 3 años lineales, cuenta 1230), IT-utstyr (64150 NOK, 9 años, cuenta 1210), Programvare (64950 NOK, 3 años, cuenta 1250). Use cuenta 6010 para gasto de depreciación y 1209 para depreciación acumulada. 2) Revierta gastos prepagados (total 25750 NOK en cuenta 1700). 3) Calcule y contabilice la provisión de impuestos (22 % del resultado imponible) en cuenta 8700/2920. Registre cada depreciación como un comprobante separado.",
+    "language": "es",
+    "tier": 3,
+    "taskType": "unknown",
+    "expectedEntities": [
+      { "amount": 61850 },
+      { "amount": 64150 },
+      { "amount": 64950 }
+    ],
+    "expectedApiCalls": { "max": 30, "maxErrors": 2 },
+    "notes": "Complex: Year-end closing with 3 depreciation vouchers, prepaid reversal, and tax provision. Requires multiple account lookups and voucher creation. Generic handler with recipe."
+  },
+  {
+    "id": "complex-currency-disagio-pt",
+    "prompt": "Enviámos uma fatura de 19074 EUR ao Oceano Lda (org. nº 966853204) quando a taxa de câmbio era 11.69 NOK/EUR. O cliente pagou agora, mas a taxa é 11.28 NOK/EUR. Registe o pagamento e lance a diferença cambial (disagio) na conta correta.",
+    "language": "pt",
+    "tier": 3,
+    "taskType": "unknown",
+    "expectedEntities": [
+      { "name": "Oceano Lda", "organizationNumber": "966853204" },
+      { "amount": 19074 }
+    ],
+    "expectedApiCalls": { "max": 20, "maxErrors": 2 },
+    "notes": "Complex: Foreign currency invoice with exchange rate loss (disagio). Must create customer+invoice in EUR at old rate, register payment at new rate, book exchange difference. Accounts: 1500/3000 for receivable, 8160 for disagio."
+  },
+  {
+    "id": "complex-ledger-analysis-de",
+    "prompt": "Die Gesamtkosten sind von Januar bis Februar 2026 deutlich gestiegen. Analysieren Sie das Hauptbuch und identifizieren Sie die drei Aufwandskonten mit dem größten Anstieg. Erstellen Sie für jedes der drei Konten ein internes Projekt mit dem Kontonamen. Erstellen Sie außerdem eine Aktivität für jedes Projekt.",
+    "language": "de",
+    "tier": 3,
+    "taskType": "unknown",
+    "expectedEntities": [],
+    "expectedApiCalls": { "max": 25, "maxErrors": 2 },
+    "notes": "Complex: Analytical task. Read ledger for Jan and Feb, compare expense accounts (4000-7999 range), find top 3 increases. Then create 3 internal projects (each named after an account) and 1 activity per project. Requires GET /ledger/account, comparing sums, POST /project x3, POST /activity x3."
+  },
+  {
+    "id": "complex-bank-reconciliation-pt",
+    "prompt": "Reconcilie o extrato bancario (CSV anexo) com as faturas em aberto no Tripletex. Relacione os pagamentos recebidos com as faturas de clientes e os pagamentos efetuados com as faturas de fornecedores. Trate os pagamentos parciais corretamente.",
+    "language": "pt",
+    "tier": 3,
+    "taskType": "unknown",
+    "expectedEntities": [],
+    "expectedApiCalls": { "max": 25, "maxErrors": 5 },
+    "notes": "Complex: Bank reconciliation from CSV attachment. Match incoming payments to customer invoices and outgoing payments to supplier invoices. Handle partial payments. Requires reading CSV, listing invoices, registering payments."
+  },
+  {
+    "id": "complex-payroll-emily-en",
+    "prompt": "Run payroll for Emily Lewis (emily.lewis@example.org) for this month. The base salary is 53400 NOK. Add a one-time bonus of 16900 NOK on top of the base salary.",
+    "language": "en",
+    "tier": 3,
+    "taskType": "create_payroll",
+    "expectedEntities": [
+      { "employeeFirstName": "Emily", "employeeLastName": "Lewis", "employeeEmail": "emily.lewis@example.org", "baseSalary": 53400, "bonus": 16900 }
+    ],
+    "expectedApiCalls": { "max": 7, "maxErrors": 0 },
+    "notes": "Should parse as create_payroll (dedicated handler). Was misclassified as unknown in competition (29 calls, 11 errors). Dedicated handler does 5-7 calls with 0 errors."
+  },
+  {
+    "id": "complex-supplier-invoice-ridgepoint-en",
+    "prompt": "We have received invoice INV-2026-3749 from the supplier Ridgepoint Ltd (org no. 902484981) for 65850 NOK including VAT. The amount relates to office services (account 6590). Register the supplier invoice with the correct input VAT (25%).",
+    "language": "en",
+    "tier": 3,
+    "taskType": "create_supplier_invoice",
+    "taskTypeAlternatives": ["create_supplier"],
+    "expectedEntities": [
+      { "supplierName": "Ridgepoint Ltd", "organizationNumber": "902484981", "amount": 65850, "amountIncludesVat": true }
+    ],
+    "expectedTaskSequence": [
+      { "taskType": "create_supplier", "entities": [{ "name": "Ridgepoint Ltd" }] },
+      { "taskType": "create_supplier_invoice", "entities": [{ "supplierName": "Ridgepoint Ltd" }] }
+    ],
+    "expectedApiCalls": { "max": 6, "maxErrors": 0 },
+    "notes": "Should parse as create_supplier + create_supplier_invoice. Was misclassified as unknown in competition (30 calls, 17 errors). Dedicated handler does 5 calls with 0 errors."
+  },
+  {
+    "id": "complex-dimension-prosjekttype-nn",
+    "prompt": "Opprett ein fri rekneskapsdimensjon \"Prosjekttype\" med verdiane \"Utvikling\" og \"Internt\". Bokfør deretter eit bilag på konto 7000 for 39700 kr, knytt til dimensjonsverdien \"Internt\".",
+    "language": "nn",
+    "tier": 3,
+    "taskType": "create_dimension",
+    "expectedEntities": [
+      { "dimensionName": "Prosjekttype", "dimensionValues": ["Utvikling", "Internt"], "accountNumber": 7000, "amount": 39700, "linkedDimensionValue": "Internt" }
+    ],
+    "expectedApiCalls": { "max": 8, "maxErrors": 0 },
+    "notes": "Should parse as create_dimension. Was misclassified as unknown in competition (12 calls, 5 errors). Dedicated handler does 5-8 calls with 0 errors."
+  },
+  {
+    "id": "complex-payment-existing-pt",
+    "prompt": "O cliente Estrela Lda (org. nº 977023211) tem uma fatura pendente de 13650 NOK sem IVA por \"Design web\". Registe o pagamento total desta fatura.",
+    "language": "pt",
+    "tier": 3,
+    "taskType": "create_payment",
+    "expectedEntities": [
+      { "customerName": "Estrela Lda", "amount": 13650 }
+    ],
+    "expectedApiCalls": { "max": 6, "maxErrors": 1 },
+    "notes": "Should parse as ONLY create_payment (invoice already exists). Was misclassified as create_invoice + create_payment in competition (31 calls, 16 errors). Keyword: 'fatura pendente' means pending invoice."
   }
 ]
