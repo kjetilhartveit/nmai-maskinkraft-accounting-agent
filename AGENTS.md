@@ -8,14 +8,7 @@ There are many caveats to consider which are well documented in the official doc
 
 In order for us to create the best possible system there are many things we need to know first; many of which are mentioned in [RECOMMENDATIONS.md](docs/reports/RECOMMENDATIONS.md).
 
-Here's a list of tasks I think we need to work on to get started:
-
-- Create the initial framework for the system using TypeScript.
-- Get us up and running and submit against the endpoint. Our system should be deterministic (apart from the LLM of course) and easy to run.
-- We will thoroughly examine the Tripletex API and learn the ins and outs of it. Some key details are exploring the possibilities, especially in terms of how we can use as few API calls as possible to do operations. We should batch when we can and be smart about it. Sometimes we must create things in advance to avoid errors, because in real attempts the sandbox is empty - and this is what we should simulate.
-- Although we will create helpful tools for the LLM (like skills perhaps and documentation in the AGENTS.md), what is perhaps even more important is creating an evaluation system which we can use to rate setups. What we'll do is use sample prompts (including those we gain from submitting tasks) and add the answers to it (e.g. the data to identify and the most efficient API calls). We can use this data to evaluate systems and see what works and what doesn't, which LLMs perform the best and so on. We could even rate setups based on properties per prompt, e.g. the complexitity, the language and so on. And we must be able to run evaluation tests a reasonable number of times to increase our confidence in the results.
-  - When we run the tests we should make sure they don't have access to the answers, only the prompts.
-- Once our systems are ready, then we can start testing in larger scale and try new ideas and iterate to find the most optimal solution(s).
+The system parses natural-language prompts (in Norwegian, Nynorsk, English, Spanish, Portuguese, German, or French) into structured task sequences. Dedicated deterministic handlers execute each task with minimal API calls, while a generic agentic handler covers unsupported task types via LLM tool-calling.
 
 ## Agent's role
 
@@ -82,8 +75,9 @@ Tripletex is a module-based accounting system. Many endpoints marked `[BETA]` in
 - **403 = likely BETA.** If an endpoint returns 403, do not retry it — find a non-beta alternative.
 - **Batch `/list` endpoints that are BETA:** `/customer/list`, `/invoice/list`, `/order/list`, `/project/list`. Use repeated single `POST` calls instead.
 - **Safe batch `/list` endpoints (non-beta):** `/department/list`, `/product/list`, `/employee/list`, `/supplier/list`, `/ledger/account/list`.
-- **Employee entitlements** (`POST /employee/entitlement`) are BETA. May return 403. The first sandbox employee usually has PM rights already.
-- **Incoming invoice** endpoints are all BETA. Use voucher postings as an alternative.
+- **Employee entitlements** (`POST /employee/entitlement`) are BETA but often work. Common failure: employee must have `userType: "EXTENDED"` before entitlements can be granted. The first sandbox employee usually has PM rights already.
+- **Incoming invoice** endpoints are all BETA. Use voucher postings as an alternative (debit expense + debit input VAT + credit 2400). **Critical**: the credit posting to account 2400 (accounts payable) MUST include `supplier: {id}` or the voucher will fail with 422.
+- **Salary/payroll** endpoints (`/salary/transaction`, `/salary/payslip`) often return 403. Use manual voucher on salary accounts (5000-series) instead.
 - **`POST /company/salesmodules`** is BETA. Modules cannot be activated via API.
 - **Project update/delete** (`PUT /project/{id}`, `DELETE /project/{id}`) are BETA.
 - **`DELETE /customer/{id}`** is BETA.
@@ -108,19 +102,24 @@ The system uses a hybrid approach: Gemini LLM parses natural-language prompts in
 
 | Task type | Handler | Typical API calls |
 |-----------|---------|-------------------|
-| `create_employee` | `create-employee.ts` | 2 (dedup check + POST) |
-| `create_customer` | `create-customer.ts` | 1 (POST) |
+| `create_employee` | `create-employee.ts` | 2-3 (dept + dedup + POST) |
+| `update_employee` | `update-employee.ts` | 2-3 (find + GET + PUT) |
+| `create_customer` | `create-customer.ts` | 1-2 (POST, retry without address on 422) |
+| `update_customer` | `update-customer.ts` | 2-3 (find + GET + PUT) |
 | `create_department` | `create-department.ts` | 1 (batch POST /list) |
-| `create_supplier` | `create-supplier.ts` | 1 (POST) |
-| `create_product` | `create-product.ts` | 4 (deps + POST) |
-| `create_order` | `create-order.ts` | 5-8 (customer + products + order + lines) |
+| `create_supplier` | `create-supplier.ts` | 1 (POST or batch) |
+| `create_product` | `create-product.ts` | 3-5 (dept + VAT + unit + POST, retries without vatType on rejection) |
+| `create_order` | `create-order.ts` | 3-8 (customer + products + order + lines) |
 | `create_invoice` / `send_invoice` | `create-invoice.ts` | 5-7 (bank config + order + invoice + send) |
-| `create_payment` | `create-payment.ts` | 3-4 (find invoice + payment type + PUT) |
+| `create_payment` | `create-payment.ts` | 3-5 (find invoice + payment type + PUT) |
 | `create_credit_note` | `create-credit-note.ts` | 6-8 (find/create invoice + credit) |
-| `create_project` | `create-project.ts` | 5-8 (PM entitlements + POST) |
-| `create_voucher` | `create-voucher.ts` | 3-5 (account lookups + POST) |
-| `create_travel_expense` | `create-travel-expense.ts` | 3-5 (employee + POST + cost) |
-| `unknown` | `generic-handler.ts` | 5-25 (LLM agentic loop) |
+| `create_project` | `create-project.ts` | 3-8 (PM entitlements + POST) |
+| `create_voucher` | `create-voucher.ts` | 2-5 (account lookups + POST) |
+| `create_travel_expense` | `create-travel-expense.ts` | 4-7 (employee + POST + paymentType + costs) |
+| `create_payroll` | `create-payroll.ts` | 5-7 (employee + 3 accounts + voucher) |
+| `create_supplier_invoice` | `create-supplier-invoice.ts` | 4-5 (3 accounts + voucher, supplier from ctx) |
+| `create_dimension` | `create-dimension.ts` | 5-8 (dimension + values + 2 accounts + voucher with dimension link) |
+| `unknown` | `generic-handler.ts` | 4-25 (LLM agentic loop) |
 
 ### SequenceContext
 

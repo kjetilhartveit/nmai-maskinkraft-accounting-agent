@@ -38,8 +38,8 @@ Our goal is to improve the tasks with the following priorities: **total failure*
 
 Feedback loop:
 - We'll use our tasks and tests and our built-in knowledge to mold the information to the LLMs so that they understand and execute the tasks accurately and correctly.
-- We should utilise our tests in the sandbox thoroughly to improve the tasks, but do note that LLMs are non-deterministic, so mishaps can occur. We should aim for no errors, but should mainly aim for consistently good solutions.
-- We can check directly against the API to see if they work as expected.
+- LLMs are non-deterministic, so mishaps can occur. We should aim for no errors, but should mainly aim for consistently good solutions.
+- We can check directly against the API using `pnpm probe` to see if endpoints work as expected.
 
 Focus areas:
 1. Review recent eval results in data/agent.db for patterns of failure
@@ -48,7 +48,12 @@ Focus areas:
 4. Verify BETA endpoint handling is correct
 5. Optimize tool call sequences to reduce unnecessary API calls
 
-After analysis, make targeted improvements. Run pnpm eval after changes to verify improvements.
+IMPORTANT - Testing strategy:
+- DO NOT run full `pnpm eval` after every change - sandbox tests are expensive.
+- Instead, focus on analysis and code improvements first.
+- Use `pnpm probe` to verify API endpoint behavior directly (fast, no LLM).
+- Only run selective tests with `pnpm eval -- --filter "<specific_case>"` when you've made a targeted fix for that specific case.
+- At the END of your iteration, run 1-3 selective tests for the cases you actually changed.
 
 Do not submit towards the competition, we are only improving the tasks and the system.
 

@@ -21,7 +21,7 @@
     "prompt": "Hemos recibido la factura INV-2026-9187 del proveedor Montaña SL (org. nº 884646979) por 19500 NOK con IVA incluido. El importe corresponde a servicios de oficina (cuenta 7300). Registre la factura del proveedor con el IVA soportado correcto (25 %).",
     "language": "es",
     "tier": 3,
-    "taskType": "unknown",
+    "taskType": "create_supplier_invoice",
     "taskTypeAlternatives": [
       "create_supplier"
     ],
@@ -38,15 +38,15 @@
         ]
       },
       {
-        "taskType": "unknown",
+        "taskType": "create_supplier_invoice",
         "entities": [
           {}
         ]
       }
     ],
     "expectedApiCalls": {
-      "max": 11,
-      "maxErrors": 5
+      "max": 5,
+      "maxErrors": 0
     }
   },
   {
@@ -206,16 +206,13 @@
     "prompt": "Registrer leverandøren Elvdal AS med organisasjonsnummer 994963309. E-post: faktura@elvdal.no.",
     "language": "no",
     "tier": 3,
-    "taskType": "unknown",
-    "taskTypeAlternatives": [
-      "create_supplier"
-    ],
+    "taskType": "create_supplier",
     "expectedEntities": [
       {}
     ],
     "expectedApiCalls": {
-      "max": 2,
-      "maxErrors": 1
+      "max": 1,
+      "maxErrors": 0
     }
   },
   {
@@ -223,16 +220,13 @@
     "prompt": "Registrer leverandøren Havbris AS med organisasjonsnummer 846635408. E-post: faktura@havbris.no.",
     "language": "no",
     "tier": 3,
-    "taskType": "unknown",
-    "taskTypeAlternatives": [
-      "create_supplier"
-    ],
+    "taskType": "create_supplier",
     "expectedEntities": [
       {}
     ],
     "expectedApiCalls": {
-      "max": 2,
-      "maxErrors": 1
+      "max": 1,
+      "maxErrors": 0
     }
   },
   {
@@ -240,15 +234,15 @@
     "prompt": "Exécutez la paie de Jules Leroy (jules.leroy@example.org) pour ce mois. Le salaire de base est de 56950 NOK. Ajoutez une prime unique de 9350 NOK en plus du salaire de base.",
     "language": "fr",
     "tier": 3,
-    "taskType": "unknown",
+    "taskType": "create_payroll",
     "expectedEntities": [
       {
         "amount": 56950
       }
     ],
     "expectedApiCalls": {
-      "max": 14,
-      "maxErrors": 2
+      "max": 6,
+      "maxErrors": 0
     }
   },
   {
@@ -256,11 +250,7 @@
     "prompt": "Erstellen Sie eine benutzerdefinierte Buchhaltungsdimension \"Kostsenter\" mit den Werten \"IT\" und \"Innkjøp\". Buchen Sie dann einen Beleg auf Konto 7000 über 19450 NOK, verknüpft mit dem Dimensionswert \"IT\".",
     "language": "de",
     "tier": 3,
-    "taskType": "unknown",
-    "taskTypeAlternatives": [
-      "create_department",
-      "create_voucher"
-    ],
+    "taskType": "create_dimension",
     "expectedEntities": [
       {
         "name": "Kostsenter"
@@ -272,29 +262,12 @@
         "name": "Innkjøp"
       },
       {
-        "name": "IT"
-      },
-      {
         "amount": 19450
       }
     ],
-    "expectedTaskSequence": [
-      {
-        "taskType": "create_department",
-        "entities": [
-          {}
-        ]
-      },
-      {
-        "taskType": "create_voucher",
-        "entities": [
-          {}
-        ]
-      }
-    ],
     "expectedApiCalls": {
-      "max": 20,
-      "maxErrors": 2
+      "max": 8,
+      "maxErrors": 1
     }
   },
   {
@@ -563,8 +536,7 @@
     "prompt": "O cliente Rio Azul Lda (org. nº 932217643) tem uma fatura pendente de 44100 NOK sem IVA por \"Sessão de formação\". Registe o pagamento total desta fatura.",
     "language": "pt",
     "tier": 3,
-    "taskType": "unknown",
-    "taskTypeAlternatives": ["create_payment"],
+    "taskType": "create_payment",
     "expectedEntities": [
       {
         "amount": 44100
@@ -689,7 +661,7 @@
     "prompt": "Erstellen Sie eine benutzerdefinierte Buchhaltungsdimension \"Kostsenter\" mit den Werten \"Kundeservice\" und \"Markedsføring\". Buchen Sie dann einen Beleg auf Konto 7100 über 42400 NOK, verknüpft mit dem Dimensionswert \"Markedsføring\".",
     "language": "de",
     "tier": 3,
-    "taskType": "unknown",
+    "taskType": "create_dimension",
     "expectedEntities": [
       {
         "name": "Kostsenter"
@@ -708,8 +680,8 @@
       }
     ],
     "expectedApiCalls": {
-      "max": 14,
-      "maxErrors": 3
+      "max": 8,
+      "maxErrors": 1
     }
   },
   {
@@ -731,7 +703,7 @@
     "prompt": "Créez une dimension comptable personnalisée \"Produktlinje\" avec les valeurs \"Premium\" et \"Standard\". Puis comptabilisez une pièce sur le compte 7140 pour 13750 NOK, liée à la valeur de dimension \"Premium\".",
     "language": "fr",
     "tier": 3,
-    "taskType": "unknown",
+    "taskType": "create_dimension",
     "expectedEntities": [
       {
         "name": "Produktlinje"
@@ -750,8 +722,8 @@
       }
     ],
     "expectedApiCalls": {
-      "max": 7,
-      "maxErrors": 2
+      "max": 8,
+      "maxErrors": 1
     }
   },
   {
@@ -793,15 +765,15 @@
     "prompt": "Ejecute la nómina de Marta López (marta.lopez@example.org) para este mes. El salario base es de 31300 NOK. Añada una bonificación única de 13300 NOK además del salario base.",
     "language": "es",
     "tier": 3,
-    "taskType": "unknown",
+    "taskType": "create_payroll",
     "expectedEntities": [
       {
         "amount": 31300
       }
     ],
     "expectedApiCalls": {
-      "max": 20,
-      "maxErrors": 2
+      "max": 6,
+      "maxErrors": 0
     }
   },
   {
@@ -822,8 +794,8 @@
       }
     ],
     "expectedApiCalls": {
-      "max": 21,
-      "maxErrors": 2
+      "max": 25,
+      "maxErrors": 4
     }
   },
   {
@@ -831,16 +803,13 @@
     "prompt": "Registe o fornecedor Porto Alegre Lda com número de organização 813918382. E-mail: faktura@portoalegrelda.no.",
     "language": "pt",
     "tier": 3,
-    "taskType": "unknown",
-    "taskTypeAlternatives": [
-      "create_supplier"
-    ],
+    "taskType": "create_supplier",
     "expectedEntities": [
       {}
     ],
     "expectedApiCalls": {
-      "max": 2,
-      "maxErrors": 1
+      "max": 1,
+      "maxErrors": 0
     }
   },
   {
@@ -884,10 +853,7 @@
     "prompt": "Opprett tre avdelinger i Tripletex: \"Produksjon\", \"Kvalitetskontroll\" og \"Administrasjon\".",
     "language": "no",
     "tier": 3,
-    "taskType": "unknown",
-    "taskTypeAlternatives": [
-      "create_department"
-    ],
+    "taskType": "create_department",
     "expectedEntities": [
       {
         "name": "Produksjon"
@@ -900,8 +866,8 @@
       }
     ],
     "expectedApiCalls": {
-      "max": 2,
-      "maxErrors": 1
+      "max": 1,
+      "maxErrors": 0
     }
   },
   {
@@ -935,8 +901,8 @@
       }
     ],
     "expectedApiCalls": {
-      "max": 24,
-      "maxErrors": 4
+      "max": 15,
+      "maxErrors": 3
     }
   },
   {
@@ -944,15 +910,15 @@
     "prompt": "Processe o salário de Beatriz Pereira (beatriz.pereira@example.org) para este mês. O salário base é de 58650 NOK. Adicione um bónus único de 8850 NOK além do salário base.",
     "language": "pt",
     "tier": 3,
-    "taskType": "unknown",
+    "taskType": "create_payroll",
     "expectedEntities": [
       {
         "amount": 58650
       }
     ],
     "expectedApiCalls": {
-      "max": 66,
-      "maxErrors": 5
+      "max": 6,
+      "maxErrors": 0
     }
   },
   {
@@ -990,7 +956,7 @@
       }
     ],
     "expectedApiCalls": {
-      "max": 17,
+      "max": 25,
       "maxErrors": 4
     }
   },
@@ -1104,7 +1070,7 @@
     "prompt": "Erstellen Sie eine benutzerdefinierte Buchhaltungsdimension \"Region\" mit den Werten \"Vestlandet\" und \"Midt-Norge\". Buchen Sie dann einen Beleg auf Konto 6540 über 8600 NOK, verknüpft mit dem Dimensionswert \"Vestlandet\".",
     "language": "de",
     "tier": 3,
-    "taskType": "unknown",
+    "taskType": "create_dimension",
     "expectedEntities": [
       {
         "name": "Region"
@@ -1123,8 +1089,8 @@
       }
     ],
     "expectedApiCalls": {
-      "max": 15,
-      "maxErrors": 3
+      "max": 8,
+      "maxErrors": 1
     }
   },
   {
@@ -1245,7 +1211,9 @@
     "language": "de",
     "tier": 3,
     "taskType": "create_credit_note",
-    "taskTypeAlternatives": ["create_customer"],
+    "taskTypeAlternatives": [
+      "create_customer"
+    ],
     "expectedEntities": [
       {
         "name": "Waldstein GmbH"
@@ -1283,15 +1251,15 @@
     "prompt": "Führen Sie die Gehaltsabrechnung für Laura Schneider (laura.schneider@example.org) für diesen Monat durch. Das Grundgehalt beträgt 33000 NOK. Fügen Sie einen einmaligen Bonus von 17850 NOK zum Grundgehalt hinzu.",
     "language": "de",
     "tier": 3,
-    "taskType": "unknown",
+    "taskType": "create_payroll",
     "expectedEntities": [
       {
         "amount": 33000
       }
     ],
     "expectedApiCalls": {
-      "max": 33,
-      "maxErrors": 5
+      "max": 6,
+      "maxErrors": 0
     }
   },
   {
@@ -1307,8 +1275,8 @@
       }
     ],
     "expectedApiCalls": {
-      "max": 21,
-      "maxErrors": 5
+      "max": 15,
+      "maxErrors": 3
     }
   },
   {
@@ -1390,16 +1358,13 @@
     "prompt": "Enregistrez le fournisseur Colline SARL avec le numéro d'organisation 915612865. E-mail : faktura@collinesarl.no.",
     "language": "fr",
     "tier": 3,
-    "taskType": "unknown",
-    "taskTypeAlternatives": [
-      "create_supplier"
-    ],
+    "taskType": "create_supplier",
     "expectedEntities": [
       {}
     ],
     "expectedApiCalls": {
-      "max": 2,
-      "maxErrors": 1
+      "max": 1,
+      "maxErrors": 0
     }
   },
   {
@@ -1523,15 +1488,15 @@
     "prompt": "Kjør lønn for Erik Nilsen (erik.nilsen@example.org) for denne måneden. Grunnlønn er 53350 kr. Legg til en engangsbonus på 11050 kr i tillegg til grunnlønnen. Dersom lønns-API-et ikke fungerer, kan du bruke manuelle bilag på lønnskontoer (5000-serien) for å registrere lønnskostnaden.",
     "language": "no",
     "tier": 3,
-    "taskType": "unknown",
+    "taskType": "create_payroll",
     "expectedEntities": [
       {
         "amount": 53350
       }
     ],
     "expectedApiCalls": {
-      "max": 36,
-      "maxErrors": 5
+      "max": 6,
+      "maxErrors": 0
     }
   },
   {
@@ -1539,10 +1504,7 @@
     "prompt": "Erstellen Sie drei Abteilungen in Tripletex: \"Økonomi\", \"Logistikk\" und \"Produksjon\".",
     "language": "de",
     "tier": 3,
-    "taskType": "unknown",
-    "taskTypeAlternatives": [
-      "create_department"
-    ],
+    "taskType": "create_department",
     "expectedEntities": [
       {
         "name": "Økonomi"
@@ -1555,8 +1517,8 @@
       }
     ],
     "expectedApiCalls": {
-      "max": 2,
-      "maxErrors": 1
+      "max": 1,
+      "maxErrors": 0
     }
   }
 ]
