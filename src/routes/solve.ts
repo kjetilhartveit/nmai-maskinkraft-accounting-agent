@@ -1,8 +1,7 @@
 import { Hono } from "hono";
 import { SolveRequestSchema } from "../types/index.js";
-import type { ApiCallLog, ParsedTaskSequence, SolveResponse } from "../types/index.js";
+import type { ApiCallLog, ParsedTaskSequence, SolveResponse, TaskType } from "../types/index.js";
 import { TripletexClient } from "../lib/tripletex-client.js";
-import { parsePrompt, type ParsePromptOptions } from "../lib/llm.js";
 import { executeTaskSequence } from "../handlers/index.js";
 import { resetCaches } from "../lib/tripletex-helpers.js";
 import { resetPaymentCache } from "../handlers/create-payment.js";
@@ -13,12 +12,12 @@ import { resetPayrollCache } from "../handlers/create-payroll.js";
 import { resetSupplierInvoiceCache } from "../handlers/create-supplier-invoice.js";
 import { resetDimensionCache } from "../handlers/create-dimension.js";
 import { resetGenericHandlerCache } from "../handlers/generic-handler.js";
-import {
-  logSolveRequest,
-  logRawRequest,
-  type SolveLogEntry,
-} from "../lib/solve-logger.js";
+import { logSolveRequest, logRawRequest } from "../lib/solve-logger.js";
 import { config } from "../lib/config.js";
+import { createSolveTrace } from "../lib/solve-trace.js";
+import { classifyPrompt } from "../lib/task-classifier.js";
+import { extractEntities, buildTaskSequence } from "../lib/entity-extractor.js";
+import { consultCouncil, shouldConsultCouncil } from "../lib/llm-council.js";
 
 export const solveRouter = new Hono();
 
@@ -35,15 +34,6 @@ export interface SolveEvalResponseBody {
   error?: string;
 }
 
-function evalParseOptions(c: { req: { header: (name: string) => string | undefined } }): ParsePromptOptions {
-  const model = c.req.header("X-Eval-Model");
-  const systemPromptVariant = c.req.header("X-Eval-System-Prompt-Variant");
-  return {
-    ...(model ? { model } : {}),
-    ...(systemPromptVariant ? { systemPromptVariant } : {}),
-  };
-}
-
 function detectSource(evalMode: boolean, baseUrl: string): "competition" | "eval" | "manual" {
   if (evalMode) return "eval";
   const sandboxUrl = config.sandbox.apiUrl;
@@ -56,12 +46,15 @@ solveRouter.post("/solve", async (c) => {
   const start = performance.now();
   const evalMode = c.req.header("X-Eval-Mode") === "true";
   const solveId = `solve-${Date.now()}`;
+  const trace = createSolveTrace(solveId);
+
   let client: TripletexClient | undefined;
   let sequence: ParsedTaskSequence | undefined;
   let prompt = "";
   let filesCount = 0;
   let baseUrl = "";
 
+  // Reset all caches
   resetCaches();
   resetPaymentCache();
   resetTravelExpenseCache();
@@ -78,13 +71,6 @@ solveRouter.post("/solve", async (c) => {
       [...c.req.raw.headers.entries()].filter(([k]) => !k.toLowerCase().includes("authorization")),
     );
 
-    console.log(`[Solve] ${solveId} | === INCOMING REQUEST ===`);
-    console.log(`[Solve] ${solveId} | Headers: ${JSON.stringify(rawHeaders)}`);
-    console.log(`[Solve] ${solveId} | Raw body keys: ${Object.keys(rawBody).join(", ")}`);
-    console.log(`[Solve] ${solveId} | prompt length: ${rawBody.prompt?.length ?? "missing"}, files type: ${rawBody.files === null ? "null" : Array.isArray(rawBody.files) ? `array(${rawBody.files.length})` : typeof rawBody.files}, creds: ${rawBody.tripletex_credentials ? "present" : "missing"}`);
-    console.log(`[Solve] ${solveId} | Full prompt: ${JSON.stringify(rawBody.prompt)}`);
-    console.log(`[Solve] ${solveId} | Base URL: ${rawBody.tripletex_credentials?.base_url ?? "missing"}`);
-
     logRawRequest({
       id: solveId,
       timestamp: new Date().toISOString(),
@@ -97,6 +83,7 @@ solveRouter.post("/solve", async (c) => {
     if (!parsed.success) {
       const issues = parsed.error.issues.map(i => `${i.path.join(".")}: ${i.message}`).join("; ");
       console.error(`[Solve] ${solveId} | Validation failed: ${issues}`);
+      trace.logResult(false, { total: 0, errors: 0 }, `Validation: ${issues}`);
 
       const source = detectSource(evalMode, rawBody.tripletex_credentials?.base_url ?? "");
       logSolveRequest({
@@ -130,28 +117,89 @@ solveRouter.post("/solve", async (c) => {
     prompt = parsed.data.prompt;
     filesCount = files.length;
     baseUrl = tripletex_credentials.base_url;
-
     const source = detectSource(evalMode, baseUrl);
-    console.log(`[Solve] ${solveId} | Received prompt (${prompt.length} chars) [${source}]`);
-    console.log(`[Solve] ${solveId} | Files: ${filesCount}, Base URL: ${baseUrl}`);
+
+    // Log request
+    trace.logRequest(prompt, filesCount, baseUrl);
 
     client = new TripletexClient(
       tripletex_credentials.base_url,
       tripletex_credentials.session_token,
     );
 
-    const parseOpts = evalMode ? evalParseOptions(c) : undefined;
-    sequence = await parsePrompt(prompt, files, parseOpts);
-    const taskTypes = sequence.tasks.map((t) => t.taskType).join(" → ");
-    console.log(`[Solve] ${solveId} | Parsed ${sequence.tasks.length} task(s): ${taskTypes} (${sequence.language})`);
+    // ══════════════════════════════════════════════════════════════════
+    // STEP 1: Classify the prompt
+    // ══════════════════════════════════════════════════════════════════
+    const classifyStart = performance.now();
+    const classification = await classifyPrompt(prompt);
+    const classifyMs = Math.round(performance.now() - classifyStart);
+
+    if (!classification) {
+      throw new Error("Classification failed");
+    }
+
+    const taskType = classification.type as TaskType;
+    trace.logClassification(taskType, classification.method, undefined, classifyMs);
+
+    // ══════════════════════════════════════════════════════════════════
+    // STEP 2: Extract entities based on task type
+    // ══════════════════════════════════════════════════════════════════
+    const extraction = await extractEntities(taskType, prompt, files);
+    trace.logEntityExtraction(taskType, extraction.entities, extraction.durationMs);
+
+    // ══════════════════════════════════════════════════════════════════
+    // STEP 3: Build task sequence (with prerequisites)
+    // ══════════════════════════════════════════════════════════════════
+    let tasks = buildTaskSequence(taskType, extraction, prompt);
+
+    // ══════════════════════════════════════════════════════════════════
+    // STEP 4: Consult LLM council for unknown/complex tasks
+    // ══════════════════════════════════════════════════════════════════
+    if (shouldConsultCouncil(taskType)) {
+      trace.debug("council", "Consulting LLM council for unknown task");
+
+      const councilResult = await consultCouncil(prompt, taskType, extraction.entities, trace);
+
+      // If council suggests a built-in handler, rebuild task sequence
+      if (councilResult.decision.finalDecision === "builtin" && councilResult.suggestedTask) {
+        trace.debug("council", `Council recommends: ${councilResult.suggestedTask.taskType}`);
+        tasks = buildTaskSequence(
+          councilResult.suggestedTask.taskType,
+          extraction,
+          prompt,
+        );
+      }
+    }
+
+    sequence = {
+      tasks,
+      language: extraction.language,
+      rawPrompt: prompt,
+    };
+
+    trace.logTaskSequence(
+      tasks.map(t => ({ taskType: t.taskType, entities: t.entities })),
+      extraction.language,
+    );
+
+    // ══════════════════════════════════════════════════════════════════
+    // STEP 5: Execute the task sequence
+    // ══════════════════════════════════════════════════════════════════
+    for (const task of sequence.tasks) {
+      trace.logHandlerStart(task.taskType, task.taskType === "unknown" ? "generic" : "dedicated");
+    }
 
     await executeTaskSequence(client, sequence);
 
+    // Log API calls to trace
+    for (const call of client.calls) {
+      trace.logApiCall(call.method, call.endpoint, call.status, call.durationMs, call.errorBody);
+    }
+
     const elapsed = Math.round(performance.now() - start);
     const stats = client.stats;
-    console.log(
-      `[Solve] ${solveId} | Completed in ${elapsed}ms | API calls: ${stats.total} (${stats.errors} errors, ${stats.totalDuration}ms total API time)`,
-    );
+
+    trace.logResult(true, { total: stats.total, errors: stats.errors });
 
     logSolveRequest({
       id: solveId,
@@ -168,7 +216,7 @@ solveRouter.post("/solve", async (c) => {
     });
 
     if (evalMode) {
-      const body: SolveEvalResponseBody = {
+      return c.json({
         status: "completed",
         success: true,
         parsedSequence: sequence,
@@ -178,18 +226,21 @@ solveRouter.post("/solve", async (c) => {
           details: [...client.calls],
         },
         elapsedMs: elapsed,
-      };
-      return c.json(body);
+      } satisfies SolveEvalResponseBody);
     }
 
     return c.json({ status: "completed" } satisfies SolveResponse);
+
   } catch (error) {
     const elapsed = Math.round(performance.now() - start);
-    console.error(`[Solve] ${solveId} | Error after ${elapsed}ms:`, error);
     const message = error instanceof Error ? error.message : String(error);
+    console.error(`[Solve] ${solveId} | Error after ${elapsed}ms:`, error);
 
     const stats = client?.stats ?? { total: 0, errors: 0, totalDuration: 0 };
     const source = detectSource(evalMode, baseUrl);
+
+    trace.logResult(false, { total: stats.total, errors: stats.errors }, message);
+
     logSolveRequest({
       id: solveId,
       timestamp: new Date().toISOString(),
@@ -206,7 +257,7 @@ solveRouter.post("/solve", async (c) => {
     });
 
     if (evalMode) {
-      const body: SolveEvalResponseBody = {
+      return c.json({
         status: "completed",
         success: false,
         parsedSequence: sequence,
@@ -217,8 +268,7 @@ solveRouter.post("/solve", async (c) => {
         },
         elapsedMs: elapsed,
         error: message,
-      };
-      return c.json(body, 200);
+      } satisfies SolveEvalResponseBody, 200);
     }
 
     return c.json({ status: "completed" } satisfies SolveResponse);

@@ -5,14 +5,18 @@ import type {
 } from "../types/index.js";
 
 export class TripletexClient {
-  private baseUrl: string;
+  private _baseUrl: string;
   private authHeader: string;
   private callLog: ApiCallLog[] = [];
 
   constructor(baseUrl: string, sessionToken: string) {
-    this.baseUrl = baseUrl.replace(/\/+$/, "");
+    this._baseUrl = baseUrl.replace(/\/+$/, "");
     this.authHeader =
       "Basic " + Buffer.from(`0:${sessionToken}`).toString("base64");
+  }
+
+  get baseUrl(): string {
+    return this._baseUrl;
   }
 
   get calls(): ReadonlyArray<ApiCallLog> {
@@ -31,7 +35,7 @@ export class TripletexClient {
     endpoint: string,
     options: { params?: Record<string, string>; body?: unknown } = {},
   ): Promise<T> {
-    const url = new URL(`${this.baseUrl}${endpoint}`);
+    const url = new URL(`${this._baseUrl}${endpoint}`);
     if (options.params) {
       for (const [key, value] of Object.entries(options.params)) {
         url.searchParams.set(key, value);
