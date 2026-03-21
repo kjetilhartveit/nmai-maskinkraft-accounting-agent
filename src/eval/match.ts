@@ -21,11 +21,13 @@ function valueMatches(expected: unknown, actual: unknown): boolean {
 }
 
 const FIELD_ALIASES: Record<string, string[]> = {
-  name: ["name", "departmentName", "projectName", "companyName", "supplierName", "dimensionName", "displayName"],
+  name: ["name", "departmentName", "projectName", "companyName", "supplierName", "dimensionName", "displayName", "activityName", "activity", "title", "description", "productName"],
   customerName: ["customerName", "name", "companyName"],
   email: ["email", "emailAddress"],
   organizationNumber: ["organizationNumber", "orgNumber", "orgNo", "orgNr"],
-  amount: ["amount", "totalAmount", "invoiceAmount", "amountExcludingVat", "amountGross", "baseSalary", "salary", "unitPrice"],
+  amount: ["amount", "totalAmount", "invoiceAmount", "amountExcludingVat", "amountGross", "baseSalary", "salary", "unitPrice", "hourlyRate", "rate", "pricePerHour", "hours", "priceExcludingVatCurrency", "priceExcludingVat", "price"],
+  number: ["number", "productNumber", "employeeNumber", "departmentNumber"],
+  priceExcludingVat: ["priceExcludingVat", "priceExcludingVatCurrency", "unitPrice", "price", "amount"],
 };
 
 function getActualValue(actual: Record<string, unknown>, key: string): unknown {

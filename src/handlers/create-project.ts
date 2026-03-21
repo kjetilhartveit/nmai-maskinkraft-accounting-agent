@@ -95,30 +95,36 @@ export async function handleCreateProject(
       console.log(`[Handler] Created project: id=${result.value.id}`);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      if (msg.includes("prosjektleder") || msg.includes("project manager") || msg.includes("rettighet")) {
-        // PM doesn't have rights — try granting, then fall back to default PM
-        if (!grantedPMs.has(projectManagerId)) {
-          const knownExtended = ctx.isEmployeeExtended(projectManagerId);
-          const granted = await grantProjectManagerEntitlement(client, projectManagerId, knownExtended);
-          grantedPMs.add(projectManagerId);
-          if (granted) {
-            const result = await client.post<{ id: number }>("/project", body);
-            console.log(`[Handler] Created project (after PM grant): id=${result.value.id}`);
-            continue;
-          }
-        }
-        const fallbackPM = await getProjectManagerEmployeeId(client);
-        if (fallbackPM && fallbackPM !== projectManagerId) {
-          console.log(`[Handler] Using fallback PM id=${fallbackPM}`);
-          body.projectManager = { id: fallbackPM };
+
+      // On any 422, try fallback PM first (the first sandbox employee usually has PM rights).
+      // This avoids wasted calls to BETA entitlement endpoints that usually return 403.
+      const fallbackPM = await getProjectManagerEmployeeId(client);
+      if (fallbackPM && fallbackPM !== projectManagerId) {
+        console.log(`[Handler] Project creation failed, retrying with fallback PM id=${fallbackPM}`);
+        body.projectManager = { id: fallbackPM };
+        try {
           const result = await client.post<{ id: number }>("/project", body);
           console.log(`[Handler] Created project (fallback PM): id=${result.value.id}`);
-        } else {
-          throw err;
+          continue;
+        } catch {
+          // Fallback PM also failed — try granting entitlements as last resort
         }
-      } else {
-        throw err;
       }
+
+      // Last resort: try granting PM entitlements to the original employee
+      const isPmError = msg.includes("prosjektleder") || msg.includes("project manager") || msg.includes("rettighet") || msg.includes("entitlement");
+      if (isPmError && !grantedPMs.has(projectManagerId)) {
+        const knownExtended = ctx.isEmployeeExtended(projectManagerId);
+        const granted = await grantProjectManagerEntitlement(client, projectManagerId, knownExtended);
+        grantedPMs.add(projectManagerId);
+        if (granted) {
+          body.projectManager = { id: projectManagerId };
+          const result = await client.post<{ id: number }>("/project", body);
+          console.log(`[Handler] Created project (after PM grant): id=${result.value.id}`);
+          continue;
+        }
+      }
+      throw err;
     }
   }
 }

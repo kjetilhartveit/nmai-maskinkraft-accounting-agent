@@ -127,14 +127,106 @@ Handlers share state via `SequenceContext` which tracks IDs for customers, emplo
 
 ## Evaluation system
 
-Run `pnpm eval` to test all cases against the sandbox. Use `--filter` to test specific cases.
+**Never run eval against all tests.** With 100+ cases each taking seconds, a full run wastes time and API quota. Always scope runs to the task type you are working on.
+
+### Eval commands
 
 ```bash
-pnpm eval                                    # run all test cases
-pnpm eval -- --filter "credit_note"          # filter by ID/type
-pnpm eval -- --filter "order" --iterations 3 # run 3 times for confidence
-pnpm eval -- --update-baselines              # tighten API call bounds
+# Targeted — run one task type
+pnpm eval -- --task-type create_invoice
+
+# Fast — one representative test per task type (16 cases total)
+pnpm eval -- --one-per-type
+
+# Focused — top N worst-performing types from solve history
+pnpm eval -- --worst 5 --one-per-type
+
+# Combine filters
+pnpm eval -- --task-type create_credit_note --tier 2,3
+pnpm eval -- --worst 5 --tier 2,3 --one-per-type
+
+# Other flags
+pnpm eval -- --filter "credit_note"          # freetext filter on ID/type/prompt
+pnpm eval -- --iterations 3                  # repeat for confidence (LLMs are non-deterministic)
+pnpm eval -- --update-baselines              # tighten API call bounds after improvements
 ```
+
+Each case prints a colored PASS/FAIL line immediately as it completes, so you get continuous terminal feedback.
+
+### Task type analysis
+
+```bash
+pnpm task-types                        # overview: all types, case counts, tiers, languages
+pnpm task-types -- create_invoice      # detail: all variations by language + solve history
+pnpm task-types -- --worst             # top 10 failing types from solve database
+```
+
+## Feedback loop for solving difficult tasks (current priority)
+
+Medium and complex tasks (tier 2–3) carry the highest competition score multiplier. Use this loop to systematically fix failing task types.
+
+### Step 1: Identify — find what's failing
+
+```bash
+pnpm task-types -- --worst
+```
+
+This queries the solve database and ranks task types by failure count. Focus on the type with the most failures or the lowest success rate.
+
+### Step 2: Understand — inspect the task type
+
+```bash
+pnpm task-types -- <task_type>
+```
+
+This shows all test case variations (by language, tier, multi-task pipelines) and the solve history from the database. Look for patterns: does it fail in a specific language? Only as part of multi-task sequences? Always with the same error?
+
+### Step 3: Diagnose — run a single targeted eval
+
+```bash
+pnpm eval -- --task-type <task_type> --one-per-type
+```
+
+This runs exactly one test case for that type. Read the PASS/FAIL output and the error message. If the handler code needs investigation, check the relevant file in `src/handlers/`.
+
+For API-level debugging, use `pnpm probe` to test the exact endpoint sequence the handler uses.
+
+### Step 4: Fix — make the change
+
+Fix the handler, prompt, or parsing logic. Common fixes:
+- Handler sends wrong fields → update handler code
+- LLM parses entities incorrectly → update system prompt in `src/lib/gemini.ts`
+- BETA endpoint returns 403 → find non-beta alternative (see BETA section above)
+- 422 validation error → use `pnpm probe` to find the correct payload format
+
+### Step 5: Verify — confirm the fix works
+
+```bash
+# Quick check: one test
+pnpm eval -- --task-type <task_type> --one-per-type
+
+# Broader check: all variations of that type
+pnpm eval -- --task-type <task_type>
+
+# Confidence check: repeat (LLM outputs are non-deterministic)
+pnpm eval -- --task-type <task_type> --one-per-type --iterations 3
+```
+
+### Step 6: Decide — is this task type "solved"?
+
+A task type is considered solved when:
+- **`--one-per-type` passes consistently** (3/3 iterations).
+- **All variations pass** (`--task-type <type>` without `--one-per-type`), or failures are limited to edge cases that don't reflect competition prompts.
+- **`pnpm task-types -- --worst`** no longer lists it near the top.
+
+Once solved, move to the next worst-performing type. Do not re-test solved types unless you change shared code (parser, sequence context, generic handler).
+
+### Key principles
+
+- **Never test everything at once.** A full eval of 100+ cases takes too long and obscures signal. Always scope to 1–5 cases.
+- **LLMs are non-deterministic.** A single PASS doesn't mean solved. Run 2–3 iterations for confidence. A single FAIL doesn't necessarily mean broken — check if it reproduces.
+- **Work one task type at a time.** Finish the feedback loop for one type before moving to the next.
+- **Probe before eval.** If the error is an API 422/403, debug with `pnpm probe` first — it's instant and doesn't require the full agent loop.
 
 # Environment variables
 

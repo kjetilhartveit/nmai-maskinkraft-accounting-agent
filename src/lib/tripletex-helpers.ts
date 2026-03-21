@@ -375,7 +375,7 @@ export async function findOrCreateProduct(
       if (existing) return existing;
     }
 
-    if (msg.includes("vatTypeId") && !helperVatTypeBroken) {
+    if ((msg.includes("vatTypeId") || msg.includes("mva-kode") || msg.includes("vatType")) && !helperVatTypeBroken) {
       console.warn(`[Helper] vatType ${resolvedVatTypeId} rejected, retrying without vatType`);
       helperVatTypeBroken = true;
       delete body.vatType;

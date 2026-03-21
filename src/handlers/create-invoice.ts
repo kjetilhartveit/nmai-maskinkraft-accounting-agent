@@ -286,15 +286,27 @@ export async function handleCreateInvoice(
 
   if (sendAfterCreate) {
     const email = entity.email as string | undefined;
-    const qs = new URLSearchParams({ sendType: "EMAIL" });
-    if (email) qs.set("overrideEmailAddress", email);
-    
+    const fallbackEmail = "faktura@example.no";
+    const sendEmail = email || fallbackEmail;
+    const qs = new URLSearchParams({
+      sendType: "EMAIL",
+      overrideEmailAddress: sendEmail,
+    });
+
     try {
       await client.put(`/invoice/${invoiceId}/:send?${qs.toString()}`, {});
       console.log(`[Handler] Sent invoice: id=${invoiceId}`);
     } catch (err) {
-      console.error(`[Handler] Failed to send invoice ${invoiceId}:`, err instanceof Error ? err.message : String(err));
-      // If it fails with the email, try without or vice-versa, or just ignore since the invoice was created
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn(`[Handler] Failed to send invoice ${invoiceId} via EMAIL: ${msg}`);
+      // Retry with EHF if email-based send fails
+      try {
+        const ehfQs = new URLSearchParams({ sendType: "EHF" });
+        await client.put(`/invoice/${invoiceId}/:send?${ehfQs.toString()}`, {});
+        console.log(`[Handler] Sent invoice via EHF: id=${invoiceId}`);
+      } catch {
+        console.warn(`[Handler] EHF send also failed for invoice ${invoiceId}, invoice was created but not sent`);
+      }
     }
   }
 }

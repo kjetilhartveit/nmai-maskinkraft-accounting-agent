@@ -92,6 +92,28 @@ export async function handleCreateVoucher(
     return;
   }
 
+  // Ensure postings balance to zero — Tripletex requires balanced vouchers
+  const sum = postings.reduce((s, p) => s + (p.amountGross as number), 0);
+  if (Math.abs(sum) > 0.01) {
+    // Auto-add balancing entry: if net is positive (debit surplus), credit a cash/bank account;
+    // if net is negative (credit surplus), debit a cash/bank account.
+    const balanceAccountNumber = sum > 0 ? 1920 : 1920; // Bank account
+    const balanceAccount = await findAccountByNumber(client, balanceAccountNumber);
+    if (balanceAccount) {
+      postings.push({
+        row: postings.length + 1,
+        account: { id: balanceAccount.id },
+        date: voucherDate,
+        amountGross: -sum,
+        amountGrossCurrency: -sum,
+        description: description || "Motkonto",
+      });
+      console.log(`[Handler] Added balancing entry: account ${balanceAccountNumber}, amount ${-sum}`);
+    } else {
+      console.warn(`[Handler] Could not find balance account ${balanceAccountNumber}, voucher may fail`);
+    }
+  }
+
   const body: Record<string, unknown> = {
     date: voucherDate,
     description,

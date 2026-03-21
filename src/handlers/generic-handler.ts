@@ -224,6 +224,32 @@ function fixVoucherPostings(body: Record<string, unknown>): void {
   }
 }
 
+let cachedDefaultDeptId: number | null = null;
+
+async function autoFixPostBody(
+  client: TripletexClient,
+  endpoint: string,
+  body: Record<string, unknown>,
+): Promise<void> {
+  if (endpoint === "/employee" || endpoint.endsWith("/employee")) {
+    if (!body.department) {
+      if (!cachedDefaultDeptId) {
+        try {
+          const res = await client.list<{ id: number }>("/department", { from: "0", count: "1" });
+          if (res.values[0]) cachedDefaultDeptId = res.values[0].id;
+        } catch { /* ignore */ }
+      }
+      if (cachedDefaultDeptId) {
+        body.department = { id: cachedDefaultDeptId };
+      }
+    }
+    const ut = String(body.userType ?? "").toUpperCase();
+    if (!ut || ut === "0") {
+      body.userType = body.email ? "EXTENDED" : "STANDARD";
+    }
+  }
+}
+
 function enrich403Error(endpoint: string, errorMsg: string): string {
   const isBetaLikely = KNOWN_BETA_PATTERNS.some((p) => endpoint.includes(p)) || errorMsg.includes("403");
   if (isBetaLikely && errorMsg.includes("403")) {
@@ -231,6 +257,10 @@ function enrich403Error(endpoint: string, errorMsg: string): string {
     return `${errorMsg}\n\n⚠️ This endpoint is likely [BETA] and returns 403 in the competition sandbox. Do NOT retry this endpoint. Use an alternative: for batch /list endpoints, use repeated single POST to ${base} instead. For other BETA endpoints, check the api_search tool for alternatives.`;
   }
   return errorMsg;
+}
+
+export function resetGenericHandlerCache(): void {
+  cachedDefaultDeptId = null;
 }
 
 export async function handleGenericTask(
@@ -308,6 +338,7 @@ export async function handleGenericTask(
         if (endpoint.includes("/ledger/voucher") && !endpoint.includes("/list")) {
           fixVoucherPostings(body);
         }
+        await autoFixPostBody(client, endpoint, body);
         console.log(`[GenericHandler] POST ${endpoint} ${JSON.stringify(body).slice(0, 300)}`);
         try {
           const result = await client.post<unknown>(endpoint, body);

@@ -12,6 +12,7 @@ import { resetProductCache } from "../handlers/create-product.js";
 import { resetPayrollCache } from "../handlers/create-payroll.js";
 import { resetSupplierInvoiceCache } from "../handlers/create-supplier-invoice.js";
 import { resetDimensionCache } from "../handlers/create-dimension.js";
+import { resetGenericHandlerCache } from "../handlers/generic-handler.js";
 import { logSolveRequest, logRawRequest, type SolveLogEntry } from "../lib/solve-logger.js";
 import { config } from "../lib/config.js";
 
@@ -65,6 +66,7 @@ solveRouter.post("/solve", async (c) => {
   resetPayrollCache();
   resetSupplierInvoiceCache();
   resetDimensionCache();
+  resetGenericHandlerCache();
 
   try {
     const rawBody = await c.req.json();

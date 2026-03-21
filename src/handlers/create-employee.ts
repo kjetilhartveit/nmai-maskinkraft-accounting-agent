@@ -204,7 +204,28 @@ export async function handleCreateEmployee(
     const deptForEmployee = entityDeptId ?? departmentId;
 
     const body = buildEmployeeBody(entity, deptForEmployee);
-    const result = await client.post<{ id: number; companyId?: number }>("/employee", body);
+    let result: { value: { id: number; companyId?: number } };
+    try {
+      result = await client.post<{ id: number; companyId?: number }>("/employee", body);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes("422")) {
+        // Retry: strip optional fields that might cause validation errors
+        const retryBody: Record<string, unknown> = {
+          firstName: body.firstName,
+          lastName: body.lastName,
+          department: body.department,
+        };
+        if (body.email) {
+          retryBody.email = body.email;
+          retryBody.userType = "EXTENDED";
+        }
+        console.warn(`[Handler] Employee creation failed, retrying with minimal fields`);
+        result = await client.post<{ id: number; companyId?: number }>("/employee", retryBody);
+      } else {
+        throw err;
+      }
+    }
     const empId = result.value.id;
     console.log(`[Handler] Created employee: id=${empId}`);
 

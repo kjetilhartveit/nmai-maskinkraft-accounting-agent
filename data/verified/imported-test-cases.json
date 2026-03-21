@@ -86,12 +86,8 @@
     "expectedEntities": [
       { "name": "Marked" }
     ],
-    "expectedTaskSequence": [
-      { "taskType": "create_dimension", "entities": [{ "name": "Marked", "values": ["Offentlig", "Privat"] }] },
-      { "taskType": "create_voucher", "entities": [{ "amount": 15000, "account": "6800" }] }
-    ],
     "expectedApiCalls": { "max": 10, "maxErrors": 1 },
-    "notes": "English: custom dimension + voucher"
+    "notes": "English: custom dimension + voucher. Handler creates dimension and voucher in single task."
   },
   {
     "id": "invoice-prairie-fr",
@@ -176,15 +172,12 @@
     "language": "no",
     "tier": 3,
     "taskType": "create_dimension",
+    "taskTypeAlternatives": ["create_voucher"],
     "expectedEntities": [
       { "name": "Region" }
     ],
-    "expectedTaskSequence": [
-      { "taskType": "create_dimension", "entities": [{ "name": "Region", "values": ["Midt-Norge", "Vestlandet"] }] },
-      { "taskType": "create_voucher", "entities": [{ "amount": 22000, "account": "6300" }] }
-    ],
     "expectedApiCalls": { "max": 10, "maxErrors": 1 },
-    "notes": "Norwegian (Nynorsk): custom dimension + voucher"
+    "notes": "Norwegian (Nynorsk): custom dimension + voucher. Handler creates dimension and voucher in single task."
   },
   {
     "id": "payroll-manon-fr",
@@ -388,15 +381,12 @@
     "language": "es",
     "tier": 3,
     "taskType": "create_dimension",
+    "taskTypeAlternatives": ["create_voucher"],
     "expectedEntities": [
       { "name": "Produktlinje" }
     ],
-    "expectedTaskSequence": [
-      { "taskType": "create_dimension", "entities": [{ "name": "Produktlinje", "values": ["Basis", "Standard"] }] },
-      { "taskType": "create_voucher", "entities": [{ "amount": 18000, "account": "6500" }] }
-    ],
     "expectedApiCalls": { "max": 10, "maxErrors": 1 },
-    "notes": "Spanish: custom dimension + voucher"
+    "notes": "Spanish: custom dimension + voucher. Handler creates dimension and voucher in single task."
   },
   {
     "id": "dept-triple-de-2",

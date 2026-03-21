@@ -6,7 +6,6 @@ import {
   findOrCreateProduct,
   findProductByNumber,
   findVatTypeIdByRate,
-  warmProductCaches,
   today,
   daysFromNow,
 } from "../lib/tripletex-helpers.js";
@@ -91,9 +90,6 @@ export async function handleCreateOrder(
   }
 
   if (products.length > 0) {
-    // Warm caches once so parallel/sequential product creation hits cache
-    await warmProductCaches(client);
-
     const orderLines: Record<string, unknown>[] = [];
     for (const p of products) {
       const productName = String(p.name ?? "Produkt");
@@ -103,7 +99,6 @@ export async function handleCreateOrder(
       if (productId) {
         console.log(`[Handler] Using product from context: ${productName} → id=${productId}`);
       } else {
-        // Try product number lookup first (cheaper than name search + create)
         if (p.productNumber) {
           const existing = await findProductByNumber(client, String(p.productNumber));
           if (existing) {
@@ -119,13 +114,11 @@ export async function handleCreateOrder(
           if (p.vatRate !== undefined) {
             vatTypeId = await findVatTypeIdByRate(client, p.vatRate);
           }
-          const alreadySearchedByNumber = !!p.productNumber;
           const product = await findOrCreateProduct(
             client,
             productName,
             Number(p.unitPrice ?? p.price ?? 0),
             vatTypeId,
-            alreadySearchedByNumber,
           );
           productId = product.id;
           ctx.registerProduct(productName, productId);

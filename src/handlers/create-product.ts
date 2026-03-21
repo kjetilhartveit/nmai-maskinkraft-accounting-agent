@@ -104,7 +104,8 @@ export async function handleCreateProduct(
       return result.value;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      if (msg.includes("vatTypeId") && !vatTypeBroken) {
+      const isVatError = msg.includes("vatTypeId") || msg.includes("mva-kode") || msg.includes("vatType");
+      if (isVatError && !vatTypeBroken) {
         console.warn(`[Handler] vatType rejected, retrying without vatType for all products`);
         vatTypeBroken = true;
         delete body.vatType;
@@ -135,7 +136,7 @@ export async function handleCreateProduct(
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      if (msg.includes("vatTypeId")) {
+      if (msg.includes("vatTypeId") || msg.includes("mva-kode") || msg.includes("vatType")) {
         console.warn("[Handler] Batch product create failed on vatType, falling back to individual creates");
         for (const body of toCreate) {
           const product = await postProductWithFallback(body);
