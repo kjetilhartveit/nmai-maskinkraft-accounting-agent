@@ -7,7 +7,7 @@
  */
 
 import { z } from "zod";
-import { geminiGenerateStructured, type GeminiJsonSchema } from "./gemini.js";
+import { openrouterGenerateStructured } from "./openrouter.js";
 import { ALL_TASK_TYPES, type TaskType } from "../types/index.js";
 
 // ── The 30 prompt templates ───────────────────────────────────────────
@@ -155,33 +155,20 @@ TEMPLATES:
 ${templateList}
 
 RULES:
-- Return ONLY the task type string, nothing else
-- Every prompt matches exactly one template — there is no "unknown"
+- Every prompt matches exactly one template — there is no "unknown" fallback
 - Match by structure/intent, not by specific variable values
 - The prompt language does NOT affect the task type
 
-Output the task type string only. No JSON, no quotes, no explanation.`;
+Return JSON: {"taskType": "<exact_task_type_id>"}`;
 }
 
 const CLASSIFIER_SYSTEM_PROMPT = buildClassifierPrompt();
 
-// ── JSON schema for structured output ─────────────────────────────────
+// ── Schema for structured output ──────────────────────────────────────
 
 const ClassificationSchema = z.object({
   taskType: z.string(),
 });
-
-const CLASSIFICATION_JSON_SCHEMA: GeminiJsonSchema = {
-  type: "object",
-  properties: {
-    taskType: {
-      type: "string",
-      description: "The task type ID — must be one of the 30 defined types",
-      enum: ALL_TASK_TYPES as unknown as string[],
-    },
-  },
-  required: ["taskType"],
-};
 
 // ── Public API ────────────────────────────────────────────────────────
 
@@ -201,18 +188,17 @@ export async function classifyPrompt(
   options?: ClassifyOptions,
 ): Promise<ClassificationResult | null> {
   try {
-    const llmPromise = geminiGenerateStructured({
-      model: "gemini-3.1-pro-preview",
+    const llmPromise = openrouterGenerateStructured({
+      model: "google/gemini-3.1-flash-lite-preview",
       system: CLASSIFIER_SYSTEM_PROMPT,
       prompt: prompt.slice(0, 2000),
       schema: ClassificationSchema,
-      jsonSchema: CLASSIFICATION_JSON_SCHEMA,
       maxTokens: 64,
       maxRetries: 2,
     });
 
     const timeoutPromise = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error("Classification timeout")), 8_000),
+      setTimeout(() => reject(new Error("Classification timeout")), 12_000),
     );
 
     const { object } = await Promise.race([llmPromise, timeoutPromise]);
