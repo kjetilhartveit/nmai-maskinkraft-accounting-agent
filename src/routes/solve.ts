@@ -8,6 +8,10 @@ import { resetCaches } from "../lib/tripletex-helpers.js";
 import { resetPaymentCache } from "../handlers/create-payment.js";
 import { resetTravelExpenseCache } from "../handlers/create-travel-expense.js";
 import { resetVoucherCache } from "../handlers/create-voucher.js";
+import { resetProductCache } from "../handlers/create-product.js";
+import { resetPayrollCache } from "../handlers/create-payroll.js";
+import { resetSupplierInvoiceCache } from "../handlers/create-supplier-invoice.js";
+import { resetDimensionCache } from "../handlers/create-dimension.js";
 import { logSolveRequest, logRawRequest, type SolveLogEntry } from "../lib/solve-logger.js";
 import { config } from "../lib/config.js";
 
@@ -57,6 +61,10 @@ solveRouter.post("/solve", async (c) => {
   resetPaymentCache();
   resetTravelExpenseCache();
   resetVoucherCache();
+  resetProductCache();
+  resetPayrollCache();
+  resetSupplierInvoiceCache();
+  resetDimensionCache();
 
   try {
     const rawBody = await c.req.json();

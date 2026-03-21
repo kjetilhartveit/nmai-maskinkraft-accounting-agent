@@ -42,6 +42,9 @@ export type TaskType =
   | "create_project"
   | "create_voucher"
   | "create_supplier"
+  | "create_payroll"
+  | "create_supplier_invoice"
+  | "create_dimension"
   | "unknown";
 
 export interface ParsedTask {
