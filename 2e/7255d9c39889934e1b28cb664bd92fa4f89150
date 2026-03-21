@@ -1,0 +1,51 @@
+scripts/ralph-overnight.sh
+  8479277c65a84b6d 3,5-6,8-9,15,26,31-32,59-60,63,67,76,80-83,85,88-92,94,101-102
+  5b2750a04c957a99 34-35,56-57
+  c55456e83a609a09 11-14,69
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.17",
+  "base_commit_sha": "2e7255d9c39889934e1b28cb664bd92fa4f89150",
+  "prompts": {
+    "5b2750a04c957a99": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "30bc4749-aacc-40f8-9caa-44ef7b490bdc",
+        "model": "claude-opus-4-5-20251101"
+      },
+      "human_author": "Kjetil Hårtveit <kjetil_runescape@hotmail.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 4,
+      "overriden_lines": 0
+    },
+    "8479277c65a84b6d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "139dd439-1c88-44a5-a2a6-4767bb45681e",
+        "model": "claude-opus-4-5-20251101"
+      },
+      "human_author": "Kjetil Hårtveit <kjetil_runescape@hotmail.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 27,
+      "overriden_lines": 0
+    },
+    "c55456e83a609a09": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "098ca6e0-cec3-4c51-ae30-94c2b84892b0",
+        "model": "claude-opus-4-5-20251101"
+      },
+      "human_author": "Kjetil Hårtveit <kjetil_runescape@hotmail.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 5,
+      "overriden_lines": 0
+    }
+  }
+}
