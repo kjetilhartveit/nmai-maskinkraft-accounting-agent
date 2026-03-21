@@ -13,6 +13,7 @@ import {
   updateScore,
 } from "../lib/solve-logger.js";
 import db from "../lib/db.js";
+import { collectScores } from "../lib/score-collector.js";
 
 function formatPrompt(prompt: string, maxLen = 50): string {
   const clean = prompt.replace(/\s+/g, " ").trim();
@@ -20,34 +21,64 @@ function formatPrompt(prompt: string, maxLen = 50): string {
 }
 
 function listRecentSolves(limit = 20): void {
-  const solves = getRecentCompetitionSolves(limit);
+  const solves = db
+    .prepare(
+      `SELECT id, timestamp, prompt, score_earned, score_max,
+              checks_passed, checks_total, checks_detail,
+              success, api_call_errors
+       FROM solves WHERE source = 'competition' ORDER BY timestamp DESC LIMIT ?`,
+    )
+    .all(limit) as {
+    id: string; timestamp: string; prompt: string;
+    score_earned: number | null; score_max: number | null;
+    checks_passed: number | null; checks_total: number | null;
+    checks_detail: string | null;
+    success: number; api_call_errors: number;
+  }[];
 
   if (solves.length === 0) {
     console.log("No competition solves found.");
     return;
   }
 
-  console.log("\n┌───────────────────────────────────────────────────────────────────────────────────────┐");
-  console.log("│                              Recent Competition Solves                                 │");
-  console.log("├───────────────────┬─────────┬────────┬─────────┬────────────────────────────────────────┤");
-  console.log("│ ID                │  Score  │ Errors │ Success │ Prompt                                 │");
-  console.log("├───────────────────┼─────────┼────────┼─────────┼────────────────────────────────────────┤");
+  console.log("\n  Recent Competition Solves");
+  console.log("─".repeat(100));
+  console.log(
+    "ID".padEnd(22) + "Score".padStart(8) + "Checks".padStart(10) +
+    "Err".padStart(5) + "  " + "Prompt".padEnd(50),
+  );
+  console.log("─".repeat(100));
 
   for (const s of solves) {
-    const id = s.id.slice(0, 17).padEnd(17);
-    const score = s.score_earned !== null && s.score_max !== null
-      ? `${s.score_earned}/${s.score_max}`.padStart(7)
-      : "      -";
-    const errors = String(s.api_call_errors).padStart(6);
-    const success = s.success ? "  YES  " : "  NO   ";
-    const prompt = formatPrompt(s.prompt, 38).padEnd(38);
+    const id = s.id.slice(0, 20).padEnd(22);
+    const score = s.score_earned !== null
+      ? s.score_earned.toFixed(2).padStart(8)
+      : "       -";
+    const checks = s.checks_passed !== null && s.checks_total !== null
+      ? `${s.checks_passed}/${s.checks_total}`.padStart(10)
+      : "         -";
+    const errors = String(s.api_call_errors).padStart(5);
+    const prompt = formatPrompt(s.prompt, 48);
 
-    console.log(`│ ${id} │ ${score} │ ${errors} │ ${success} │ ${prompt} │`);
+    console.log(`${id}${score}${checks}${errors}  ${prompt}`);
+
+    if (s.checks_detail) {
+      try {
+        const detail = JSON.parse(s.checks_detail) as (string | { name: string; passed: boolean })[];
+        const failedChecks = detail.filter((c) =>
+          (typeof c === "string" && c.includes("failed")) ||
+          (typeof c === "object" && c.passed === false),
+        );
+        if (failedChecks.length > 0) {
+          const names = failedChecks.map((c) => typeof c === "string" ? c : c.name).join(", ");
+          console.log(`${"".padEnd(22)}  FAILED: ${names}`);
+        }
+      } catch { /* ignore */ }
+    }
   }
 
-  console.log("└───────────────────┴─────────┴────────┴─────────┴────────────────────────────────────────┘");
-  console.log("\nTo update a score: pnpm score-manager --update <solve-id> <earned>/<max>");
-  console.log("Example: pnpm score-manager --update solve-1711234567890 8/10");
+  console.log("─".repeat(100));
+  console.log("\nTo auto-collect scores: pnpm collect-scores");
 }
 
 function showSummary(): void {
@@ -86,7 +117,7 @@ function showSummary(): void {
   console.log("╚════════════════════════════════════════════╝");
 }
 
-function main(): void {
+async function main(): Promise<void> {
   const args = process.argv.slice(2);
 
   if (args.includes("--help") || args.includes("-h")) {
@@ -96,13 +127,15 @@ Score Manager - Track competition scores
 Usage:
   pnpm score-manager                              List recent competition solves
   pnpm score-manager --summary                    Show scoring summary
+  pnpm score-manager --collect                    Auto-collect scores from API then show
   pnpm score-manager --update <id> <earned>/<max> Update score from leaderboard
-
-Examples:
-  pnpm score-manager --update solve-1711234567890 8/10
-  pnpm score-manager --update solve-1711234567890 0/8
 `);
     return;
+  }
+
+  if (args.includes("--collect")) {
+    const updated = await collectScores({ verbose: true });
+    console.log(`Collected ${updated} new scores.\n`);
   }
 
   if (args.includes("--summary")) {
@@ -144,4 +177,4 @@ Examples:
   listRecentSolves(limit);
 }
 
-main();
+main().catch(console.error);
