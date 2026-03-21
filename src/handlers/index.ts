@@ -17,6 +17,7 @@ import { handleCreateVoucher } from "./create-voucher.js";
 import { handleUpdateEmployee } from "./update-employee.js";
 import { handleUpdateCustomer } from "./update-customer.js";
 import { handleCreatePayment } from "./create-payment.js";
+import { handleCreateCreditNote } from "./create-credit-note.js";
 import { handleGenericTask } from "./generic-handler.js";
 
 export type TaskHandler = (
@@ -41,6 +42,7 @@ const handlers: Record<string, TaskHandler> = {
   create_project: handleCreateProject,
   create_voucher: handleCreateVoucher,
   create_payment: handleCreatePayment,
+  create_credit_note: handleCreateCreditNote,
 };
 
 export async function executeTask(
