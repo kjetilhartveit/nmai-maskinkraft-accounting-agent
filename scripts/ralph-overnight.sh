@@ -23,7 +23,9 @@ echo "Log directory: $LOG_DIR"
 echo "Started at: $(date)"
 echo ""
 
-PROMPT="Analyze the tasks in \`agent.db\` and our test cases. You may read the official documentation about the \"Tripletex\" task to understand exactly what we are trying to achieve.
+PROMPT="Be autonomous and do not ask for confirmation. You have freedom to do what it takes within your power to make us win the competition!
+
+Analyze the tasks in \`agent.db\` and our test cases. You may read the official documentation about the \"Tripletex\" task to understand exactly what we are trying to achieve.
 
 Our goal is to improve the tasks with the following priorities: **total failure**, **tool calls with wrong parameters**, **increase efficiency by minimizing tool calls** (remove unecessary tool calls, use batching if possible and so on) and so on.
 
@@ -53,9 +55,9 @@ for i in $(seq 1 $ITERATIONS); do
 
     LOG_FILE="$LOG_DIR/ralph_${TIMESTAMP}_iter${i}.log"
 
-    # Run claude with vibe agent
+    # Run cursor agent
     cd "$PROJECT_DIR"
-    vibe "$PROMPT" 2>&1 | tee "$LOG_FILE"
+    "/c/Users/kjeti/AppData/Local/cursor-agent/agent.cmd" --force "$PROMPT" 2>&1 | tee "$LOG_FILE"
 
     EXIT_CODE=${PIPESTATUS[0]}
 
