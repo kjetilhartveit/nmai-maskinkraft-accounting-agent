@@ -16,8 +16,9 @@ You have tools to make HTTP requests to the Tripletex API. Authentication is han
 SCORING CONTEXT — EFFICIENCY MATTERS:
 - Only WRITE calls (POST, PUT, DELETE) count toward the efficiency score. GET requests are FREE — read as much as you need.
 - Any WRITE call that returns a 4xx error (400, 404, 422) REDUCES your score. Avoid trial-and-error on writes.
-- Plan your writes carefully: look up required fields with GET/api_search BEFORE making POST/PUT calls.
+- Plan your writes carefully: look up required IDs with GET BEFORE making POST/PUT calls.
 - Use batch endpoints (tripletex_post_list) when creating multiple items of the same type.
+- The RECIPES section below contains exact API call sequences for common tasks. Follow them DIRECTLY without calling api_search first — they are already verified.
 
 IMPORTANT RULES:
 1. Read the task carefully and identify ALL required operations.
@@ -26,44 +27,139 @@ IMPORTANT RULES:
 4. All dates MUST be in YYYY-MM-DD format. Use 2026 as the year (current year).
 5. Voucher postings MUST balance (debits = credits).
 6. When creating resources, use the MINIMUM required fields to avoid validation errors. Always include required fields.
-7. If a POST/PUT fails with 422, read the error message carefully. If it says "Verdien er ikke av korrekt type for dette feltet." for a date field, it means you must provide the date as a YYYY-MM-DD string, NOT a timestamp or object. Fix it and retry ONCE.
+7. If a POST/PUT fails with 422, read the error carefully and fix the issue. Do NOT blindly retry. Max 1 retry per write call.
 8. For custom accounting dimensions: create the dimension name first, then create values using the returned dimensionIndex.
 9. The sandbox MAY have pre-existing data for certain tasks (like invoices for payment tasks). ALWAYS search for existing resources first.
 10. Use tripletex_post_list for batch creation ONLY for non-beta /list endpoints (e.g. /department/list, /product/list, /employee/list, /supplier/list).
 11. When you're done, stop calling tools and summarize what you did.
-12. If you're unsure about an endpoint's exact path, parameters, or required fields, use the api_search tool first to look it up in the full Tripletex API documentation (800 endpoints available, 115 are BETA).
 
 CRITICAL — BETA ENDPOINT RULES:
-- Many Tripletex endpoints marked [BETA] return 403 Forbidden in the competition sandbox. They are NOT available.
-- If you get a 403 error, the endpoint is almost certainly BETA. Do NOT retry the same endpoint. Switch to a non-beta alternative.
-- KNOWN BETA ENDPOINTS TO AVOID:
-  * POST /customer/list (batch) → use repeated POST /customer instead
-  * POST /invoice/list (batch) → use repeated POST /invoice instead
-  * POST /order/list (batch) → use repeated POST /order instead
-  * POST /project/list (batch) → use repeated POST /project instead
-  * DELETE /customer/{id} → customers cannot be deleted
-  * PUT /project/{id} → projects cannot be updated via API
-  * DELETE /project/{id} → projects cannot be deleted
-  * POST /company/salesmodules → modules cannot be activated via API
-  * All /incomingInvoice/* endpoints → not available. If the task is to register an incoming invoice/supplier invoice, you MUST create a VOUCHER (POST /voucher) instead! Credit the supplier's ledger account (e.g., 2400) and debit the expense account, including VAT calculations.
-  * All /salary/transaction or /salary/payslip endpoints → often fail due to missing module access. For payroll/salary tasks, create a manual VOUCHER (POST /voucher) using salary accounts (e.g., 5000-series).
-  * All /documentArchive/* endpoints → not available
-- SAFE BATCH ENDPOINTS (non-beta): /department/list, /product/list, /employee/list, /supplier/list, /ledger/account/list
-- When the api_search tool returns results, endpoints marked [BETA] will be flagged. Prefer non-beta alternatives.
-- Some BETA endpoints MAY work (like GET /project/{id}), but don't rely on them — have a fallback plan.
+- Many Tripletex endpoints marked [BETA] return 403 Forbidden in the sandbox. They are NOT available.
+- If you get a 403 error, do NOT retry. Switch to the non-beta alternative immediately.
+- KNOWN BETA (403) ENDPOINTS — NEVER CALL THESE:
+  * POST /customer/list, POST /invoice/list, POST /order/list, POST /project/list → use repeated single POST instead
+  * DELETE /customer/{id} → cannot delete customers
+  * PUT /project/{id}, DELETE /project/{id} → cannot update/delete projects
+  * All /incomingInvoice/* → use POST /ledger/voucher instead
+  * All /salary/transaction, /salary/payslip → use POST /ledger/voucher instead (see PAYROLL recipe)
+  * All /documentArchive/* → not available
+- SAFE BATCH ENDPOINTS: /department/list, /product/list, /employee/list, /supplier/list, /ledger/account/list
 
-CRITICAL endpoint patterns:
-- Employee creation (POST /employee): \`department: { id: <number> }\` is ALWAYS REQUIRED. For \`userType\`, use "EXTENDED" (requires email), "STANDARD", or omit it entirely. NEVER use "0".
-- Product creation (POST /product): \`vatType: { id: <number> }\` is REQUIRED. This is the ID of the VAT type, NOT the percentage.
-- Project creation (POST /project): \`projectManager: { id: <number> }\` is REQUIRED. The employee MUST have the AUTH_PROJECT_MANAGER entitlement. Use the first employee in the sandbox if unsure.
-- CRITICAL: List endpoints REQUIRE date parameters. If you call GET /invoice, you MUST include invoiceDateFrom and invoiceDateTo. If you call GET /order, you MUST include orderDateFrom and orderDateTo. Always use a wide date range like "2020-01-01" to "2026-12-31" if no dates are given.
-- Payment registration: use tripletex_put_action with PUT /invoice/{id}/:payment and query params: paymentDate, paymentTypeId, paidAmount
-- Action endpoints (containing /:action) use QUERY PARAMETERS, not request bodies. Use the tripletex_put_action tool for these.
-- Single-object GET (with ID in path like /invoice/123) returns { value: {...} }, NOT a list
-- VOUCHER POSTINGS: Body should be { date: "YYYY-MM-DD", description: "...", postings: [{ account: {id: 5000}, date: "YYYY-MM-DD", amountGross: 1000, amountGrossCurrency: 1000, description: "..." }] }.
-  Only use these fields in posting objects: { account: {id}, date, amountGross, amountGrossCurrency, description }.
-  Set amountGross and amountGrossCurrency to the SAME value. Do NOT add dimension1, freeDimension1, accountingDimension1, or customDimension1 — these fields DO NOT EXIST on the posting object and will cause 422 errors.
-  For custom dimensions: just create the dimension name + values. The voucher is separate.
+CRITICAL FIELD RULES:
+- Employee (POST /employee): department: {id} is REQUIRED. userType: "STANDARD" or "EXTENDED" (never "0").
+- Product (POST /product): vatType: {id} is REQUIRED — this is the database ID, NOT the percentage. Look up via GET /ledger/vatType first.
+- Project (POST /project): projectManager: {id} is REQUIRED. Use first sandbox employee if unsure.
+- Customer (POST /customer): postalAddress MUST be an object {addressLine1, postalCode, city}, NEVER a string.
+- Travel expense (POST /travelExpense): fields are {employee: {id}, title, date}. There is NO "comment" field — use "title" instead.
+- Travel expense cost (POST /travelExpense/cost): fields are {travelExpense: {id}, paymentType: {id}, date, amountCurrencyIncVat, comments?}. The text field is "comments", NOT "description" — using "description" causes 422.
+- Invoice search (GET /invoice): REQUIRES invoiceDateFrom and invoiceDateTo. Use "2020-01-01" to "2026-12-31".
+- Order search (GET /order): REQUIRES orderDateFrom and orderDateTo. Use "2020-01-01" to "2026-12-31".
+- Payment: use tripletex_put_action with PUT /invoice/{id}/:payment and query params: paymentDate, paymentTypeId, paidAmount.
+- Action endpoints (/:payment, /:send, /:deliver) use QUERY PARAMETERS, not bodies. Use tripletex_put_action.
+- Single-object GET (e.g. /invoice/123) returns {value: {...}}, NOT a list.
+
+═══════════════════════════════════════════════════════════════
+VOUCHER POSTINGS — FOLLOW THIS EXACT FORMAT (errors here are #1 failure cause):
+═══════════════════════════════════════════════════════════════
+POST /ledger/voucher body:
+{
+  "date": "2026-03-21",
+  "description": "Description here",
+  "postings": [
+    {"row": 1, "account": {"id": 12345}, "date": "2026-03-21", "amountGross": 10000, "amountGrossCurrency": 10000, "description": "Debit"},
+    {"row": 2, "account": {"id": 67890}, "date": "2026-03-21", "amountGross": -10000, "amountGrossCurrency": -10000, "description": "Credit"}
+  ]
+}
+
+ABSOLUTE RULES for voucher postings:
+1. "row" MUST start at 1, then 2, 3, etc. Row 0 is system-reserved — using row 0 or omitting row ALWAYS causes 422.
+2. Standard fields per posting: row, account, date, amountGross, amountGrossCurrency, description.
+3. NEVER add: guiRow, dimension1, freeDimension1, accountingDimension1, customDimension1, supplierId. To link a dimension value, use freeAccountingDimension1/2/3: {id: <valueId>} (matching the dimensionIndex).
+4. EXCEPTION: When posting to account 2400 (leverandørgjeld / accounts payable), you MUST include "supplier": {"id": <supplierId>} on that posting. Omitting it causes 422 "Leverandør mangler".
+5. amountGross and amountGrossCurrency MUST be identical. Positive = debit, negative = credit.
+6. Sum of all amountGross MUST equal 0 (balanced).
+7. Look up account IDs first with GET /ledger/account?number=XXXX — use the returned "id", not the account number.
+═══════════════════════════════════════════════════════════════
+
+RECIPES — USE THESE EXACT PATTERNS:
+
+PAYROLL/SALARY (salary API returns 403 — ALWAYS use voucher):
+  1. Find or create employee: GET /employee?email=<email>&from=0&count=1. If not found, POST /employee {firstName, lastName, department: {id}, email, userType: "EXTENDED"} (get dept from GET /department first).
+  2. Look up EXACTLY 3 accounts (no more, no less!) via GET /ledger/account?number=XXXX:
+     - GET /ledger/account?number=5000 → salary expense
+     - GET /ledger/account?number=2780 → employer payroll tax
+     - GET /ledger/account?number=1920 → bank
+     DO NOT look up any other accounts (no 2600, 2770, 7090, 1900, etc.). This simplified model is all that's needed.
+  3. Calculate:
+     - totalSalary = baseSalary + bonus (e.g. 53350 + 11050 = 64400)
+     - employerTax = Math.round(totalSalary × 0.141)
+     - totalCredit = totalSalary + employerTax
+  4. POST /ledger/voucher with EXACTLY 3 postings (no more, no less!):
+     {"date": "2026-03-21", "description": "Lønn <name>", "postings": [
+       {"row": 1, "account": {"id": <5000_id>}, "date": "2026-03-21", "amountGross": <totalSalary>, "amountGrossCurrency": <totalSalary>, "description": "Lønn"},
+       {"row": 2, "account": {"id": <2780_id>}, "date": "2026-03-21", "amountGross": <employerTax>, "amountGrossCurrency": <employerTax>, "description": "Arbeidsgiveravgift"},
+       {"row": 3, "account": {"id": <1920_id>}, "date": "2026-03-21", "amountGross": <-totalCredit>, "amountGrossCurrency": <-totalCredit>, "description": "Utbetaling"}
+     ]}
+  Verify: row1 + row2 + row3 = totalSalary + employerTax + (-totalCredit) = 0 ✓
+  Total: 5-7 API calls (employee lookup/creation + 3 GET account + 1 POST voucher). Do NOT call api_search for payroll — follow this recipe directly.
+
+SUPPLIER INVOICE / INCOMING INVOICE (incomingInvoice returns 403 — ALWAYS use voucher):
+  NOTE: If the supplier was already created in a prior task step, its ID is provided in "Resources already created" above. Do NOT create it again.
+  1. If supplier not already created: POST /supplier {name, organizationNumber, isSupplier: true}. Note the returned supplier ID.
+  2. Look up EXACTLY 3 accounts via GET /ledger/account?number=XXXX:
+     - The expense account from the prompt (e.g. 7300, 6300, 7100)
+     - 2710 (input VAT / inngående mva, 25%)
+     - 2400 (accounts payable / leverandørgjeld)
+  3. Calculate amounts:
+     - If total INCLUDES VAT (25%): net = Math.round(total / 1.25), vat = total - net
+     - If total EXCLUDES VAT: net = total, vat = Math.round(total * 0.25)
+  4. POST /ledger/voucher:
+     {"date": "2026-03-21", "description": "Leverandørfaktura <supplier>", "postings": [
+       {"row": 1, "account": {"id": <expense_id>}, "date": "2026-03-21", "amountGross": <net>, "amountGrossCurrency": <net>, "description": "Kostnad"},
+       {"row": 2, "account": {"id": <2710_id>}, "date": "2026-03-21", "amountGross": <vat>, "amountGrossCurrency": <vat>, "description": "Inngående mva"},
+       {"row": 3, "account": {"id": <2400_id>}, "date": "2026-03-21", "amountGross": <-(net+vat)>, "amountGrossCurrency": <-(net+vat)>, "description": "Leverandørgjeld", "supplier": {"id": <supplierId>}}
+     ]}
+  CRITICAL: The posting to account 2400 MUST include "supplier": {"id": <supplierId>} or you get 422 "Leverandør mangler".
+  Verify: row1 + row2 + row3 = net + vat + (-(net+vat)) = 0 ✓
+  Total: 4-5 API calls (3 GET account + 1 POST voucher, optionally POST supplier). Do NOT call api_search — follow this recipe directly.
+
+CUSTOM ACCOUNTING DIMENSION + VOUCHER:
+  1. GET /ledger/accountingDimensionName — check if dimension already exists.
+  2. If not found: POST /ledger/accountingDimensionName {"dimensionName": "<name>", "active": true}. Note the returned "dimensionIndex" from the response.
+     If found: use the existing dimensionIndex from the GET response.
+  3. GET /ledger/accountingDimensionValue?dimensionIndex=X — check which values already exist.
+  4. For each missing value: POST /ledger/accountingDimensionValue {"dimensionIndex": X, "displayName": "<value>", "active": true, "showInVoucherRegistration": true}.
+     If a POST returns "Navnet er i bruk" (name already taken), that's OK — skip it.
+  5. Look up EXACTLY 2 accounts via GET /ledger/account?number=XXXX: the expense account + 1920 (bank).
+  6. POST /ledger/voucher with balanced postings (row starts at 1!).
+  To link a dimension value to a voucher posting, add freeAccountingDimension{N}: {id: <valueId>} where N matches the dimensionIndex (1, 2, or 3). Get the value ID from the POST or GET responses above.
+  Total: 5-8 API calls. Do NOT call api_search — follow this recipe directly.
+
+TIMESHEET + PROJECT INVOICE:
+  1. Create/find customer (GET /customer or POST /customer), employee (GET /employee or POST /employee with department: {id}).
+  2. GET /department?from=0&count=1 to get department ID.
+  3. POST /project {name, startDate: "2026-01-01", projectManager: {id: employeeId}, department: {id}, isInternal: false, customer: {id}}.
+  4. GET /activity?from=0&count=10 to find the activity ID matching the name (e.g. "Design").
+  5. POST /timesheet/entry {employee: {id}, project: {id}, activity: {id}, date: "2026-03-21", hours: N}.
+  6. POST /order {customer: {id}, orderDate: "2026-03-21", deliveryDate: "2026-04-04"}.
+  7. POST /order/orderline {order: {id}, description: "<description>", count: 1, unitPriceExcludingVatCurrency: hours * hourlyRate}.
+  8. POST /invoice {invoiceDate: "2026-03-21", invoiceDueDate: "2026-04-21", orders: [{id: orderId}]}.
+  IMPORTANT: There is NO "/project/{id}/:invoice" or "/project/{id}/:createInvoice" endpoint. Project invoicing goes through the standard order→invoice flow.
+  Total: 10-18 API calls depending on what needs creation.
+
+FIXED-PRICE PROJECT + PARTIAL INVOICE:
+  1. Create customer, employee, project.
+  2. POST /order {customer: {id}, orderDate, deliveryDate}.
+  3. POST /order/orderline with the partial amount (e.g. 50% of fixed price).
+  4. POST /invoice {invoiceDate, invoiceDueDate, orders: [{id}]}.
+  Total: 8-12 API calls.
+
+PAYMENT REVERSAL (bank return):
+  1. Find the customer: GET /customer?name=...
+  2. Find the invoice: GET /invoice?invoiceDateFrom=2020-01-01&invoiceDateTo=2026-12-31&customerId=X
+  3. If no invoice exists, create: customer → order → invoice → register payment first.
+  4. To reverse: POST /ledger/voucher debiting 1500 (accounts receivable) and crediting 1920 (bank).
+  Total: 5-10 API calls.
 
 ${TRIPLETEX_API_REFERENCE}`;
 }
@@ -81,6 +177,12 @@ function buildUserPrompt(task: ParsedTask, ctx: SequenceContext): string {
   const ctxInfo: string[] = [];
   if (ctx.getLastOrderId()) ctxInfo.push(`Existing order ID: ${ctx.getLastOrderId()}`);
   if (ctx.getLastInvoiceId()) ctxInfo.push(`Existing invoice ID: ${ctx.getLastInvoiceId()}`);
+  // Pass supplier ID if a supplier was already created for this task
+  const supplierName = task.entities[0]?.supplierName as string | undefined;
+  if (supplierName) {
+    const supplierId = ctx.getSupplierId(supplierName);
+    if (supplierId) ctxInfo.push(`Existing supplier "${supplierName}" ID: ${supplierId} — do NOT create again, use this ID directly`);
+  }
   if (ctxInfo.length > 0) {
     parts.push(`\nResources already created in this session:\n${ctxInfo.join("\n")}`);
   }
@@ -103,6 +205,24 @@ const KNOWN_BETA_PATTERNS = [
   "/customer/list", "/invoice/list", "/order/list", "/project/list",
   "/incomingInvoice", "/documentArchive", "/company/salesmodules",
 ];
+
+/**
+ * Fix voucher postings that use row 0 (system-reserved, always causes 422).
+ * Re-numbers rows starting at 1. Also strips extra fields from account objects
+ * that cause validation errors (only {id} is needed).
+ */
+function fixVoucherPostings(body: Record<string, unknown>): void {
+  const postings = body.postings;
+  if (!Array.isArray(postings)) return;
+  for (let i = 0; i < postings.length; i++) {
+    const p = postings[i] as Record<string, unknown>;
+    p.row = i + 1;
+    const account = p.account as Record<string, unknown> | undefined;
+    if (account && account.id !== undefined) {
+      p.account = { id: account.id };
+    }
+  }
+}
 
 function enrich403Error(endpoint: string, errorMsg: string): string {
   const isBetaLikely = KNOWN_BETA_PATTERNS.some((p) => endpoint.includes(p)) || errorMsg.includes("403");
@@ -185,6 +305,9 @@ export async function handleGenericTask(
       execute: async (args) => {
         const endpoint = args.endpoint as string;
         const body = args.body as Record<string, unknown>;
+        if (endpoint.includes("/ledger/voucher") && !endpoint.includes("/list")) {
+          fixVoucherPostings(body);
+        }
         console.log(`[GenericHandler] POST ${endpoint} ${JSON.stringify(body).slice(0, 300)}`);
         try {
           const result = await client.post<unknown>(endpoint, body);
@@ -327,7 +450,7 @@ export async function handleGenericTask(
     {
       name: "api_search",
       description:
-        "Search the Tripletex API documentation for endpoints matching a keyword or topic. Use this BEFORE making API calls to unfamiliar endpoints to learn the correct path, parameters, and required fields.",
+        "Search the Tripletex API documentation for endpoints matching a keyword. Only use for UNFAMILIAR endpoints not covered by the RECIPES in the system prompt. Skip this for payroll, supplier invoices, dimensions, and timesheets — those recipes are complete.",
       parameters: {
         type: "object",
         properties: {
