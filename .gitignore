@@ -10,5 +10,8 @@ data/*.db-shm
 data/*.db-wal
 data/api-index.json
 
+# Logs
+logs/
+
 # Claude
 /.claude/settings.local.json
