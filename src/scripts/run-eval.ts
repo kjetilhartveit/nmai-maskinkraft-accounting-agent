@@ -16,6 +16,7 @@ function parseArgs(argv: string[]): {
   serverUrl?: string;
   iterations?: number;
   filter?: string;
+  tier?: number[];
   updateBaselines?: boolean;
 } {
   const out: ReturnType<typeof parseArgs> = {};
@@ -33,6 +34,8 @@ function parseArgs(argv: string[]): {
       out.iterations = parseInt(argv[++i], 10);
     } else if (a === "--filter" && argv[i + 1]) {
       out.filter = argv[++i];
+    } else if (a === "--tier" && argv[i + 1]) {
+      out.tier = argv[++i].split(",").map(Number);
     } else if (a === "--update-baselines") {
       out.updateBaselines = true;
     }
@@ -73,6 +76,9 @@ async function main() {
   };
 
   let cases = testCases;
+  if (args.tier) {
+    cases = cases.filter((tc) => args.tier!.includes(tc.tier));
+  }
   if (args.filter) {
     cases = cases.filter(
       (tc) =>
@@ -85,14 +91,25 @@ async function main() {
   const iterations = args.iterations ?? 1;
   const serverUrl = args.serverUrl ?? process.env.SERVER_URL ?? "http://localhost:3000";
 
-  console.log(`Evaluating ${cases.length} case(s) × ${iterations} iteration(s) (server: ${serverUrl})`);
-  console.log(`Model: ${evalConfig.model}${evalConfig.systemPromptVariant ? ` | system prompt variant: ${evalConfig.systemPromptVariant}` : ""}`);
+  const tierLabel = args.tier ? ` (tier ${args.tier.join(",")})` : "";
+  console.log(`Evaluating ${cases.length} case(s) × ${iterations} iteration(s)${tierLabel} (server: ${serverUrl})`);
+  console.log(`Model: ${evalConfig.model}${evalConfig.systemPromptVariant ? ` | system prompt variant: ${evalConfig.systemPromptVariant}` : ""}\n`);
 
   const results = await runEval(evalConfig, cases, {
     serverUrl: args.serverUrl,
     iterations,
+    onResult: (r, idx, total) => {
+      const icon = r.success ? "\x1b[32m PASS \x1b[0m" : "\x1b[31m FAIL \x1b[0m";
+      const api = `${r.apiCalls.count} calls${r.apiCalls.errors > 0 ? ` (${r.apiCalls.errors} err)` : ""}`;
+      const time = `${(r.elapsedMs / 1000).toFixed(1)}s`;
+      console.log(`[${idx}/${total}] ${icon} ${r.testCaseId}  ${api}  ${time}`);
+      if (r.error && !r.success) {
+        console.log(`         └─ ${r.error.slice(0, 120)}`);
+      }
+    },
   });
   const summary = summarize(results);
+  console.log("");
   printEvalTable(results, summary);
 
   const improvements = findBaselineImprovements(results, cases);

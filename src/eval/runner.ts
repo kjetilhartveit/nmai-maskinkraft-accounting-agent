@@ -138,18 +138,25 @@ export async function runEvalCase(
 export async function runEval(
   evalConfig: EvalConfig,
   cases: TestCase[],
-  options?: { serverUrl?: string; iterations?: number },
+  options?: {
+    serverUrl?: string;
+    iterations?: number;
+    onResult?: (result: EvalResult, index: number, total: number) => void;
+  },
 ): Promise<EvalResult[]> {
   const serverUrl = options?.serverUrl ?? DEFAULT_SERVER;
   const iterations = options?.iterations ?? 1;
   const results: EvalResult[] = [];
+  const total = cases.length * iterations;
 
   for (let iter = 0; iter < iterations; iter++) {
     if (iterations > 1) {
       console.log(`\n--- Iteration ${iter + 1}/${iterations} ---`);
     }
     for (const tc of cases) {
-      results.push(await runEvalCase(serverUrl, evalConfig, tc));
+      const result = await runEvalCase(serverUrl, evalConfig, tc);
+      results.push(result);
+      options?.onResult?.(result, results.length, total);
     }
   }
 
