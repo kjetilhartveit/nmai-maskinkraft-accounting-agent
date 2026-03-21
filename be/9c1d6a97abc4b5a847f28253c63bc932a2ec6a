@@ -1,0 +1,47 @@
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.17",
+  "base_commit_sha": "be9c1d6a97abc4b5a847f28253c63bc932a2ec6a",
+  "prompts": {
+    "5b2750a04c957a99": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "30bc4749-aacc-40f8-9caa-44ef7b490bdc",
+        "model": "claude-opus-4-5-20251101"
+      },
+      "human_author": "Kjetil Hårtveit <kjetil_runescape@hotmail.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 4,
+      "overriden_lines": 0
+    },
+    "8479277c65a84b6d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "139dd439-1c88-44a5-a2a6-4767bb45681e",
+        "model": "claude-opus-4-5-20251101"
+      },
+      "human_author": "Kjetil Hårtveit <kjetil_runescape@hotmail.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 27,
+      "overriden_lines": 0
+    },
+    "c55456e83a609a09": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "098ca6e0-cec3-4c51-ae30-94c2b84892b0",
+        "model": "claude-opus-4-5-20251101"
+      },
+      "human_author": "Kjetil Hårtveit <kjetil_runescape@hotmail.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 5,
+      "overriden_lines": 0
+    }
+  }
+}
