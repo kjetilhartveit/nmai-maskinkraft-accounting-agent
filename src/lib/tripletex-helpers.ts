@@ -167,48 +167,50 @@ export async function getDefaultProductVatTypeId(
 }
 
 /**
- * Find a VAT type ID by percentage rate. Falls back to the default 25% VAT type.
- * Matches "utgående" (outgoing/sales) VAT types by looking at the name and percentage.
+ * Standard Norwegian outgoing VAT type numbers by rate.
+ * These are the well-known "mva-kode" numbers used in Tripletex for sales/products.
+ */
+const OUTGOING_VAT_NUMBER_BY_RATE: Record<number, string> = {
+  25: "3",   // Utgående avgift, høy sats
+  15: "31",  // Utgående avgift, middels sats
+  12: "33",  // Utgående avgift, lav sats
+  0: "6",    // Ingen utgående avgift (utenfor mva-loven)
+};
+
+/**
+ * Find a VAT type ID by percentage rate. Uses the standard Norwegian
+ * outgoing VAT type numbers for deterministic matching.
  */
 export async function findVatTypeIdByRate(
   client: TripletexClient,
   ratePercent: number,
 ): Promise<number> {
-  const vatTypes = await loadVatTypes(client);
-
-  if (ratePercent === 0) {
-    const exempt = vatTypes.find(
-      (v) =>
-        v.percentage === 0 ||
-        v.name?.toLowerCase().includes("fritatt") ||
-        v.name?.toLowerCase().includes("avgiftsfri") ||
-        v.number === "6",
-    );
-    if (exempt) {
-      console.log(`[Helper] VAT 0%: id=${exempt.id} (${exempt.name})`);
-      return exempt.id;
-    }
-  }
-
-  if (ratePercent === 15 || ratePercent === 12) {
-    const medium = vatTypes.find(
-      (v) =>
-        (v.percentage === ratePercent ||
-          v.name?.toLowerCase().includes("middels") ||
-          v.name?.toLowerCase().includes("lav")) &&
-        v.name?.toLowerCase().includes("utgående"),
-    );
-    if (medium) {
-      console.log(`[Helper] VAT ${ratePercent}%: id=${medium.id} (${medium.name})`);
-      return medium.id;
-    }
-  }
-
   if (ratePercent === 25) {
     return getDefaultProductVatTypeId(client);
   }
 
-  // Try percentage match on any outgoing type
+  const vatTypes = await loadVatTypes(client);
+
+  // Match by the standard Norwegian VAT number first (most reliable)
+  const expectedNumber = OUTGOING_VAT_NUMBER_BY_RATE[ratePercent];
+  if (expectedNumber) {
+    const byNumber = vatTypes.find((v) => v.number === expectedNumber);
+    if (byNumber) {
+      console.log(`[Helper] VAT ${ratePercent}%: id=${byNumber.id} (code ${byNumber.number}: ${byNumber.name})`);
+      return byNumber.id;
+    }
+  }
+
+  // For 0%: also try code "5" (Ingen utgående avgift innenfor mva-loven)
+  if (ratePercent === 0) {
+    const code5 = vatTypes.find((v) => v.number === "5");
+    if (code5) {
+      console.log(`[Helper] VAT 0%: id=${code5.id} (code 5: ${code5.name})`);
+      return code5.id;
+    }
+  }
+
+  // Fallback: match by percentage on outgoing types
   const match = vatTypes.find(
     (v) => v.percentage === ratePercent && v.name?.toLowerCase().includes("utgående"),
   );
@@ -217,7 +219,7 @@ export async function findVatTypeIdByRate(
     return match.id;
   }
 
-  console.log(`[Helper] No VAT type found for ${ratePercent}%, falling back to default`);
+  console.log(`[Helper] No VAT type found for ${ratePercent}%, falling back to default 25%`);
   return getDefaultProductVatTypeId(client);
 }
 
@@ -258,14 +260,12 @@ export async function findEmployeeByEmail(
   client: TripletexClient,
   email: string,
 ): Promise<Employee | null> {
-  // Tripletex /employee endpoint might not support email filtering directly,
-  // so we fetch a batch and filter locally.
-  const result = await client.list<Employee & { email?: string }>("/employee", {
+  const result = await client.list<Employee>("/employee", {
+    email,
     from: "0",
-    count: "100",
-    fields: "id,firstName,lastName,email",
+    count: "1",
   });
-  return result.values.find((e) => e.email?.toLowerCase() === email.toLowerCase()) ?? null;
+  return result.values[0] ?? null;
 }
 
 export async function findCustomerByName(
@@ -429,15 +429,13 @@ export async function getProjectManagerEmployeeId(
 ): Promise<number | null> {
   if (cachedProjectManagerId !== null) return cachedProjectManagerId;
 
-  // Fetch a few employees and sort by ID ascending to find the sandbox admin
   const result = await client.list<Employee>("/employee", {
     from: "0",
-    count: "50",
+    count: "1",
   });
 
   if (result.values.length > 0) {
-    const sorted = result.values.sort((a, b) => a.id - b.id);
-    cachedProjectManagerId = sorted[0].id;
+    cachedProjectManagerId = result.values[0].id;
     console.log(`[Helper] Using project manager employee id=${cachedProjectManagerId}`);
     return cachedProjectManagerId;
   }

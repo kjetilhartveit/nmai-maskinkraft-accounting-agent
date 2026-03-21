@@ -6,6 +6,8 @@ import {
   daysFromNow,
   findCustomerByName,
   findOrCreateProduct,
+  findProductByNumber,
+  findVatTypeIdByRate,
   ensureBankAccountConfigured,
 } from "../lib/tripletex-helpers.js";
 
@@ -20,6 +22,7 @@ interface Customer {
 
 interface ProductLine {
   productName: string;
+  productNumber?: string | number;
   unitPrice: number;
   quantity: number;
   vatRate?: number;
@@ -65,6 +68,7 @@ function extractProductLines(task: ParsedTask): ProductLine[] {
   if (Array.isArray(first.productLines) && first.productLines.length > 0) {
     return (first.productLines as Record<string, unknown>[]).map((line) => ({
       productName: String(line.productName ?? line.name ?? line.description ?? "Produkt"),
+      productNumber: (line.productNumber ?? line.number) as string | number | undefined,
       unitPrice: Number(line.unitPrice ?? line.amount ?? line.price ?? 0),
       quantity: Number(line.quantity ?? line.count ?? 1),
       vatRate: line.vatRate !== undefined ? Number(line.vatRate) : undefined,
@@ -80,6 +84,7 @@ function extractProductLines(task: ParsedTask): ProductLine[] {
     if (hasProductEntities) {
       return entities.slice(1).map((e) => ({
         productName: String(e.productName ?? e.name ?? e.description ?? "Produkt"),
+        productNumber: (e.productNumber ?? e.number) as string | number | undefined,
         unitPrice: Number(e.unitPrice ?? e.amount ?? e.price ?? 0),
         quantity: Number(e.quantity ?? e.count ?? 1),
         vatRate: e.vatRate !== undefined ? Number(e.vatRate) : undefined,
@@ -125,12 +130,26 @@ async function createOrderForInvoice(
   // Resolve all product IDs
   const resolvedLines: { productId: number; line: ProductLine }[] = [];
   for (const line of productLines) {
-    const cachedId = ctx?.getProductId(line.productName);
+    const cachedId = ctx?.getProductId(line.productName) ??
+      (line.productNumber ? ctx?.getProductId(String(line.productNumber)) : undefined);
     let productId: number;
     if (cachedId) {
       console.log(`[Handler] Using product from context: ${line.productName} → id=${cachedId}`);
       productId = cachedId;
     } else {
+      // Try product number lookup first
+      if (line.productNumber) {
+        const existing = await findProductByNumber(client, String(line.productNumber));
+        if (existing) {
+          console.log(`[Handler] Found product by number ${line.productNumber}: id=${existing.id}`);
+          productId = existing.id;
+          ctx?.registerProduct(line.productName, existing.id);
+          ctx?.registerProduct(String(line.productNumber), existing.id);
+          resolvedLines.push({ productId, line });
+          continue;
+        }
+      }
+
       let vatTypeId: number | undefined;
       if (line.vatRate !== undefined) {
         vatTypeId = await findVatTypeIdByRate(client, line.vatRate);
@@ -142,6 +161,8 @@ async function createOrderForInvoice(
         vatTypeId,
       );
       productId = product.id;
+      ctx?.registerProduct(line.productName, productId);
+      if (line.productNumber) ctx?.registerProduct(String(line.productNumber), productId);
     }
     resolvedLines.push({ productId, line });
   }
@@ -206,8 +227,17 @@ export async function handleCreateInvoice(
 
   const customerFromCtx = customerName ? ctx?.getCustomerId(customerName) : undefined;
 
-  // Only try to find an existing un-specified order if we have NO product lines.
-  // If we have product lines, we should always create a new order for this invoice.
+  // Check context for an order created by a prior task in this sequence
+  if (!order && customerName && ctx) {
+    const ctxOrderId = ctx.getOrderId(customerName) ?? ctx.getLastOrderId();
+    if (ctxOrderId) {
+      console.log(`[Handler] Using order from context: id=${ctxOrderId}`);
+      order = { id: ctxOrderId };
+    }
+  }
+
+  // Only try to find an existing un-specified order if we have NO product lines
+  // and no order was found from context.
   if (!order && customerName && productLines.length === 0) {
     order = await findOrderByCustomerName(client, customerName);
   }
@@ -250,6 +280,7 @@ export async function handleCreateInvoice(
   const result = await client.post<{ id: number }>("/invoice", invoiceBody);
   const invoiceId = result.value.id;
   console.log(`[Handler] Created invoice: id=${invoiceId}`);
+  if (customerName && ctx) ctx.registerInvoice(customerName, invoiceId);
 
   if (sendAfterCreate) {
     const email = entity.email as string | undefined;

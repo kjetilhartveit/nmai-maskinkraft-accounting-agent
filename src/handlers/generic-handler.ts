@@ -68,13 +68,21 @@ CRITICAL endpoint patterns:
 ${TRIPLETEX_API_REFERENCE}`;
 }
 
-function buildUserPrompt(task: ParsedTask): string {
+function buildUserPrompt(task: ParsedTask, ctx: SequenceContext): string {
   const parts = [`Complete the following accounting task:\n\n${task.rawPrompt}`];
 
   if (task.entities.length > 0) {
     parts.push(
       `\nExtracted data from the prompt:\n${JSON.stringify(task.entities, null, 2)}`,
     );
+  }
+
+  // Include context from prior tasks to avoid redundant lookups
+  const ctxInfo: string[] = [];
+  if (ctx.getLastOrderId()) ctxInfo.push(`Existing order ID: ${ctx.getLastOrderId()}`);
+  if (ctx.getLastInvoiceId()) ctxInfo.push(`Existing invoice ID: ${ctx.getLastInvoiceId()}`);
+  if (ctxInfo.length > 0) {
+    parts.push(`\nResources already created in this session:\n${ctxInfo.join("\n")}`);
   }
 
   parts.push(
@@ -108,7 +116,7 @@ function enrich403Error(endpoint: string, errorMsg: string): string {
 export async function handleGenericTask(
   client: TripletexClient,
   task: ParsedTask,
-  _ctx: SequenceContext,
+  ctx: SequenceContext,
 ): Promise<void> {
   console.log(
     `[GenericHandler] Starting agentic execution for: ${task.taskType}`,
@@ -366,7 +374,7 @@ export async function handleGenericTask(
   const { text, steps, toolCalls } = await geminiGenerateWithTools({
     model: config.google.model,
     system: buildSystemPrompt(),
-    prompt: buildUserPrompt(task),
+    prompt: buildUserPrompt(task, ctx),
     tools,
     maxSteps: MAX_STEPS,
     maxTokens: 16384,

@@ -4,6 +4,7 @@ import type { SequenceContext } from "../lib/sequence-context.js";
 import {
   findCustomerByName,
   findOrCreateProduct,
+  findProductByNumber,
   findVatTypeIdByRate,
   today,
   daysFromNow,
@@ -11,6 +12,7 @@ import {
 
 interface ProductLine {
   name?: string;
+  productNumber?: string | number;
   quantity?: number;
   count?: number;
   unitPrice?: number;
@@ -64,6 +66,7 @@ export async function handleCreateOrder(
   const orderResult = await client.post<{ id: number }>("/order", orderBody);
   const orderId = orderResult.value.id;
   console.log(`[Handler] Created order: id=${orderId}`);
+  ctx.registerOrder(customerName, orderId);
 
   // Add order lines if products are specified
   const products: ProductLine[] = Array.isArray(entity.products)
@@ -78,6 +81,7 @@ export async function handleCreateOrder(
     for (const pe of productEntities) {
       products.push({
         name: String(pe.name ?? ""),
+        productNumber: (pe.productNumber ?? pe.number) as string | number | undefined,
         quantity: Number(pe.quantity ?? pe.count ?? 1),
         unitPrice: Number(pe.unitPrice ?? pe.price ?? 0),
         vatRate: pe.vatRate !== undefined ? Number(pe.vatRate) : undefined,
@@ -89,12 +93,30 @@ export async function handleCreateOrder(
     const orderLines = await Promise.all(
       products.map(async (p) => {
         const productName = String(p.name ?? "Produkt");
-        const cachedId = ctx.getProductId(productName);
+        const cachedId = ctx.getProductId(productName) ??
+          (p.productNumber ? ctx.getProductId(String(p.productNumber)) : undefined);
         let productId: number;
         if (cachedId) {
           console.log(`[Handler] Using product from context: ${productName} → id=${cachedId}`);
           productId = cachedId;
         } else {
+          // Try product number lookup first (cheaper than name search + create)
+          if (p.productNumber) {
+            const existing = await findProductByNumber(client, String(p.productNumber));
+            if (existing) {
+              console.log(`[Handler] Found product by number ${p.productNumber}: id=${existing.id}`);
+              productId = existing.id;
+              ctx.registerProduct(productName, existing.id);
+              ctx.registerProduct(String(p.productNumber), existing.id);
+              return {
+                order: { id: orderId },
+                product: { id: productId },
+                count: Number(p.quantity ?? p.count ?? 1),
+                unitPriceExcludingVatCurrency: Number(p.unitPrice ?? p.price ?? 0),
+              };
+            }
+          }
+
           let vatTypeId: number | undefined;
           if (p.vatRate !== undefined) {
             vatTypeId = await findVatTypeIdByRate(client, p.vatRate);
@@ -106,6 +128,8 @@ export async function handleCreateOrder(
             vatTypeId,
           );
           productId = product.id;
+          ctx.registerProduct(productName, productId);
+          if (p.productNumber) ctx.registerProduct(String(p.productNumber), productId);
         }
         return {
           order: { id: orderId },

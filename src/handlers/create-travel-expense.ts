@@ -74,10 +74,8 @@ export async function handleCreateTravelExpense(
     date: String(entity.date ?? today()),
   };
 
-  if (entity.description) travelExpenseBody.comment = entity.description;
-  if (entity.projectName ?? entity.project) {
-    // Project ID would need lookup; skip for now
-  }
+  const title = entity.description ?? entity.title ?? entity.tripTitle;
+  if (title) travelExpenseBody.title = String(title);
 
   const teResult = await client.post<{ id: number }>(
     "/travelExpense",
@@ -86,21 +84,52 @@ export async function handleCreateTravelExpense(
   const travelExpenseId = teResult.value.id;
   console.log(`[Handler] Created travel expense: id=${travelExpenseId}`);
 
-  // Add cost line if amount is specified
-  const amount = entity.amount ?? entity.cost;
-  if (amount !== undefined) {
+  // Add cost lines for expenses
+  const costItems: { amount: number; description: string }[] = [];
+
+  // Check for individual cost items in additional entities
+  for (const e of task.entities.slice(1)) {
+    const amt = Number(e.amount ?? e.cost ?? 0);
+    if (amt > 0) {
+      costItems.push({
+        amount: amt,
+        description: String(e.description ?? e.name ?? ""),
+      });
+    }
+  }
+
+  // Fallback: single cost from first entity
+  if (costItems.length === 0) {
+    const amount = entity.amount ?? entity.cost;
+    if (amount !== undefined && Number(amount) > 0) {
+      costItems.push({
+        amount: Number(amount),
+        description: String(entity.description ?? ""),
+      });
+    }
+  }
+
+  if (costItems.length > 0) {
     const paymentTypeId = await getDefaultPaymentTypeId(client);
+    const expenseDate = String(entity.date ?? today());
 
-    const costBody: Record<string, unknown> = {
-      travelExpense: { id: travelExpenseId },
-      paymentType: { id: paymentTypeId },
-      amountCurrencyIncVat: Number(amount),
-    };
+    for (const item of costItems) {
+      const costBody: Record<string, unknown> = {
+        travelExpense: { id: travelExpenseId },
+        paymentType: { id: paymentTypeId },
+        date: expenseDate,
+        amountCurrencyIncVat: item.amount,
+      };
+      if (item.description) costBody.description = item.description;
 
-    if (entity.description) costBody.comment = entity.description;
-
-    await client.post("/travelExpense/cost", costBody);
-    console.log(`[Handler] Added cost to travel expense: ${amount}`);
+      try {
+        await client.post("/travelExpense/cost", costBody);
+        console.log(`[Handler] Added cost to travel expense: ${item.amount} (${item.description || "no description"})`);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.warn(`[Handler] Failed to add cost line: ${msg}`);
+      }
+    }
   }
 }
 

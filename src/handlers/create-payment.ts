@@ -1,7 +1,7 @@
 import type { TripletexClient } from "../lib/tripletex-client.js";
 import type { ParsedTask } from "../types/index.js";
 import type { SequenceContext } from "../lib/sequence-context.js";
-import { today, findCustomerByName, ensureBankAccountConfigured } from "../lib/tripletex-helpers.js";
+import { today, findCustomerByName, findOrCreateProduct, ensureBankAccountConfigured } from "../lib/tripletex-helpers.js";
 
 interface Invoice {
   id: number;
@@ -28,32 +28,41 @@ async function findInvoiceForPayment(
     invoiceDateFrom: "2020-01-01",
     invoiceDateTo: "2030-12-31",
     from: "0",
-    count: "100",
+    count: "20",
   };
+  if (customerName) params.customerName = customerName;
 
   const result = await client.list<Invoice>("/invoice", params);
 
+  if (result.values.length === 0 && customerName) {
+    // Retry without customer filter in case name doesn't match exactly
+    delete params.customerName;
+    params.count = "50";
+    const fallback = await client.list<Invoice>("/invoice", params);
+    if (fallback.values.length === 0) return null;
+
+    const byName = fallback.values.filter((inv) => {
+      const name = inv.customer?.name?.toLowerCase() ?? "";
+      return name.includes(customerName.toLowerCase());
+    });
+    if (byName.length > 0) return byName[0];
+    const unpaid = fallback.values.filter(
+      (inv) => inv.amountOutstanding > 0 || inv.amountCurrencyOutstanding > 0,
+    );
+    return unpaid[0] ?? fallback.values[0];
+  }
+
   if (result.values.length === 0) return null;
 
-  // Try to match by customer name and/or amount
-  const candidates = result.values.filter((inv) => {
-    if (customerName) {
-      const name = inv.customer?.name?.toLowerCase() ?? "";
-      if (!name.includes(customerName.toLowerCase())) return false;
-    }
-    if (amount) {
-      const matches =
-        Math.abs(inv.amount - amount) < 1 ||
-        Math.abs(inv.amountExcludingVat - amount) < 1 ||
-        Math.abs(inv.amountCurrency - amount) < 1;
-      if (!matches) return false;
-    }
-    return true;
-  });
+  if (amount) {
+    const byAmount = result.values.filter((inv) =>
+      Math.abs(inv.amount - amount) < 1 ||
+      Math.abs(inv.amountExcludingVat - amount) < 1 ||
+      Math.abs(inv.amountCurrency - amount) < 1,
+    );
+    if (byAmount.length > 0) return byAmount[0];
+  }
 
-  if (candidates.length > 0) return candidates[0];
-
-  // Fallback: return the first invoice with an outstanding balance
   const unpaid = result.values.filter(
     (inv) => inv.amountOutstanding > 0 || inv.amountCurrencyOutstanding > 0,
   );
@@ -96,11 +105,27 @@ export async function handleCreatePayment(
     `[Handler] Searching for invoice — customer: "${customerName}", amount: ${rawAmount}`,
   );
 
-  let invoice = await findInvoiceForPayment(
-    client,
-    customerName || undefined,
-    rawAmount || undefined,
-  );
+  // Check context for an invoice created by a prior task in this sequence
+  let invoice: Invoice | null = null;
+  const ctxInvoiceId = customerName ? ctx.getInvoiceId(customerName) : undefined;
+  const fallbackInvoiceId = ctxInvoiceId ?? ctx.getLastInvoiceId();
+  if (fallbackInvoiceId) {
+    console.log(`[Handler] Using invoice from context: id=${fallbackInvoiceId}`);
+    try {
+      const inv = await client.get<Invoice>(`/invoice/${fallbackInvoiceId}`);
+      invoice = inv.value;
+    } catch {
+      console.log(`[Handler] Context invoice ${fallbackInvoiceId} not found, falling back to search`);
+    }
+  }
+
+  if (!invoice) {
+    invoice = await findInvoiceForPayment(
+      client,
+      customerName || undefined,
+      rawAmount || undefined,
+    );
+  }
 
   if (!invoice) {
     // If no invoice found, we might need to create the whole chain
@@ -134,8 +159,10 @@ export async function handleCreatePayment(
 
     const amount = rawAmount || 10000;
     const description = String(
-      entity.productName ?? entity.description ?? entity.service ?? "Service",
+      entity.productName ?? entity.description ?? entity.service ?? "Tjeneste",
     );
+
+    const product = await findOrCreateProduct(client, description, amount);
 
     const order = await client.post<{ id: number }>("/order", {
       customer: { id: customerId },
@@ -145,7 +172,7 @@ export async function handleCreatePayment(
 
     await client.post("/order/orderline", {
       order: { id: order.value.id },
-      description,
+      product: { id: product.id },
       count: 1,
       unitPriceExcludingVatCurrency: amount,
     });
