@@ -8,7 +8,50 @@ There are many caveats to consider which are well documented in the official doc
 
 In order for us to create the best possible system there are many things we need to know first; many of which are mentioned in [RECOMMENDATIONS.md](docs/reports/RECOMMENDATIONS.md).
 
-The system parses natural-language prompts (in Norwegian, Nynorsk, English, Spanish, Portuguese, German, or French) into structured task sequences. Dedicated deterministic handlers execute each task with minimal API calls, while a generic agentic handler covers unsupported task types via LLM tool-calling.
+The system parses natural-language prompts (in Norwegian, Nynorsk, English, Spanish, Portuguese, German, or French) into structured task sequences. There are exactly **30 task types** — one per competition prompt template — with no "unknown" fallback. Each type has a dedicated handler.
+
+## Solver pipeline architecture
+
+The solver (`POST /solve`) follows a **3-step pipeline** (no council, no unknown):
+
+1. **Classify** (`task-classifier.ts`) — LLM (Gemini) matches the prompt against 30 English template prompts baked into the system prompt. Falls back to regex. Returns exactly one `TaskType`.
+2. **Extract entities** (`entity-extractor.ts`) — LLM extracts variables specific to that template (e.g., for `create_invoice`: customerName, organizationNumber, lines[]. For `fx_payment`: currency, invoiceRate, paymentRate). Also identifies prerequisites (e.g., `create_customer` before `send_invoice`).
+3. **Execute** (`handlers/index.ts`) — Runs each task in sequence with a shared `SequenceContext`. Every type has a dedicated deterministic handler with minimal API calls.
+
+The 30 templates and their variable schemas are defined in `task-classifier.ts` (PROMPT_TEMPLATES) and `entity-extractor.ts` (TASK_PROMPTS). The `SequenceContext` passes IDs between tasks (e.g., customer ID from step 1 used in invoice creation in step 2).
+
+## Current work plan
+
+**Architecture**: Refactored from 5-step (classify → extract → build → council → execute) to 3-step pipeline. Removed `unknown` type, LLM council, and 4 speculative types. Added 3 new types: `employee_contract_pdf`, `supplier_invoice_pdf`, `ledger_analysis`.
+
+**Baseline results** (2026-03-21, `--one-per-type`, 30 cases):
+- **19/30 passed (63%)**
+
+**Confidently working (19 types):** create_employee, create_department, send_invoice, create_supplier, create_customer, create_invoice, create_credit_note, create_payment, create_dimension, create_product, create_supplier_invoice, create_order, reverse_payment, fx_payment, bank_reconciliation, reminder_fee, receipt_expense, employee_onboarding_pdf, ledger_audit.
+
+**11 failures by category:**
+
+**Misclassification (4):**
+- `create_timesheet` → classified as `create_customer` (Norwegian prompt)
+- `ledger_analysis` → classified as `create_project`
+- `employee_contract_pdf` → classified as `create_department`
+- `supplier_invoice_pdf` → classified as `create_invoice`
+
+**Entity extraction failures (5):**
+- `create_project` → missing employee prerequisite in sequence
+- `create_travel_expense` → entity fields not matching expectations
+- `project_fixed_price` → entity extraction issue
+- `year_end_closing` → entity extraction issue (complex multi-part prompt)
+- `monthly_closing` → entity extraction issue (complex multi-part prompt)
+
+**Handler execution failures (2):**
+- `create_payroll` → 8 calls, 2 errors — handler or API issue
+- `project_lifecycle` → 3 calls, 1 error — handler likely broken
+
+**Next priorities:**
+1. Fix 4 misclassifications — likely regex fallback issues or classifier prompt needs refinement
+2. Fix entity extraction for the 5 failing types — variable schemas may need tuning
+3. Fix 2 handler execution failures
 
 ## Agent's role
 
@@ -83,9 +126,7 @@ Tripletex is a module-based accounting system. Many endpoints marked `[BETA]` in
 
 ### Dedicated handlers
 
-See [`src/handlers/index.ts`](src/handlers/index.ts) for the complete list of handlers with their typical API call counts. Each handler entry includes a comment describing its API call pattern.
-
-The `unknown` task type falls back to [`generic-handler.ts`](src/handlers/generic-handler.ts) which uses an LLM agentic loop (4-25 calls).
+All 30 task types have dedicated handlers in `src/handlers/`. See [`src/handlers/index.ts`](src/handlers/index.ts) for the complete mapping with API call counts. There is no "unknown" fallback — every competition prompt maps to exactly one of the 30 types.
 
 ### SequenceContext
 
