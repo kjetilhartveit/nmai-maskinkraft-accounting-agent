@@ -1,0 +1,31 @@
+src/lib/db.ts
+  7b6345be2b26f8ef 31-33,63-72
+src/routes/solve.ts
+  7b6345be2b26f8ef 16-20
+src/lib/solve-logger.ts
+  7b6345be2b26f8ef 71-111
+src/scripts/score-manager.ts
+  7b6345be2b26f8ef 1-147
+package.json
+  7b6345be2b26f8ef 28-29
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.17",
+  "base_commit_sha": "ae099a195b47947c34471399cce83bb95353249d",
+  "prompts": {
+    "7b6345be2b26f8ef": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6c54c54f-18eb-48f9-a88e-c58a32d1fa35",
+        "model": "claude-opus-4-5-20251101"
+      },
+      "human_author": "Kjetil Hårtveit <kjetil_runescape@hotmail.com>",
+      "messages": [],
+      "total_additions": 967,
+      "total_deletions": 761,
+      "accepted_lines": 795,
+      "overriden_lines": 0
+    }
+  }
+}
