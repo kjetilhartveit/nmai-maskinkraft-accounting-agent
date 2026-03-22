@@ -1,0 +1,27 @@
+src/handlers/ledger-analysis.ts
+  a767f3c6d1b2d06a 6,8,10,16,29-30,34,36,40,44,49-54,56,63-64,78-84
+src/handlers/create-order.ts
+  a767f3c6d1b2d06a 48-54
+src/handlers/create-invoice.ts
+  a767f3c6d1b2d06a 250-277
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.17",
+  "base_commit_sha": "dc84f79941977fa9706829b1ec9d28df15188c9c",
+  "prompts": {
+    "a767f3c6d1b2d06a": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "a4414119-fd27-4ec0-86b1-2e44c89c53e3",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Kjetil Hårtveit <kjetil_runescape@hotmail.com>",
+      "messages": [],
+      "total_additions": 571,
+      "total_deletions": 541,
+      "accepted_lines": 571,
+      "overriden_lines": 0
+    }
+  }
+}
