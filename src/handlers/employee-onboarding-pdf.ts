@@ -25,9 +25,13 @@ export async function handleEmployeeOnboardingPdf(
   const startDate = String(entity.startDate ?? "");
   const salaryRaw = entity.salary ?? entity.baseSalary ?? entity.annualSalary ?? 0;
   const salary = Number(String(salaryRaw).replace(/[^\d.]/g, ""));
-  const position = String(entity.position ?? entity.title ?? "");
+  const position = String(entity.position ?? entity.jobTitle ?? entity.title ?? "");
   const departmentName = String(entity.departmentName ?? entity.department ?? "");
   const userType = String(entity.userType ?? (email ? "EXTENDED" : "NO_ACCESS"));
+  const employmentPercentage = Number(entity.employmentPercentage ?? entity.percentage ?? 100);
+  const workingHoursPerWeek = Number(entity.workingHours ?? entity.hoursPerWeek ?? 0);
+  const address = String(entity.address ?? "");
+  const nationalIdNumber = String(entity.nationalIdNumber ?? entity.ssn ?? "");
 
   // Check if employee already exists
   let employeeId: number | null = null;
@@ -78,6 +82,8 @@ export async function handleEmployeeOnboardingPdf(
   if (phoneMobile) body.phoneNumberMobile = phoneMobile;
   if (dateOfBirth) body.dateOfBirth = dateOfBirth;
   if (userType) body.userType = userType;
+  if (nationalIdNumber) body.nationalIdentityNumber = nationalIdNumber;
+  if (address) body.address = { addressLine1: address };
 
   const result = await client.post<{ id: number }>("/employee", body);
   employeeId = result.value.id;
@@ -89,13 +95,17 @@ export async function handleEmployeeOnboardingPdf(
   // Create employment record if start date provided
   if (startDate) {
     try {
-      await client.post("/employee/employment", {
+      const employmentBody: Record<string, unknown> = {
         employee: { id: employeeId },
         startDate,
         employmentType: "ORDINARY",
-        percentageOfFullTimeEquivalent: 100,
-      });
-      console.log(`[Handler] Created employment starting ${startDate}`);
+        percentageOfFullTimeEquivalent: employmentPercentage,
+      };
+      if (position) employmentBody.jobTitle = position;
+      if (workingHoursPerWeek > 0) employmentBody.workingHoursScheme = "HOURS_PER_WEEK";
+
+      await client.post("/employee/employment", employmentBody);
+      console.log(`[Handler] Created employment starting ${startDate}, position=${position}, pct=${employmentPercentage}`);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       if (!msg.includes("403")) {

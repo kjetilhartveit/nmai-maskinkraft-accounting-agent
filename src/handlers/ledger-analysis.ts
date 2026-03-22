@@ -43,25 +43,36 @@ export async function handleLedgerAnalysis(
 
   console.log(`[Handler] Postings: Jan=${janPostings.values.length}, Feb=${febPostings.values.length}`);
 
+  if (janPostings.values.length > 0) {
+    const sample = janPostings.values[0];
+    console.log(`[Handler] Sample posting keys: ${Object.keys(sample).join(", ")}`);
+    console.log(`[Handler] Sample: acct=${sample.account?.number}, amt=${sample.amount}, gross=${sample.amountGross}`);
+  }
+
   const janTotals = new Map<number, { total: number; name: string }>();
   const febTotals = new Map<number, { total: number; name: string }>();
 
-  function aggregate(postings: Posting[], map: Map<number, { total: number; name: string }>) {
+  function aggregate(postings: Posting[], map: Map<number, { total: number; name: string }>, label: string) {
+    const accountsSeen = new Set<number>();
     for (const p of postings) {
       const acctNum = p.account?.number;
+      if (acctNum) accountsSeen.add(acctNum);
       if (acctNum >= 4000 && acctNum <= 7999) {
         const amt = p.amount ?? p.amountGross ?? 0;
-        if (amt > 0) {
+        if (amt !== 0) {
+          const absAmt = Math.abs(amt);
           const existing = map.get(acctNum) ?? { total: 0, name: p.account.name };
-          existing.total += amt;
+          existing.total += absAmt;
           map.set(acctNum, existing);
         }
       }
     }
+    console.log(`[Handler] ${label} accounts seen: ${[...accountsSeen].sort((a, b) => a - b).join(", ")}`);
+    console.log(`[Handler] ${label} expense totals: ${[...map.entries()].map(([k, v]) => `${k}=${v.total}`).join(", ")}`);
   }
 
-  aggregate(janPostings.values, janTotals);
-  aggregate(febPostings.values, febTotals);
+  aggregate(janPostings.values, janTotals, "Jan");
+  aggregate(febPostings.values, febTotals, "Feb");
 
   const increases: { accountNumber: number; name: string; increase: number }[] = [];
   const allAccounts = new Set([...janTotals.keys(), ...febTotals.keys()]);

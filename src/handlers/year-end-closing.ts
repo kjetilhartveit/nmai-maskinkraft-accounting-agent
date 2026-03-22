@@ -14,6 +14,10 @@ const ACCOUNT_FALLBACKS: Record<number, number[]> = {
   6030: [6020, 6010, 6000],
   1209: [1200],
   1229: [1230, 1200],
+  8700: [8300, 8320],
+  2920: [2500, 2510],
+  8060: [8000],
+  8160: [8000],
 };
 
 async function findAccountRaw(
