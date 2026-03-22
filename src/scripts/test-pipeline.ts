@@ -1,18 +1,16 @@
 #!/usr/bin/env tsx
 /**
- * Test the solve flow (classifier → extractor → council → handlers).
+ * Test the solve flow (classifier → extractor → handlers).
  *
  * Usage:
  *   pnpm test-pipeline                    # Run with sample prompts
  *   pnpm test-pipeline "your prompt"      # Run with custom prompt
- *   pnpm test-pipeline --council          # Enable multi-LLM council for unknown
  *   pnpm test-pipeline --verbose          # Show detailed reasoning
  */
 import "dotenv/config";
 import { classifyPrompt } from "../lib/task-classifier.js";
 import { extractEntities, buildTaskSequence } from "../lib/entity-extractor.js";
 import { createSolveTrace } from "../lib/solve-trace.js";
-import { consultCouncil, shouldConsultCouncil } from "../lib/llm-council.js";
 import type { TaskType } from "../types/index.js";
 
 const SAMPLE_PROMPTS = [
@@ -23,7 +21,7 @@ const SAMPLE_PROMPTS = [
   "Create a custom accounting dimension called Region with values Nord-Norge and Vestlandet",
 ];
 
-async function testPipeline(prompt: string, options: { useCouncil?: boolean; verbose?: boolean }) {
+async function testPipeline(prompt: string, options: { verbose?: boolean }) {
   const solveId = `test-${Date.now()}`;
   const trace = createSolveTrace(solveId);
 
@@ -77,32 +75,12 @@ async function testPipeline(prompt: string, options: { useCouncil?: boolean; ver
     extraction.language,
   );
 
-  // Step 4: Council (if enabled and applicable)
-  if (options.useCouncil && shouldConsultCouncil(taskType)) {
-    console.log("\n[4] CONSULTING LLM COUNCIL...");
-    const councilResult = await consultCouncil(prompt, taskType, extraction.entities, trace);
-
-    console.log(`   Decision: ${councilResult.decision.finalDecision}`);
-    console.log(`   Rationale: ${councilResult.decision.rationale}`);
-    console.log(`   Approach: ${councilResult.decision.chosenApproach}`);
-
-    for (const r of councilResult.reasonings) {
-      console.log(`\n   --- ${r.model} ---`);
-      console.log(`   Use built-in: ${r.useBuiltInHandler}`);
-      console.log(`   Confidence: ${(r.confidence * 100).toFixed(0)}%`);
-      if (options.verbose) {
-        console.log(`   Reasoning: ${r.reasoning.slice(0, 200)}...`);
-      }
-    }
-  }
-
   trace.logResult(true, { total: 0, errors: 0 });
   console.log("\n[DONE] Check logs at:", trace.dir);
 }
 
 async function main() {
   const args = process.argv.slice(2);
-  const useCouncil = args.includes("--council");
   const verbose = args.includes("--verbose") || args.includes("-v");
 
   // Filter out flags to get prompts
@@ -111,16 +89,15 @@ async function main() {
   if (prompts.length > 0) {
     // Run with provided prompts
     for (const prompt of prompts) {
-      await testPipeline(prompt, { useCouncil, verbose });
+      await testPipeline(prompt, { verbose });
     }
   } else {
     // Run with sample prompts
     console.log("Running with sample prompts (pass a prompt as argument for custom)");
-    console.log("Use --council to enable multi-LLM council for unknown tasks");
     console.log("Use --verbose for detailed reasoning output\n");
 
     for (const prompt of SAMPLE_PROMPTS) {
-      await testPipeline(prompt, { useCouncil, verbose });
+      await testPipeline(prompt, { verbose });
     }
   }
 }

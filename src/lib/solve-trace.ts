@@ -20,22 +20,6 @@ export interface TraceStep {
   error?: string;
 }
 
-export interface LLMReasoning {
-  model: string;
-  reasoning: string;
-  suggestedApproach: string;
-  useBuiltInHandler: boolean;
-  confidence: number;
-  durationMs: number;
-}
-
-export interface CouncilDecision {
-  reasonings: LLMReasoning[];
-  finalDecision: "builtin" | "custom";
-  chosenApproach: string;
-  rationale: string;
-}
-
 export class SolveTrace {
   readonly id: string;
   readonly dir: string;
@@ -148,55 +132,9 @@ export class SolveTrace {
   }
 
   /**
-   * Log LLM reasoning (for multi-LLM council)
-   */
-  logReasoning(reasoning: LLMReasoning, index: number): void {
-    const step: TraceStep = {
-      phase: "reasoning",
-      timestamp: new Date().toISOString(),
-      durationMs: reasoning.durationMs,
-      model: reasoning.model,
-      output: reasoning,
-    };
-    this.steps.push(step);
-
-    // Create reasoning directory if needed
-    const reasoningDir = join(this.dir, "04-reasoning");
-    mkdirSync(reasoningDir, { recursive: true });
-    writeFileSync(
-      join(reasoningDir, `llm-${index + 1}-${reasoning.model.replace(/[^a-z0-9]/gi, "-")}.json`),
-      JSON.stringify(step, null, 2),
-      "utf-8",
-    );
-
-    const handler = reasoning.useBuiltInHandler ? "builtin" : "custom";
-    this.logTerminal(
-      `[Trace] Reasoning ${index + 1} (${reasoning.model}): ${handler} approach, ` +
-      `confidence ${(reasoning.confidence * 100).toFixed(0)}%`,
-    );
-  }
-
-  /**
-   * Log council decision
-   */
-  logCouncilDecision(decision: CouncilDecision): void {
-    const step: TraceStep = {
-      phase: "council_decision",
-      timestamp: new Date().toISOString(),
-      output: decision,
-    };
-    this.steps.push(step);
-    this.writeFile("05-council-decision.json", step);
-
-    this.logTerminal(
-      `[Trace] Council decided: ${decision.finalDecision} — ${decision.rationale.slice(0, 60)}...`,
-    );
-  }
-
-  /**
    * Log handler execution start
    */
-  logHandlerStart(taskType: string, handlerType: "dedicated" | "generic" | "council"): void {
+  logHandlerStart(taskType: string, handlerType: "dedicated" | "generic"): void {
     const step: TraceStep = {
       phase: "handler_start",
       timestamp: new Date().toISOString(),
