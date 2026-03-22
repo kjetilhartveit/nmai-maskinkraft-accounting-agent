@@ -132,7 +132,7 @@ function candidateToTestCase(
     language,
     tier,
     taskType,
-    expectedEntities: entities,
+    expectedEntities: entities as TestCase["expectedEntities"],
     expectedApiCalls: { max: optimalCount * 4, maxErrors: tier === 1 ? 0 : 2 },
   };
 
