@@ -105,14 +105,20 @@ export async function handleMonthlyClosing(
 
   const entries: { debitAccount: number; creditAccount: number; amount: number; description: string }[] = [];
 
+  function isValidAccountNumber(n: number): boolean {
+    return n >= 1000 && n <= 9999 && !isNaN(n);
+  }
+
   // Process accrual reversals (entity field: accrualReversals or accruals)
   const accruals = (entity.accrualReversals ?? entity.accruals ?? []) as AccrualReversal[];
   for (const acc of accruals) {
     const from = Number(acc.fromAccount ?? 0);
     const to = Number(acc.toAccount ?? 0);
     const amount = Number(acc.amount ?? 0);
-    if (from > 0 && to > 0 && amount > 0) {
+    if (isValidAccountNumber(from) && isValidAccountNumber(to) && amount > 0) {
       entries.push({ debitAccount: to, creditAccount: from, amount, description: String(acc.description ?? "Periodisering tilbakeføring") });
+    } else if (amount > 0) {
+      console.warn(`[Handler] Invalid accrual accounts: from=${from}, to=${to}, amount=${amount}`);
     }
   }
 
@@ -122,8 +128,10 @@ export async function handleMonthlyClosing(
     const depAcct = Number(dep.depreciationAccount ?? 0);
     const assetAcct = Number(dep.assetAccount ?? 0);
     const amount = Number(dep.amount ?? 0);
-    if (depAcct > 0 && assetAcct > 0 && amount > 0) {
+    if (isValidAccountNumber(depAcct) && isValidAccountNumber(assetAcct) && amount > 0) {
       entries.push({ debitAccount: depAcct, creditAccount: assetAcct, amount, description: String(dep.description ?? "Månedlig avskrivning") });
+    } else if (amount > 0) {
+      console.warn(`[Handler] Invalid depreciation accounts: dep=${depAcct}, asset=${assetAcct}, amount=${amount}`);
     }
   }
 

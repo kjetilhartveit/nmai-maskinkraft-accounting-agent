@@ -253,17 +253,25 @@ If specific accounts are not given, the handler will analyze the ledger.`,
 
   year_end_closing: `Extract:
 - fiscalYear (e.g. 2025)
-- assets: array of { name, accountNumber, originalValue, depreciationRate, depreciationAccountNumber }
-- prepaidExpenses: array of { accountNumber, amount, expenseAccountNumber }
+- assets: array of { name, accountNumber (4-digit like 1200), originalValue (amount in NOK), depreciationRate (percentage like 20), depreciationAccountNumber (4-digit like 6010) }
+- prepaidExpenses: array of { accountNumber (4-digit like 1710), amount (NOK), expenseAccountNumber (4-digit like 6300) }
 - taxRate (percentage, e.g. 22)
+
+CRITICAL: Account numbers are ALWAYS 4-digit Norwegian standard chart of accounts (1000-9999).
+Do NOT confuse monetary amounts with account numbers.
+Common accounts: 1200/1210/1230 (assets), 1710 (prepaid), 6010/6020 (depreciation expense), 8300 (tax), 2500 (tax payable).
 
 Extract ALL details about depreciation, prepaid expenses, and tax provision.`,
 
   monthly_closing: `Extract:
-- month (e.g. "March 2026" or YYYY-MM)
-- accrualReversals: array of { amount, fromAccount, toAccount, description }
-- depreciationEntries: array of { amount, assetAccount, depreciationAccount }
-- salaryProvision: { amount, account }
+- month (e.g. "2026-03" for March 2026)
+- accrualReversals: array of { amount (number), fromAccount (4-digit account like 1710), toAccount (4-digit account like 6300), description }
+- depreciationEntries: array of { amount (number), assetAccount (4-digit, e.g. 1200), depreciationAccount (4-digit, e.g. 6010) }
+- salaryProvision: { amount (number), debitAccount (4-digit, e.g. 5000), creditAccount (4-digit, e.g. 2900) }
+
+CRITICAL: Account numbers are ALWAYS 4-digit Norwegian standard chart of accounts numbers (1000-9999). 
+Do NOT confuse monetary amounts (like 11150 NOK) with account numbers.
+Common accounts: 1200 (assets), 1710 (prepaid), 2900 (provisions), 5000 (salary), 6010 (depreciation), 6300 (rent/expenses).
 
 Extract ALL closing entries mentioned in the prompt.`,
 
