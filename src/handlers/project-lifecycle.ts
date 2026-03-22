@@ -20,6 +20,7 @@ interface EmployeeEntry {
   email?: string;
   hours: number;
   hourlyRate?: number;
+  role?: string;
 }
 
 interface SupplierCost {
@@ -57,13 +58,19 @@ export async function handleProjectLifecycle(
       email: emp.email ? String(emp.email) : undefined,
       hours: Number(emp.hours ?? 0),
       hourlyRate: emp.hourlyRate ? Number(emp.hourlyRate) : undefined,
+      role: emp.role ? String(emp.role) : undefined,
     });
   }
 
   // Parse supplier cost
-  const supplierCostRaw = entity.supplierCost as SupplierCost | undefined;
-  const supplierCost: SupplierCost | null = supplierCostRaw?.amount
-    ? { supplierName: String(supplierCostRaw.supplierName ?? ""), amount: Number(supplierCostRaw.amount), description: String(supplierCostRaw.description ?? "") }
+  const supplierCostRaw = entity.supplierCost as Record<string, unknown> | undefined;
+  const supplierCost = supplierCostRaw?.amount
+    ? {
+        supplierName: String(supplierCostRaw.supplierName ?? ""),
+        organizationNumber: supplierCostRaw.organizationNumber ? String(supplierCostRaw.organizationNumber) : undefined,
+        amount: Number(supplierCostRaw.amount),
+        description: String(supplierCostRaw.description ?? ""),
+      }
     : null;
 
   // 1. Find or create customer
@@ -171,6 +178,21 @@ export async function handleProjectLifecycle(
       const found = await findEmployeeByEmail(client, emp.email);
       if (found) empId = found.id;
     }
+    if (!empId && emp.firstName && emp.lastName) {
+      try {
+        const created = await client.post<{ id: number }>("/employee", {
+          firstName: emp.firstName,
+          lastName: emp.lastName,
+          email: emp.email,
+          dateOfBirth: "1990-01-01",
+          startDate: today(),
+        });
+        empId = created.value.id;
+        console.log(`[Handler] Created employee: ${emp.firstName} ${emp.lastName} (id=${empId})`);
+      } catch (err) {
+        console.warn(`[Handler] Failed to create employee ${emp.firstName}: ${err}`);
+      }
+    }
     if (!empId) empId = pmId;
 
     const entryDate = today();
@@ -216,10 +238,12 @@ export async function handleProjectLifecycle(
         if (suppliers.values.length > 0) {
           supplierId = suppliers.values[0].id;
         } else {
-          const created = await client.post<{ id: number }>("/supplier", {
+          const supplierBody: Record<string, unknown> = {
             name: supplierCost.supplierName,
             isSupplier: true,
-          });
+          };
+          if (supplierCost.organizationNumber) supplierBody.organizationNumber = supplierCost.organizationNumber;
+          const created = await client.post<{ id: number }>("/supplier", supplierBody);
           supplierId = created.value.id;
         }
       }

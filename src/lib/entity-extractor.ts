@@ -339,11 +339,14 @@ Extract ALL closing entries mentioned in the prompt.`,
   project_lifecycle: `Extract:
 - projectName (required)
 - customerName (required)
-- organizationNumber
-- budgetAmount (project budget)
-- employees: array of { firstName, lastName, hours, hourlyRate }
-- supplierCost: { supplierName, amount, description }
-- invoiceAmount (amount to invoice customer)`,
+- organizationNumber (customer org number)
+- budgetAmount (project budget in NOK)
+- employees: array of { firstName, lastName, email, hours, hourlyRate, role }
+  IMPORTANT: Extract the email addresses for each employee. Role can be "project_manager", "consultant", etc.
+- supplierCost: { supplierName, organizationNumber, amount, description }
+  IMPORTANT: Extract the supplier's organization number if provided.
+- invoiceAmount (amount to invoice customer, if explicitly stated)
+- invoicePercentage (percentage of budget to invoice, if stated)`,
 
   reminder_fee: `Extract:
 - customerName (if specified)
