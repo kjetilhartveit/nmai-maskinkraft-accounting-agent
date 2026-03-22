@@ -98,14 +98,25 @@ export async function handleEmployeeOnboardingPdf(
       const employmentBody: Record<string, unknown> = {
         employee: { id: employeeId },
         startDate,
-        employmentType: "ORDINARY",
         percentageOfFullTimeEquivalent: employmentPercentage,
       };
-      if (position) employmentBody.jobTitle = position;
-      if (workingHoursPerWeek > 0) employmentBody.workingHoursScheme = "HOURS_PER_WEEK";
 
-      await client.post("/employee/employment", employmentBody);
-      console.log(`[Handler] Created employment starting ${startDate}, position=${position}, pct=${employmentPercentage}`);
+      const empResult = await client.post<{ id: number }>("/employee/employment", employmentBody);
+      console.log(`[Handler] Created employment id=${empResult.value.id} starting ${startDate}, pct=${employmentPercentage}`);
+
+      if (position) {
+        try {
+          const detailsBody: Record<string, unknown> = {
+            employment: { id: empResult.value.id },
+            date: startDate,
+          };
+          detailsBody.occupationCode = { nameNO: position };
+          await client.post("/employee/employment/details", detailsBody);
+          console.log(`[Handler] Created employment details: position=${position}`);
+        } catch {
+          console.warn(`[Handler] Could not set employment details`);
+        }
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       if (!msg.includes("403")) {
