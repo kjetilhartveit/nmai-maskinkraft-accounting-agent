@@ -201,9 +201,10 @@ Add prerequisite create_supplier.`,
 - customerName (company name to invoice)
 - organizationNumber (org number of the customer company)
 - hourlyRate (NOK per hour, as a number)
-- date (YYYY-MM-DD, use today if not specified)
+- date (YYYY-MM-DD format. ONLY extract if the prompt explicitly mentions a date. If no date is mentioned, return null.)
 
-IMPORTANT: Extract the activity name and project name EXACTLY as they appear in the prompt.`,
+IMPORTANT: Extract the activity name and project name EXACTLY as they appear in the prompt.
+CRITICAL: Do NOT invent or hallucinate a date. If the prompt does not mention a specific date, set date to null.`,
 
   receipt_expense: `Extract ALL details from the prompt and any attached receipt/PDF:
 - itemDescription (what was purchased)

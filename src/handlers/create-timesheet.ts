@@ -34,7 +34,11 @@ export async function handleCreateTimesheet(
   const customerName = String(entity.customerName ?? entity.customer ?? "");
   const orgNumber = String(entity.organizationNumber ?? entity.orgNumber ?? "");
   const hourlyRate = Number(entity.hourlyRate ?? entity.rate ?? 0);
-  const entryDate = String(entity.date ?? today());
+  const rawDate = String(entity.date ?? "");
+  const currentYear = new Date().getFullYear();
+  const entryDate = rawDate && /^\d{4}-\d{2}-\d{2}$/.test(rawDate) && Number(rawDate.slice(0, 4)) >= currentYear
+    ? rawDate
+    : today();
 
   let employeeId: number | null = null;
 
@@ -174,10 +178,17 @@ export async function handleCreateTimesheet(
     console.log(`[Handler] Created timesheet entry: id=${result.value.id}, hours=${hours}, date=${entryDate}`);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    if (msg.includes("409") || msg.includes("allerede") || msg.includes("already")) {
-      timesheetBody.date = daysFromNow(1);
-      const result = await client.post<{ id: number }>("/timesheet/entry", timesheetBody);
-      console.log(`[Handler] Created timesheet entry on retry date: id=${result.value.id}`);
+    if (msg.includes("422") || msg.includes("409") || msg.includes("allerede") || msg.includes("already") || msg.includes("datoen")) {
+      timesheetBody.date = today();
+      try {
+        const result = await client.post<{ id: number }>("/timesheet/entry", timesheetBody);
+        console.log(`[Handler] Created timesheet entry on fallback date: id=${result.value.id}`);
+      } catch (err2) {
+        const msg2 = err2 instanceof Error ? err2.message : String(err2);
+        timesheetBody.date = daysFromNow(1);
+        const result = await client.post<{ id: number }>("/timesheet/entry", timesheetBody);
+        console.log(`[Handler] Created timesheet entry on tomorrow: id=${result.value.id}`);
+      }
     } else {
       throw err;
     }
