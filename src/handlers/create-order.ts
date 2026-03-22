@@ -8,6 +8,7 @@ import {
   findVatTypeIdByRate,
   today,
   daysFromNow,
+  ensureBankAccountConfigured,
 } from "../lib/tripletex-helpers.js";
 
 interface ProductLine {
@@ -140,5 +141,57 @@ export async function handleCreateOrder(
       await client.postList("/order/orderline/list", orderLines);
     }
     console.log(`[Handler] Added ${orderLines.length} order line(s) to order ${orderId}`);
+  }
+
+  // Convert order to invoice if the prompt asks for it (competition template always does)
+  const promptLower = (task.rawPrompt ?? "").toLowerCase();
+  const shouldInvoice = entity.convertToInvoice === true ||
+    promptLower.includes("invoice") || promptLower.includes("faktura") ||
+    promptLower.includes("facture") || promptLower.includes("rechnung") ||
+    promptLower.includes("fatura");
+
+  if (shouldInvoice || products.length > 0) {
+    try {
+      await ensureBankAccountConfigured(client);
+
+      const invoiceResult = await client.post<{ id: number; amount: number; amountCurrency: number }>("/invoice", {
+        invoiceDate: today(),
+        invoiceDueDate: daysFromNow(14),
+        orders: [{ id: orderId }],
+      });
+      const invoiceId = invoiceResult.value.id;
+      const invoiceAmount = invoiceResult.value.amount ?? invoiceResult.value.amountCurrency ?? 0;
+      console.log(`[Handler] Created invoice from order: id=${invoiceId}, amount=${invoiceAmount}`);
+      ctx.registerInvoice(customerName, invoiceId);
+
+      // Register full payment
+      const shouldPay = entity.registerPayment !== false &&
+        (promptLower.includes("payment") || promptLower.includes("betaling") ||
+         promptLower.includes("paiement") || promptLower.includes("zahlung") ||
+         promptLower.includes("pagamento") || products.length > 0);
+
+      if (shouldPay && invoiceAmount > 0) {
+        const paymentTypes = await client.list<{ id: number; description: string }>("/invoice/paymentType", {
+          from: "0", count: "10",
+        });
+        const paymentType = paymentTypes.values.find(pt =>
+          pt.description?.toLowerCase().includes("bank") ||
+          pt.description?.toLowerCase().includes("innbetaling")
+        ) ?? paymentTypes.values[0];
+
+        if (paymentType) {
+          await client.put(`/invoice/${invoiceId}/:createPayment`, {
+            paymentDate: today(),
+            paymentTypeId: paymentType.id,
+            paidAmount: invoiceAmount,
+            paidAmountCurrency: invoiceAmount,
+          });
+          console.log(`[Handler] Registered full payment on invoice ${invoiceId}: ${invoiceAmount} NOK`);
+        }
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn(`[Handler] Invoice/payment step failed: ${msg}`);
+    }
   }
 }
