@@ -29,14 +29,13 @@ The 30 templates and their variable schemas are defined in `task-classifier.ts` 
 - Precise expected entities (what the entity extractor must produce)
 - Expected API sequence (from Python reference `templates.py`)
 - API call bounds with `maxErrors: 0` target
-- 5 file-based types marked with `requiresFile` (need PDF/CSV fixtures)
+- File-based types have fixtures in `data/pdf/` and `data/csv/`
 
 **Next priorities:**
-1. Run `pnpm eval -- --skip-file-tasks` to get new baseline across 25 non-file types
+1. Run `pnpm eval` to get baseline across all 30 task types
 2. Fix failing task types one by one using the feedback loop
 3. For each type: ensure 0 API errors, correct classification, correct entity extraction
 4. Secondary: optimize API call counts (batching, remove duplicates)
-5. Add file fixtures for the 5 file-based types (receipt_expense, employee_onboarding_pdf, employee_contract_pdf, supplier_invoice_pdf, bank_reconciliation)
 
 ## Agent's role
 
@@ -46,7 +45,7 @@ Your role in this project is of utter importance. As an autonomous senior softwa
 
 - Runtime: Node.js with TypeScript.
 - HTTP Framework: Hono (lightweight, fast, TypeScript-first).
-- AI: Google Gemini API (direct REST calls via `src/lib/gemini.ts`).
+- AI: Google Gemini via OpenRouter (`src/lib/openrouter.ts`).
 - Manage dependencies/packages: pnpm.
 - Deployment: Cloudflare Tunnel (local dev → HTTPS).
 
@@ -135,21 +134,18 @@ There are exactly **30 test cases** — one per task type — defined in `src/ev
 ### Eval commands
 
 ```bash
-# Run all 30 types (excluding file-based)
-pnpm eval -- --skip-file-tasks
+# Run all 30 task types
+pnpm eval
 
 # Run a single task type
 pnpm eval -- --task-type create_invoice
-
-# Run all 30 types including file-based (5 will fail without fixtures)
-pnpm eval
 
 # Focused — top N worst-performing types from solve history
 pnpm eval -- --worst 5
 
 # Other flags
+pnpm eval -- --file-tasks                    # run only file-based task types (PDF/CSV)
 pnpm eval -- --filter "credit_note"          # freetext filter on ID/type/prompt
-pnpm eval -- --iterations 3                  # repeat for confidence (LLMs are non-deterministic)
 pnpm eval -- --update-baselines              # tighten API call bounds after improvements
 pnpm eval -- --verbose                       # show API call details for all results
 pnpm eval -- --tier 1                        # filter by tier (1, 2, or 3)
@@ -200,18 +196,15 @@ For API-level debugging, use `pnpm probe` to test the exact endpoint sequence th
 Fix the handler, prompt, or parsing logic. Common fixes:
 
 - Handler sends wrong fields → update handler code
-- LLM parses entities incorrectly → update system prompt in `src/lib/gemini.ts`
+- LLM parses entities incorrectly → update prompts in `src/lib/task-classifier.ts` or `src/lib/entity-extractor.ts`
 - BETA endpoint returns 403 → find non-beta alternative (see BETA section above)
 - 422 validation error → use `pnpm probe` to find the correct payload format
 
 ### Step 5: Verify — confirm the fix works
 
 ```bash
-# Quick check: one test
+# Run the test
 pnpm eval -- --task-type <task_type>
-
-# Confidence check: repeat (LLMs are non-deterministic)
-pnpm eval -- --task-type <task_type> --iterations 3
 
 # Verbose: see all API calls
 pnpm eval -- --task-type <task_type> --verbose
@@ -221,7 +214,7 @@ pnpm eval -- --task-type <task_type> --verbose
 
 A task type is considered solved when:
 
-- **Passes consistently** (3/3 iterations with `--iterations 3`).
+- **Passes** — the eval test succeeds.
 - **Zero API errors** — no 4xx/5xx responses from Tripletex.
 - **Correct classification and entity extraction** — parse match is true.
 - **`pnpm task-types -- --worst`** no longer lists it near the top.
@@ -231,7 +224,6 @@ Once solved, move to the next worst-performing type. Do not re-test solved types
 ### Key principles
 
 - **30 canonical tests, one per type.** A full eval takes ~2-3 minutes. Use `--task-type` to focus on a single type.
-- **LLMs are non-deterministic.** A single PASS doesn't mean solved. Run 2–3 iterations for confidence. A single FAIL doesn't necessarily mean broken — check if it reproduces.
 - **Work one task type at a time.** Finish the feedback loop for one type before moving to the next.
 - **Probe before eval.** If the error is an API 422/403, debug with `pnpm probe` first — it's instant and doesn't require the full agent loop.
 - **Zero errors is the target.** Every canonical test should pass with 0 API errors. The `maxErrors: 0` bound enforces this.
