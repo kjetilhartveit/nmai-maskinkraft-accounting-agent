@@ -1,0 +1,25 @@
+src/lib/entity-extractor.ts
+  a767f3c6d1b2d06a 342-349
+src/handlers/project-lifecycle.ts
+  a767f3c6d1b2d06a 23,61,66-73,181-195,241,244-246
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.17",
+  "base_commit_sha": "a675630781fe2f72830ecd4fd8f59105cf3310ab",
+  "prompts": {
+    "a767f3c6d1b2d06a": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "a4414119-fd27-4ec0-86b1-2e44c89c53e3",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Kjetil Hårtveit <kjetil_runescape@hotmail.com>",
+      "messages": [],
+      "total_additions": 880,
+      "total_deletions": 853,
+      "accepted_lines": 875,
+      "overriden_lines": 0
+    }
+  }
+}
