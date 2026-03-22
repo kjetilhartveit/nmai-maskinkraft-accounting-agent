@@ -10,6 +10,7 @@ import { z } from "zod";
 import { openrouterGenerateStructured } from "./openrouter.js";
 import type { ParsedTask, TaskType, FileAttachment } from "../types/index.js";
 import { PROMPT_TEMPLATES } from "./task-classifier.js";
+import { PDFParse } from "pdf-parse";
 
 // ── Extraction response schema ───────────────────────────────────────
 
@@ -323,6 +324,19 @@ Respond with JSON: { "entities": [...], "language": "...", "requiresPrerequisite
     userMessage += `\n\nAttached files: ${files
       .map((f) => f.filename)
       .join(", ")}`;
+      
+    for (const file of files) {
+      if (file.filename.toLowerCase().endsWith(".pdf") && file.content_base64) {
+        try {
+          const b = Buffer.from(file.content_base64, "base64");
+          const parser = new PDFParse(new Uint8Array(b));
+          const pdfData = await parser.getText();
+          userMessage += `\n\n--- Content of ${file.filename} ---\n${pdfData.text}\n--- End of ${file.filename} ---`;
+        } catch (err) {
+          console.error(`[EntityExtractor] Failed to parse PDF ${file.filename}:`, err);
+        }
+      }
+    }
   }
 
   let result;
@@ -356,7 +370,8 @@ Respond with JSON: { "entities": [...], "language": "...", "requiresPrerequisite
     entities: Record<string, unknown>[];
   }[] = [];
   if (object.requiresPrerequisites) {
-    for (const prereq of object.requiresPrerequisites) {
+    for (const rawPrereq of object.requiresPrerequisites) {
+      const prereq = rawPrereq as { taskType: string; reason?: string };
       const prereqEntities = extractPrerequisiteEntities(
         prereq.taskType as TaskType,
         object.entities

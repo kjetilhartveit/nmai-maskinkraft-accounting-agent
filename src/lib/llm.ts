@@ -2,6 +2,7 @@ import { z } from "zod";
 import { openrouterGenerateStructured } from "./openrouter.js";
 import type { FileAttachment, ParsedTask, ParsedTaskSequence, TaskType } from "../types/index.js";
 import { ALL_TASK_TYPES } from "../types/index.js";
+import { PDFParse } from "pdf-parse";
 
 const TaskSchema = z.object({
   taskType: z.enum(ALL_TASK_TYPES as [string, ...string[]]),
@@ -97,7 +98,7 @@ export async function parsePrompt(
   files: FileAttachment[] = [],
   options?: ParsePromptOptions,
 ): Promise<ParsedTaskSequence> {
-  const userContent = buildUserMessage(prompt, files);
+  const userContent = await buildUserMessage(prompt, files);
   const modelId = options?.model ?? "google/gemini-3.1-flash-lite-preview";
   const system = resolveSystemPrompt(options?.systemPromptVariant);
 
@@ -133,16 +134,26 @@ export async function parsePrompt(
   };
 }
 
-function buildUserMessage(prompt: string, files: FileAttachment[]): string {
+async function buildUserMessage(prompt: string, files: FileAttachment[]): Promise<string> {
   let message = `Parse the following accounting task prompt:\n\n${prompt}`;
 
   if (files.length > 0) {
     message += `\n\nAttached files:\n`;
     for (const file of files) {
       message += `- ${file.filename} (${file.mime_type})\n`;
+      if (file.filename.toLowerCase().endsWith(".pdf") && file.content_base64) {
+        try {
+          const b = Buffer.from(file.content_base64, "base64");
+          const parser = new PDFParse(new Uint8Array(b));
+          const pdfData = await parser.getText();
+          message += `\n--- Content of ${file.filename} ---\n${pdfData.text}\n--- End of ${file.filename} ---\n`;
+        } catch (err) {
+          console.error(`[LLM] Failed to parse PDF ${file.filename}:`, err);
+        }
+      }
     }
     message +=
-      "\nNote: File contents are attached but not shown here. Extract any relevant information from the prompt itself.";
+      "\nNote: If file contents are not shown above, extract any relevant information from the prompt itself.";
   }
 
   return message;
