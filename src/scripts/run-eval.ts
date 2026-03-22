@@ -5,7 +5,7 @@ import { config } from "../lib/config.js";
 import { testCases } from "../eval/test-cases.js";
 import { runEval, summarize } from "../eval/runner.js";
 import { printEvalTable, findBaselineImprovements, printBaselineImprovements } from "../eval/reporter.js";
-import { pickOnePerTaskType, getTopFailingTaskTypes } from "../eval/task-type-analysis.js";
+import { getTopFailingTaskTypes } from "../eval/task-type-analysis.js";
 import type { EvalConfig } from "../eval/types.js";
 
 const TEST_CASES_FILE = join(import.meta.dirname, "../eval/test-cases.ts");
@@ -22,6 +22,8 @@ function parseArgs(argv: string[]): {
   onePerType?: boolean;
   worst?: number;
   updateBaselines?: boolean;
+  skipFileTasks?: boolean;
+  verbose?: boolean;
 } {
   const out: ReturnType<typeof parseArgs> = {};
   for (let i = 0; i < argv.length; i++) {
@@ -48,6 +50,10 @@ function parseArgs(argv: string[]): {
       out.worst = argv[i + 1] && !argv[i + 1].startsWith("--") ? parseInt(argv[++i], 10) : 5;
     } else if (a === "--update-baselines") {
       out.updateBaselines = true;
+    } else if (a === "--skip-file-tasks") {
+      out.skipFileTasks = true;
+    } else if (a === "--verbose" || a === "-v") {
+      out.verbose = true;
     }
   }
   return out;
@@ -86,6 +92,10 @@ async function main() {
   };
 
   let cases = testCases;
+
+  if (args.skipFileTasks) {
+    cases = cases.filter((tc) => !tc.requiresFile);
+  }
   if (args.tier) {
     cases = cases.filter((tc) => args.tier!.includes(tc.tier));
   }
@@ -118,7 +128,11 @@ async function main() {
     console.log("");
   }
   if (args.onePerType) {
-    cases = pickOnePerTaskType(cases);
+    const byType = new Map<string, (typeof cases)[0]>();
+    for (const tc of cases) {
+      if (!byType.has(tc.taskType)) byType.set(tc.taskType, tc);
+    }
+    cases = [...byType.values()];
   }
 
   if (cases.length === 0) {
@@ -134,8 +148,11 @@ async function main() {
   if (args.taskType) labels.push(`task-type: ${args.taskType}`);
   if (args.onePerType) labels.push("one-per-type");
   if (args.worst) labels.push(`worst ${args.worst}`);
+  if (args.skipFileTasks) labels.push("skip-file-tasks");
   const filterLabel = labels.length > 0 ? ` (${labels.join(", ")})` : "";
-  console.log(`Evaluating ${cases.length} case(s) × ${iterations} iteration(s)${filterLabel} (server: ${serverUrl})`);
+  const fileTaskCount = cases.filter(tc => tc.requiresFile).length;
+  const fileNote = fileTaskCount > 0 ? ` [${fileTaskCount} require files]` : "";
+  console.log(`Evaluating ${cases.length} case(s) × ${iterations} iteration(s)${filterLabel}${fileNote} (server: ${serverUrl})`);
   console.log(`Model: ${evalConfig.model}${evalConfig.systemPromptVariant ? ` | system prompt variant: ${evalConfig.systemPromptVariant}` : ""}\n`);
 
   const results = await runEval(evalConfig, cases, {
@@ -153,7 +170,7 @@ async function main() {
   });
   const summary = summarize(results);
   console.log("");
-  printEvalTable(results, summary);
+  printEvalTable(results, summary, args.verbose);
 
   const improvements = findBaselineImprovements(results, cases);
   if (improvements.length > 0) {

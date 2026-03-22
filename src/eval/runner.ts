@@ -1,5 +1,5 @@
 import "dotenv/config";
-import type { ParsedTaskSequence } from "../types/index.js";
+import type { ApiCallLog, ParsedTaskSequence } from "../types/index.js";
 import type { SolveEvalResponseBody } from "../routes/solve.js";
 import { config } from "../lib/config.js";
 import type { EvalConfig, EvalResult, EvalSummary, TestCase } from "./types.js";
@@ -73,6 +73,7 @@ export async function runEvalCase(
       testCaseId: tc.id,
       config: evalConfig,
       apiCalls: { count: 0, errors: 0 },
+      apiCallDetails: [],
       elapsedMs: elapsed,
       success: false,
       serverReportedSuccess: false,
@@ -91,6 +92,7 @@ export async function runEvalCase(
       testCaseId: tc.id,
       config: evalConfig,
       apiCalls: { count: 0, errors: 0 },
+      apiCallDetails: [],
       elapsedMs: elapsedRoundtrip,
       success: false,
       serverReportedSuccess: false,
@@ -102,6 +104,7 @@ export async function runEvalCase(
   const parsedSequence = json.parsedSequence as ParsedTaskSequence | undefined;
   const total = json.apiCallStats.total;
   const errors = json.apiCallStats.errors;
+  const details = (json.apiCallStats.details ?? []) as ApiCallLog[];
 
   const taskTypeOk = taskTypeMatches(tc, parsedSequence);
   const langOk = languageMatches(tc, parsedSequence);
@@ -116,10 +119,20 @@ export async function runEvalCase(
   }
   if (!success && !parseMatch) {
     const parts = [];
-    if (!taskTypeOk) parts.push("taskType");
+    if (!taskTypeOk) {
+      const actualTypes = parsedSequence?.tasks.map(t => t.taskType).join("→") ?? "none";
+      parts.push(`taskType(expected=${tc.taskType}, got=${actualTypes})`);
+    }
     if (!langOk) parts.push(`language(expected=${tc.language}, got=${parsedSequence?.language})`);
     if (!entitiesOk) parts.push("entities");
     console.warn(`[Eval] ${tc.id}: parse failed: ${parts.join(", ")}`);
+  }
+
+  const errorCalls = details.filter(d => d.isError);
+  if (errorCalls.length > 0) {
+    for (const ec of errorCalls) {
+      console.warn(`[Eval] ${tc.id}: API error ${ec.method} ${ec.endpoint} → ${ec.status}${ec.errorBody ? `: ${ec.errorBody.slice(0, 100)}` : ""}`);
+    }
   }
 
   return {
@@ -127,6 +140,7 @@ export async function runEvalCase(
     config: evalConfig,
     parsedSequence,
     apiCalls: { count: total, errors },
+    apiCallDetails: details,
     elapsedMs: json.elapsedMs ?? elapsedRoundtrip,
     success,
     serverReportedSuccess: json.success,

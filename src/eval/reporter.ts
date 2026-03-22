@@ -9,8 +9,8 @@ function fmtBool(b: boolean): string {
 }
 
 /** Print one row per test case and a footer summary. */
-export function printEvalTable(results: EvalResult[], summary: EvalSummary): void {
-  const colId = 26;
+export function printEvalTable(results: EvalResult[], summary: EvalSummary, verbose = false): void {
+  const colId = 36;
   const colOk = 8;
   const colParse = 8;
   const colApi = 6;
@@ -20,18 +20,23 @@ export function printEvalTable(results: EvalResult[], summary: EvalSummary): voi
   const header =
     `${pad("case", colId)} ${pad("pass", colOk)} ${pad("parse", colParse)} ${pad("api", colApi)} ${pad("4xx+", colErr)} ${pad("ms", colMs)} tasks`;
   console.log(header);
-  console.log("-".repeat(header.length));
+  console.log("-".repeat(header.length + 20));
 
   for (const r of results) {
     const taskTypes = r.parsedSequence?.tasks.map((t) => t.taskType).join("→") ?? "?";
-    const line = `${pad(r.testCaseId, colId)} ${pad(fmtBool(r.success), colOk)} ${pad(fmtBool(r.parseMatch), colParse)} ${pad(String(r.apiCalls.count), colApi)} ${pad(String(r.apiCalls.errors), colErr)} ${pad(String(r.elapsedMs), colMs)} ${taskTypes}`;
+    const passColor = r.success ? "\x1b[32m" : "\x1b[31m";
+    const line = `${pad(r.testCaseId, colId)} ${passColor}${pad(fmtBool(r.success), colOk)}\x1b[0m ${pad(fmtBool(r.parseMatch), colParse)} ${pad(String(r.apiCalls.count), colApi)} ${pad(String(r.apiCalls.errors), colErr)} ${pad(String(r.elapsedMs), colMs)} ${taskTypes}`;
     console.log(line);
     if (r.error && !r.success) {
       console.log(`  └─ ${r.error}`);
     }
+
+    if (verbose || (!r.success && r.apiCallDetails.length > 0)) {
+      printApiCallDetails(r);
+    }
   }
 
-  console.log("-".repeat(header.length));
+  console.log("-".repeat(header.length + 20));
   const cfg = summary.config;
   const label =
     cfg.description ??
@@ -42,6 +47,17 @@ export function printEvalTable(results: EvalResult[], summary: EvalSummary): voi
   );
 }
 
+function printApiCallDetails(r: EvalResult): void {
+  if (r.apiCallDetails.length === 0) return;
+
+  for (const call of r.apiCallDetails) {
+    const statusColor = call.isError ? "\x1b[31m" : "\x1b[90m";
+    const icon = call.isError ? "✗" : "·";
+    const errSuffix = call.errorBody ? ` — ${call.errorBody.slice(0, 80)}` : "";
+    console.log(`  ${icon} ${statusColor}${call.method} ${call.endpoint} → ${call.status} (${call.durationMs}ms)${errSuffix}\x1b[0m`);
+  }
+}
+
 export interface BaselineImprovement {
   testCaseId: string;
   oldMax: number;
@@ -49,10 +65,6 @@ export interface BaselineImprovement {
   actualCalls: number;
 }
 
-/**
- * Check if any successful results used fewer API calls than the test case allows.
- * Returns suggestions for tightening API call bounds.
- */
 export function findBaselineImprovements(
   results: EvalResult[],
   testCases: TestCase[],
