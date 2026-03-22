@@ -53,21 +53,33 @@ export async function openrouterGenerateStructured<T>(
         }),
       });
 
+      const responseText = await response.text();
+
       if (!response.ok) {
-        const errorBody = await response.text();
-        throw new Error(`OpenRouter API error ${response.status}: ${errorBody}`);
+        throw new Error(`OpenRouter API error ${response.status}: ${responseText}`);
       }
 
-      const data = await response.json();
+      let data: unknown;
+      try {
+        data = JSON.parse(responseText);
+      } catch {
+        throw new Error(`OpenRouter returned non-JSON: ${responseText.slice(0, 100)}`);
+      }
+
       const durationMs = Math.round(performance.now() - start);
 
-      const content = data.choices?.[0]?.message?.content;
+      const content = (data as { choices?: { message?: { content?: string } }[] })?.choices?.[0]?.message?.content;
       if (!content) {
-        throw new Error("Empty response from OpenRouter");
+        throw new Error(`Empty response from OpenRouter: ${responseText.slice(0, 200)}`);
       }
 
       // Parse JSON and validate with schema
-      const parsed = JSON.parse(content);
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(content);
+      } catch {
+        throw new Error(`LLM returned non-JSON content: ${content.slice(0, 100)}`);
+      }
       const object = options.schema.parse(parsed) as T;
 
       return { object, durationMs };
