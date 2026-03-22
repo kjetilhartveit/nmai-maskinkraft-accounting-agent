@@ -1,0 +1,38 @@
+src/handlers/employee-onboarding-pdf.ts
+  334f12f723b93334 29,34-37,89-95,132-136
+src/handlers/year-end-closing.ts
+  1e90d8b1bb35e646 12-13
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.17",
+  "base_commit_sha": "083ba3e0527ef3383acfe73dc82773111642b98c",
+  "prompts": {
+    "1e90d8b1bb35e646": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a5b8b077-08b9-4f76-bd34-f0f7b01e51f0",
+        "model": "claude-opus-4-5-20251101"
+      },
+      "human_author": "Kjetil Hårtveit <kjetil_runescape@hotmail.com>",
+      "messages": [],
+      "total_additions": 296,
+      "total_deletions": 294,
+      "accepted_lines": 296,
+      "overriden_lines": 0
+    },
+    "334f12f723b93334": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "9a2a8c19-f3cb-44fc-83ec-2876596d3cbc",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Kjetil Hårtveit <kjetil_runescape@hotmail.com>",
+      "messages": [],
+      "total_additions": 153,
+      "total_deletions": 140,
+      "accepted_lines": 150,
+      "overriden_lines": 0
+    }
+  }
+}
