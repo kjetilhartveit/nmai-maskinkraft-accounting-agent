@@ -43,7 +43,7 @@ function makeFailResult(
   return {
     testCaseId: tc.id,
     config: evalConfig,
-    apiCalls: { count: 0, errors: 0 },
+    apiCalls: { count: 0, errors: 0, writeCalls: 0, writeErrors: 0 },
     apiCallDetails: [],
     elapsedMs,
     success: false,
@@ -153,10 +153,13 @@ export async function runEvalCase(
   const parsedSequence = json.parsedSequence as ParsedTaskSequence | undefined;
   const total = json.apiCallStats.total;
   const errors = json.apiCallStats.errors;
+  const writeCalls = json.apiCallStats.writeCalls ?? total; // fallback for backwards compat
+  const writeErrors = json.apiCallStats.writeErrors ?? errors;
   const details = (json.apiCallStats.details ?? []) as ApiCallLog[];
 
   const parseMatch = taskTypeMatches(tc, parsedSequence);
-  const boundsOk = apiBoundsSatisfied(tc, total, errors);
+  // Only count write operations (POST/PUT/DELETE) for efficiency bounds - GET calls are free
+  const boundsOk = apiBoundsSatisfied(tc, writeCalls, writeErrors);
 
   // Sandbox verification: check that expected entities were created
   let sandboxVerified = true;
@@ -217,7 +220,7 @@ export async function runEvalCase(
     testCaseId: tc.id,
     config: evalConfig,
     parsedSequence,
-    apiCalls: { count: total, errors },
+    apiCalls: { count: total, errors, writeCalls, writeErrors },
     apiCallDetails: details,
     elapsedMs: json.elapsedMs ?? elapsedRoundtrip,
     success,

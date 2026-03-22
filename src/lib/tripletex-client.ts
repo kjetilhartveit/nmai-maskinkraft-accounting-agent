@@ -26,8 +26,10 @@ export class TripletexClient {
   get stats() {
     const total = this.callLog.length;
     const errors = this.callLog.filter((c) => c.isError).length;
+    const writeCalls = this.callLog.filter((c) => c.method !== "GET").length;
+    const writeErrors = this.callLog.filter((c) => c.method !== "GET" && c.isError).length;
     const totalDuration = this.callLog.reduce((s, c) => s + c.durationMs, 0);
-    return { total, errors, totalDuration };
+    return { total, errors, writeCalls, writeErrors, totalDuration };
   }
 
   private async request<T>(

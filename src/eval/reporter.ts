@@ -21,7 +21,7 @@ export function printEvalTable(
   const colErr = 4;
   const colMs = 6;
 
-  const header = `${pad("case", colId)} ${pad("pass", colOk)} ${pad("type", colParse)} ${pad("verify", colVerify)} ${pad("api", colApi)} ${pad("4xx+", colErr)} ${pad("ms", colMs)} tasks`;
+  const header = `${pad("case", colId)} ${pad("pass", colOk)} ${pad("type", colParse)} ${pad("verify", colVerify)} ${pad("write", colApi)} ${pad("err", colErr)} ${pad("ms", colMs)} tasks`;
   console.log(header);
   console.log("-".repeat(header.length + 20));
 
@@ -38,9 +38,9 @@ export function printEvalTable(
       fmtBool(r.sandboxVerified),
       colVerify
     )}${verifyReset} ${pad(
-      String(r.apiCalls.count),
+      String(r.apiCalls.writeCalls),
       colApi
-    )} ${pad(String(r.apiCalls.errors), colErr)} ${pad(
+    )} ${pad(String(r.apiCalls.writeErrors), colErr)} ${pad(
       String(r.elapsedMs),
       colMs
     )} ${taskTypes}`;
@@ -98,16 +98,16 @@ export function findBaselineImprovements(
   const caseMap = new Map(testCases.map((tc) => [tc.id, tc]));
 
   for (const r of results) {
-    if (!r.success || r.apiCalls.errors > 0) continue;
+    if (!r.success || r.apiCalls.writeErrors > 0) continue;
     const tc = caseMap.get(r.testCaseId);
     if (!tc?.expectedApiCalls?.max) continue;
 
-    if (r.apiCalls.count < tc.expectedApiCalls.max) {
+    if (r.apiCalls.writeCalls < tc.expectedApiCalls.max) {
       improvements.push({
         testCaseId: r.testCaseId,
         oldMax: tc.expectedApiCalls.max,
-        newMax: r.apiCalls.count,
-        actualCalls: r.apiCalls.count,
+        newMax: r.apiCalls.writeCalls,
+        actualCalls: r.apiCalls.writeCalls,
       });
     }
   }

@@ -36,7 +36,7 @@ export interface EvalResult {
   testCaseId: string;
   config: EvalConfig;
   parsedSequence?: ParsedTaskSequence;
-  apiCalls: { count: number; errors: number };
+  apiCalls: { count: number; errors: number; writeCalls: number; writeErrors: number };
   apiCallDetails: ApiCallLog[];
   elapsedMs: number;
   success: boolean;

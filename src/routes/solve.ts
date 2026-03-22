@@ -33,6 +33,8 @@ export interface SolveEvalResponseBody {
   apiCallStats: {
     total: number;
     errors: number;
+    writeCalls: number;
+    writeErrors: number;
     details: ApiCallLog[];
   };
   elapsedMs: number;
@@ -105,7 +107,7 @@ solveRouter.post("/solve", async (c) => {
         baseUrl: rawBody.tripletex_credentials?.base_url ?? "",
         parsedSequence: undefined,
         apiCalls: [],
-        apiCallStats: { total: 0, errors: 0, totalDuration: 0 },
+        apiCallStats: { total: 0, errors: 0, writeCalls: 0, writeErrors: 0, totalDuration: 0 },
         elapsedMs: Math.round(performance.now() - start),
         success: false,
         error: `Validation: ${issues}`,
@@ -116,7 +118,7 @@ solveRouter.post("/solve", async (c) => {
         return c.json({
           status: "completed",
           success: false,
-          apiCallStats: { total: 0, errors: 0, details: [] },
+          apiCallStats: { total: 0, errors: 0, writeCalls: 0, writeErrors: 0, details: [] },
           elapsedMs: Math.round(performance.now() - start),
           error: `Validation: ${issues}`,
         } satisfies SolveEvalResponseBody);
@@ -227,6 +229,8 @@ solveRouter.post("/solve", async (c) => {
         apiCallStats: {
           total: stats.total,
           errors: stats.errors,
+          writeCalls: stats.writeCalls,
+          writeErrors: stats.writeErrors,
           details: [...client.calls],
         },
         elapsedMs: elapsed,
@@ -242,7 +246,7 @@ solveRouter.post("/solve", async (c) => {
     console.error(`[Solve] ${solveId} | Error after ${elapsed}ms:`, message);
     console.error(`[Solve] ${solveId} | Stack trace:`, stack);
 
-    const stats = client?.stats ?? { total: 0, errors: 0, totalDuration: 0 };
+    const stats = client?.stats ?? { total: 0, errors: 0, writeCalls: 0, writeErrors: 0, totalDuration: 0 };
     const source = detectSource(evalMode, baseUrl);
 
     trace.logResult(false, { total: stats.total, errors: stats.errors }, message);
@@ -270,6 +274,8 @@ solveRouter.post("/solve", async (c) => {
         apiCallStats: {
           total: stats.total,
           errors: stats.errors,
+          writeCalls: stats.writeCalls,
+          writeErrors: stats.writeErrors,
           details: client ? [...client.calls] : [],
         },
         elapsedMs: elapsed,

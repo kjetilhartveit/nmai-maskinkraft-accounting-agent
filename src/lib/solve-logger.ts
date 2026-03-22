@@ -32,7 +32,7 @@ export interface SolveLogEntry {
   baseUrl: string;
   parsedSequence?: ParsedTaskSequence;
   apiCalls: ApiCallLog[];
-  apiCallStats: { total: number; errors: number; totalDuration: number };
+  apiCallStats: { total: number; errors: number; writeCalls: number; writeErrors: number; totalDuration: number };
   elapsedMs: number;
   success: boolean;
   error?: string;
