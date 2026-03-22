@@ -12,6 +12,11 @@ import { resetPayrollCache } from "../handlers/create-payroll.js";
 import { resetSupplierInvoiceCache } from "../handlers/create-supplier-invoice.js";
 import { resetDimensionCache } from "../handlers/create-dimension.js";
 import { resetGenericHandlerCache } from "../handlers/generic-handler.js";
+import { resetYearEndClosingCache } from "../handlers/year-end-closing.js";
+import { resetMonthlyClosingCache } from "../handlers/monthly-closing.js";
+import { resetLedgerAuditCache } from "../handlers/ledger-audit.js";
+import { resetFxPaymentCache } from "../handlers/fx-payment.js";
+import { resetReversePaymentCache } from "../handlers/reverse-payment.js";
 import { logSolveRequest, logRawRequest } from "../lib/solve-logger.js";
 import { config } from "../lib/config.js";
 import { createSolveTrace } from "../lib/solve-trace.js";
@@ -63,6 +68,11 @@ solveRouter.post("/solve", async (c) => {
   resetSupplierInvoiceCache();
   resetDimensionCache();
   resetGenericHandlerCache();
+  resetYearEndClosingCache();
+  resetMonthlyClosingCache();
+  resetLedgerAuditCache();
+  resetFxPaymentCache();
+  resetReversePaymentCache();
 
   try {
     const rawBody = await c.req.json();
