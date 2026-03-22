@@ -63,6 +63,7 @@ export async function handleCreateSupplierInvoice(
   const vatRateStr = String(entity.vatRate ?? "25");
   const vatRate = Number(vatRateStr.replace(/[%\s]/g, ""));
   const invoiceNumber = String(entity.invoiceNumber ?? "");
+  const invoiceDate = String(entity.invoiceDate ?? entity.date ?? "");
   const description = String(entity.description ?? "");
 
   // 1. Resolve supplier — must exist for the credit posting
@@ -134,8 +135,8 @@ export async function handleCreateSupplierInvoice(
   const vatAccount = vat > 0 ? accounts[1] : null;
   const payableAccount = accounts[accounts.length - 1];
 
-  // 4. Build voucher postings
-  const voucherDate = today();
+  // 4. Build voucher postings — use invoice date from PDF if available
+  const voucherDate = invoiceDate && /^\d{4}-\d{2}-\d{2}$/.test(invoiceDate) ? invoiceDate : today();
   const desc = invoiceNumber
     ? `Leverandørfaktura ${invoiceNumber} ${supplierName}`
     : `Leverandørfaktura ${supplierName}`;

@@ -118,17 +118,42 @@ export async function handleProjectLifecycle(
   }
   ctx.registerProject(projectName, projectId);
 
-  // 4. Create project activity with unique name
+  // 4. Find or create project activity
   let defaultActivityId: number | null = null;
+  const activityName = projectName;
   try {
-    const actResult = await client.post<{ id: number }>("/activity", {
-      name: `${projectName} ${Date.now()}`,
-      activityType: "PROJECT_GENERAL_ACTIVITY",
+    const existing = await client.list<{ id: number; name: string }>("/activity", {
+      name: activityName,
+      from: "0",
+      count: "5",
     });
-    defaultActivityId = actResult.value.id;
-    console.log(`[Handler] Created activity: id=${defaultActivityId}`);
-  } catch {
-    console.log("[Handler] Could not create activity, proceeding without");
+    const match = existing.values.find(
+      (a) => a.name?.toLowerCase() === activityName.toLowerCase(),
+    );
+    if (match) {
+      defaultActivityId = match.id;
+    }
+  } catch { /* search not available */ }
+
+  if (!defaultActivityId) {
+    try {
+      const actResult = await client.post<{ id: number }>("/activity", {
+        name: activityName.slice(0, 255),
+        activityType: "PROJECT_GENERAL_ACTIVITY",
+      });
+      defaultActivityId = actResult.value.id;
+      console.log(`[Handler] Created activity: id=${defaultActivityId}`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes("422") || msg.includes("i bruk") || msg.includes("in use")) {
+        try {
+          const retry = await client.list<{ id: number; name: string }>("/activity", { from: "0", count: "100" });
+          const match = retry.values.find((a) => a.name?.toLowerCase() === activityName.toLowerCase());
+          if (match) defaultActivityId = match.id;
+        } catch { /* ignore */ }
+      }
+      if (!defaultActivityId) console.warn(`[Handler] Activity creation failed: ${msg}`);
+    }
   }
 
   // 5. Register hours for each employee
@@ -148,8 +173,7 @@ export async function handleProjectLifecycle(
     }
     if (!empId) empId = pmId;
 
-    const baseOffset = Math.floor(Math.random() * 30) + 30;
-    const entryDate = daysFromNow(baseOffset + i);
+    const entryDate = today();
     const timesheetBody: Record<string, unknown> = {
       employee: { id: empId },
       project: { id: projectId },
@@ -165,7 +189,7 @@ export async function handleProjectLifecycle(
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       if (msg.includes("409") || msg.includes("allerede")) {
-        timesheetBody.date = daysFromNow(baseOffset + i + 15);
+        timesheetBody.date = daysFromNow(1);
         try {
           await client.post("/timesheet/entry", timesheetBody);
           console.log(`[Handler] Registered ${emp.hours}h on alternate date`);
@@ -179,19 +203,47 @@ export async function handleProjectLifecycle(
     }
   }
 
-  // 6. Register supplier cost as voucher
+  // 6. Register supplier cost as voucher (debit expense, credit accounts payable with supplier)
   if (supplierCost && supplierCost.amount > 0) {
     try {
-      const [expenseAcct, bankAcct] = await Promise.all([
+      let supplierId: number | null = null;
+      if (supplierCost.supplierName) {
+        const suppliers = await client.list<{ id: number; name: string }>("/supplier", {
+          name: supplierCost.supplierName,
+          from: "0",
+          count: "5",
+        });
+        if (suppliers.values.length > 0) {
+          supplierId = suppliers.values[0].id;
+        } else {
+          const created = await client.post<{ id: number }>("/supplier", {
+            name: supplierCost.supplierName,
+            isSupplier: true,
+          });
+          supplierId = created.value.id;
+        }
+      }
+
+      const [expenseAcct, apAcct] = await Promise.all([
         findAccountByNumber(client, 6300),
-        findAccountByNumber(client, 1920),
+        findAccountByNumber(client, 2400),
       ]);
+      const creditPosting: Record<string, unknown> = {
+        row: 2,
+        account: { id: apAcct.id },
+        date: today(),
+        amountGross: -supplierCost.amount,
+        amountGrossCurrency: -supplierCost.amount,
+        description: supplierCost.supplierName || "Leverandørgjeld",
+      };
+      if (supplierId) creditPosting.supplier = { id: supplierId };
+
       await client.post("/ledger/voucher", {
         date: today(),
         description: supplierCost.description || `Leverandørkostnad: ${supplierCost.supplierName}`,
         postings: [
           { row: 1, account: { id: expenseAcct.id }, date: today(), amountGross: supplierCost.amount, amountGrossCurrency: supplierCost.amount, description: supplierCost.description || "Leverandørkostnad" },
-          { row: 2, account: { id: bankAcct.id }, date: today(), amountGross: -supplierCost.amount, amountGrossCurrency: -supplierCost.amount, description: "Betaling" },
+          creditPosting,
         ],
       });
       console.log(`[Handler] Registered supplier cost: ${supplierCost.amount} NOK`);
