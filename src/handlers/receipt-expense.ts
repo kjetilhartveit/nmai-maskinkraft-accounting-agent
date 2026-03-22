@@ -37,10 +37,11 @@ export async function handleReceiptExpense(
 
   const expenseAccountNumber = Number(entity.accountNumber ?? entity.account ?? 7700);
   const departmentName = String(entity.departmentName ?? entity.department ?? "");
-  const totalAmount = Number(entity.amount ?? entity.totalAmount ?? 0);
-  const vatRate = Number(entity.vatRate ?? 25);
-  const vatAmount = Number(entity.vatAmount ?? 0);
-  const description = String(entity.expenseName ?? entity.description ?? entity.name ?? "Kvittering");
+  const totalAmount = Number(String(entity.amount ?? entity.totalAmount ?? 0).replace(/[^\d.]/g, ""));
+  const vatRateRaw = String(entity.vatRate ?? "25");
+  const vatRate = Number(vatRateRaw.replace(/[%\s]/g, ""));
+  const vatAmount = Number(String(entity.vatAmount ?? 0).replace(/[^\d.]/g, ""));
+  const description = String(entity.itemDescription ?? entity.expenseName ?? entity.description ?? entity.name ?? "Kvittering");
   const dateStr = String(entity.date ?? today());
 
   // Resolve department

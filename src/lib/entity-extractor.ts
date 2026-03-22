@@ -195,14 +195,18 @@ Add prerequisite create_supplier.`,
 - hourlyRate (NOK per hour)
 - date (YYYY-MM-DD)`,
 
-  receipt_expense: `Extract:
+  receipt_expense: `Extract ALL details from the prompt and any attached receipt/PDF:
 - itemDescription (what was purchased)
 - departmentName (which department to book to)
-- amount (if visible in prompt — may come from receipt image)
-- accountNumber (expense account, if specified)
-- vatRate (if specified)
+- amount (total amount INCLUDING VAT, as a number like 6750)
+- vatAmount (VAT amount as number, if shown separately on receipt)
+- vatRate (as number like 25, NOT "25%")
+- accountNumber (4-digit expense account, if specified)
+- date (receipt date in YYYY-MM-DD format, if shown)
+- supplierName (vendor/supplier name from receipt)
 
-The receipt image will provide the actual amounts.`,
+IMPORTANT: Extract the total amount and VAT from the attached receipt/PDF content.
+Return amounts as pure numbers without currency symbols or formatting.`,
 
   employee_onboarding_pdf: `Extract ALL employee details from the prompt and any attached PDF content:
 - firstName (required)
@@ -235,11 +239,19 @@ Extract ALL fields that appear in the text. The PDF content is inlined above.`,
 
 Extract ALL fields that appear in the text. The PDF content is inlined above.`,
 
-  supplier_invoice_pdf: `Extract from the prompt (PDF will provide actual values):
-- supplierName (if mentioned in prompt)
-- The invoice details come from the PDF
+  supplier_invoice_pdf: `Extract ALL details from the prompt and any attached invoice PDF:
+- supplierName (required)
+- organizationNumber (supplier org number if shown)
+- invoiceNumber (from the invoice)
+- invoiceDate (YYYY-MM-DD)
+- dueDate (YYYY-MM-DD)
+- totalAmount (total including VAT, as number)
+- vatAmount (VAT amount as number)
+- netAmount (amount excluding VAT, as number)
+- description (what was purchased/service description)
+- accountNumber (4-digit expense account to debit, if known)
 
-The handler will parse the PDF for amounts, account, VAT.`,
+Extract all available information from the attached PDF content.`,
 
   bank_reconciliation: `Extract from the prompt AND any attached CSV/bank statement:
 - periodStart, periodEnd (YYYY-MM-DD)
