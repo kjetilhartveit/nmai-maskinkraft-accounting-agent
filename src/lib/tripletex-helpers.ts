@@ -293,8 +293,12 @@ export async function findProductByNumber(
   client: TripletexClient,
   productNumber: string | number,
 ): Promise<Product | null> {
+  const numStr = String(productNumber).trim();
+  if (!/^\d+$/.test(numStr)) {
+    return null;
+  }
   const result = await client.list<Product>("/product", {
-    number: String(productNumber),
+    number: numStr,
     from: "0",
     count: "1",
   });
@@ -311,12 +315,6 @@ export async function findProductByName(
     count: "1",
   });
   return result.values[0] ?? null;
-}
-
-let helperVatTypeBroken = false;
-
-export function resetHelperVatTypeFlag(): void {
-  helperVatTypeBroken = false;
 }
 
 /**
@@ -346,10 +344,9 @@ export async function findOrCreateProduct(
     }
   }
 
-  const [departmentId, unitId, resolvedVatTypeId] = await Promise.all([
+  const [departmentId, unitId] = await Promise.all([
     getDefaultDepartmentId(client),
     getDefaultProductUnitId(client),
-    vatTypeId ? Promise.resolve(vatTypeId) : getDefaultProductVatTypeId(client),
   ]);
 
   const body: Record<string, unknown> = {
@@ -358,9 +355,6 @@ export async function findOrCreateProduct(
     department: { id: departmentId },
     productUnit: { id: unitId },
   };
-  if (!helperVatTypeBroken) {
-    body.vatType = { id: resolvedVatTypeId };
-  }
 
   try {
     const created = await client.post<Product>("/product", body);
@@ -375,24 +369,6 @@ export async function findOrCreateProduct(
       if (existing) return existing;
     }
 
-    if ((msg.includes("vatTypeId") || msg.includes("mva-kode") || msg.includes("vatType")) && !helperVatTypeBroken) {
-      console.warn(`[Helper] vatType ${resolvedVatTypeId} rejected, retrying without vatType`);
-      helperVatTypeBroken = true;
-      delete body.vatType;
-      try {
-        const created = await client.post<Product>("/product", body);
-        console.log(`[Helper] Created product: ${name} (id=${created.value.id}) without vatType`);
-        return created.value;
-      } catch (retryErr) {
-        const retryMsg = retryErr instanceof Error ? retryErr.message : String(retryErr);
-        if (retryMsg.includes("allerede registrert") || retryMsg.includes("already registered")) {
-          console.warn(`[Helper] Product "${name}" already exists (on retry), looking it up`);
-          const existing = await findProductByName(client, name);
-          if (existing) return existing;
-        }
-        throw retryErr;
-      }
-    }
     throw err;
   }
 }
@@ -418,7 +394,6 @@ export function resetCaches(): void {
   cachedCompanyId = null;
   bankAccountConfigured = false;
   cachedProjectManagerId = null;
-  helperVatTypeBroken = false;
 }
 
 // === Bank Account Configuration ===

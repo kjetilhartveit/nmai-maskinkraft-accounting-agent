@@ -134,7 +134,7 @@ export const testCases: TestCase[] = [
         organizationNumber: "811222333",
       },
     ],
-    expectedApiCalls: { min: 4, max: 12, maxErrors: 0 },
+    expectedApiCalls: { min: 4, max: 8, maxErrors: 0 },
     notes: "Three products with different VAT rates: 25%, 15% (food), 0% (exempt).",
   },
 
@@ -168,7 +168,7 @@ export const testCases: TestCase[] = [
         organizationNumber: "933444555",
       },
     ],
-    expectedApiCalls: { min: 5, max: 12, maxErrors: 0 },
+    expectedApiCalls: { min: 5, max: 5, maxErrors: 0 },
   },
 
   {
@@ -222,7 +222,7 @@ export const testCases: TestCase[] = [
         perDiemRate: 800,
       },
     ],
-    expectedApiCalls: { min: 3, max: 8, maxErrors: 0 },
+    expectedApiCalls: { min: 3, max: 4, maxErrors: 0 },
   },
 
   {
@@ -241,7 +241,7 @@ export const testCases: TestCase[] = [
         bonus: 8000,
       },
     ],
-    expectedApiCalls: { min: 3, max: 8, maxErrors: 0 },
+    expectedApiCalls: { min: 3, max: 6, maxErrors: 0 },
   },
 
   {
@@ -295,7 +295,7 @@ export const testCases: TestCase[] = [
         productName: "Markedsanalyse",
       },
     ],
-    expectedApiCalls: { min: 3, max: 4, maxErrors: 0 },
+    expectedApiCalls: { min: 3, max: 3, maxErrors: 0 },
   },
 
   {
@@ -313,7 +313,7 @@ export const testCases: TestCase[] = [
         invoicePercentage: 75,
       },
     ],
-    expectedApiCalls: { min: 5, max: 12, maxErrors: 0 },
+    expectedApiCalls: { min: 5, max: 11, maxErrors: 0 },
   },
 
   {
@@ -420,7 +420,7 @@ export const testCases: TestCase[] = [
     tier: 3,
     taskType: "ledger_audit",
     expectedEntities: [],
-    expectedApiCalls: { min: 4, max: 12, maxErrors: 0 },
+    expectedApiCalls: { min: 2, max: 3, maxErrors: 0 },
   },
 
   {
@@ -431,7 +431,7 @@ export const testCases: TestCase[] = [
     tier: 3,
     taskType: "ledger_analysis",
     expectedEntities: [],
-    expectedApiCalls: { min: 5, max: 12, maxErrors: 0 },
+    expectedApiCalls: { min: 5, max: 10, maxErrors: 0 },
   },
 
   {
@@ -447,7 +447,7 @@ export const testCases: TestCase[] = [
         taxRate: 22,
       },
     ],
-    expectedApiCalls: { min: 4, max: 12, maxErrors: 0 },
+    expectedApiCalls: { min: 1, max: 2, maxErrors: 0 },
   },
 
   {
@@ -458,7 +458,7 @@ export const testCases: TestCase[] = [
     tier: 3,
     taskType: "monthly_closing",
     expectedEntities: [],
-    expectedApiCalls: { min: 3, max: 8, maxErrors: 0 },
+    expectedApiCalls: { min: 1, max: 2, maxErrors: 0 },
     notes: "Accrual: 15000 (1710→6300). Depreciation: 5000 (6010/1209). Salary provision: 180000 (5000/2900).",
   },
 
@@ -479,7 +479,7 @@ export const testCases: TestCase[] = [
         paymentRate: 11.2,
       },
     ],
-    expectedApiCalls: { min: 4, max: 8, maxErrors: 0 },
+    expectedApiCalls: { min: 3, max: 8, maxErrors: 0 },
   },
 
   {
@@ -497,7 +497,7 @@ export const testCases: TestCase[] = [
         budgetAmount: 500000,
       },
     ],
-    expectedApiCalls: { min: 8, max: 18, maxErrors: 0 },
+    expectedApiCalls: { min: 8, max: 17, maxErrors: 0 },
   },
 
   {

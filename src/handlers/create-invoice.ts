@@ -64,12 +64,12 @@ function extractProductLines(task: ParsedTask): ProductLine[] {
 
   const first = entities[0];
 
-  // Check if there's a productLines array in the first entity
-  if (Array.isArray(first.productLines) && first.productLines.length > 0) {
-    return (first.productLines as Record<string, unknown>[]).map((line) => ({
+  const lineArray = first.productLines ?? first.lines ?? first.invoiceLines ?? first.orderLines;
+  if (Array.isArray(lineArray) && lineArray.length > 0) {
+    return (lineArray as Record<string, unknown>[]).map((line) => ({
       productName: String(line.productName ?? line.name ?? line.description ?? "Produkt"),
       productNumber: (line.productNumber ?? line.number) as string | number | undefined,
-      unitPrice: Number(line.unitPrice ?? line.amount ?? line.price ?? 0),
+      unitPrice: Number(line.unitPrice ?? line.amount ?? line.price ?? line.priceExcludingVat ?? 0),
       quantity: Number(line.quantity ?? line.count ?? 1),
       vatRate: line.vatRate !== undefined ? Number(line.vatRate) : undefined,
     }));
@@ -150,17 +150,10 @@ async function createOrderForInvoice(
         }
       }
 
-      let vatTypeId: number | undefined;
-      if (line.vatRate !== undefined) {
-        vatTypeId = await findVatTypeIdByRate(client, line.vatRate);
-      }
-      const alreadySearchedByNumber = !!line.productNumber;
       const product = await findOrCreateProduct(
         client,
         line.productName,
         line.unitPrice,
-        vatTypeId,
-        alreadySearchedByNumber,
       );
       productId = product.id;
       ctx?.registerProduct(line.productName, productId);

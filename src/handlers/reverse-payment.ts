@@ -1,7 +1,7 @@
 import type { TripletexClient } from "../lib/tripletex-client.js";
 import type { ParsedTask } from "../types/index.js";
 import type { SequenceContext } from "../lib/sequence-context.js";
-import { today, findCustomerByName, ensureBankAccountConfigured } from "../lib/tripletex-helpers.js";
+import { today, findCustomerByName } from "../lib/tripletex-helpers.js";
 
 interface Invoice {
   id: number;
@@ -42,8 +42,6 @@ export async function handleReversePayment(
   const orgNumber = String(entity.organizationNumber ?? entity.orgNumber ?? "");
   const amountExVat = Number(entity.amount ?? 0);
   const invoiceDescription = String(entity.description ?? entity.service ?? entity.productName ?? "");
-
-  await ensureBankAccountConfigured(client);
 
   // 1. Find customer
   let customerId: number | undefined;

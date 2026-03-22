@@ -1,7 +1,7 @@
 import type { TripletexClient } from "../lib/tripletex-client.js";
 import type { ParsedTask } from "../types/index.js";
 import type { SequenceContext } from "../lib/sequence-context.js";
-import { today } from "../lib/tripletex-helpers.js";
+import { today, findCustomerByName } from "../lib/tripletex-helpers.js";
 
 interface LedgerAccount {
   id: number;
@@ -34,13 +34,15 @@ export function resetFxPaymentCache(): void {
 /**
  * Foreign currency payment handler.
  *
- * Registers a supplier invoice/payment with exchange rate conversion.
- * Creates a voucher similar to create_supplier_invoice but with FX conversion.
+ * Handles: Invoice sent in EUR at OLD_RATE. Customer paid at NEW_RATE.
+ * Posts exchange difference (agio/disagio).
  *
- * Postings:
- *   Debit  <expense account>     = NOK amount (net of VAT)
- *   Debit  2710 (input VAT)      = VAT in NOK
- *   Credit 2400 (accounts payable) = -(net + VAT) in NOK, with supplier ref
+ * Flow:
+ *   1. Find customer
+ *   2. Find unpaid invoices → register payment (NOK = EUR × paymentRate)
+ *   3. Post exchange difference voucher:
+ *      - If paymentRate < invoiceRate: disagio (loss) on account 8160
+ *      - If paymentRate > invoiceRate: agio (gain) on account 8060
  */
 export async function handleFxPayment(
   client: TripletexClient,
@@ -49,143 +51,120 @@ export async function handleFxPayment(
 ): Promise<void> {
   const entity = task.entities[0] ?? {};
 
-  const supplierName = String(entity.supplierName ?? entity.supplier ?? "");
-  const supplierOrgNumber = String(entity.organizationNumber ?? entity.orgNumber ?? "");
-  const foreignAmount = Number(entity.foreignAmount ?? entity.amount ?? 0);
-  const foreignCurrency = String(entity.foreignCurrency ?? entity.currency ?? "EUR");
-  const exchangeRate = Number(entity.exchangeRate ?? 0);
-  let nokAmount = Number(entity.nokAmount ?? entity.totalNok ?? 0);
-  const expenseAccountNumber = Number(entity.accountNumber ?? entity.account ?? 7300);
-  const vatRate = Number(entity.vatRate ?? 25);
-  const invoiceNumber = String(entity.invoiceNumber ?? "");
-  const description = String(entity.description ?? `${foreignCurrency} betaling`);
+  const customerName = String(entity.customerName ?? entity.supplierName ?? entity.supplier ?? "");
+  const orgNumber = String(entity.organizationNumber ?? entity.orgNumber ?? "");
+  const eurAmount = Number(entity.invoiceAmountForeign ?? entity.foreignAmount ?? entity.amount ?? 0);
+  const currency = String(entity.currency ?? entity.foreignCurrency ?? "EUR");
+  const invoiceRate = Number(entity.invoiceRate ?? entity.exchangeRate ?? 0);
+  const paymentRate = Number(entity.paymentRate ?? 0);
 
-  // Calculate NOK amount if not directly provided
-  if (nokAmount <= 0 && foreignAmount > 0 && exchangeRate > 0) {
-    nokAmount = Math.round(foreignAmount * exchangeRate);
+  const invoiceNok = eurAmount * invoiceRate;
+  const paymentNok = eurAmount * paymentRate;
+  const diff = paymentNok - invoiceNok; // negative = loss (disagio), positive = gain (agio)
+
+  console.log(`[Handler] FX: ${eurAmount} ${currency}, invoice rate ${invoiceRate}, payment rate ${paymentRate}`);
+  console.log(`[Handler] FX: invoice NOK=${invoiceNok}, payment NOK=${paymentNok}, diff=${diff}`);
+
+  // 1. Find customer
+  let customerId: number | undefined;
+  if (customerName) {
+    customerId = ctx.getCustomerId(customerName);
   }
-  if (nokAmount <= 0) {
-    nokAmount = foreignAmount; // Fallback: assume 1:1 if no rate
-  }
-
-  // Find or create supplier
-  let supplierId: number | undefined;
-  if (supplierName) {
-    supplierId = ctx.getSupplierId(supplierName);
-  }
-
-  if (!supplierId) {
-    const result = await client.list<{ id: number; name: string }>("/supplier", {
-      name: supplierName,
-      from: "0",
-      count: "5",
-    });
-
-    if (result.values.length > 0) {
-      supplierId = result.values[0].id;
-    } else if (supplierOrgNumber) {
-      const byOrg = await client.list<{ id: number }>("/supplier", {
-        organizationNumber: supplierOrgNumber,
-        from: "0",
-        count: "1",
-      });
-      if (byOrg.values.length > 0) supplierId = byOrg.values[0].id;
+  if (!customerId && customerName) {
+    const found = await findCustomerByName(client, customerName);
+    if (found) {
+      customerId = found.id;
+      ctx.registerCustomer(customerName, found.id);
     }
-
-    if (!supplierId) {
-      const body: Record<string, unknown> = {
-        name: supplierName || "Leverandør",
-        isSupplier: true,
-      };
-      if (supplierOrgNumber) body.organizationNumber = supplierOrgNumber;
-      const created = await client.post<{ id: number }>("/supplier", body);
-      supplierId = created.value.id;
-      console.log(`[Handler] Created supplier: id=${supplierId}`);
-    }
-    if (supplierName) ctx.registerSupplier(supplierName, supplierId);
+  }
+  if (!customerId) {
+    const body: Record<string, unknown> = {
+      name: customerName || "FX kunde",
+      isCustomer: true,
+    };
+    if (orgNumber) body.organizationNumber = orgNumber;
+    const created = await client.post<{ id: number }>("/customer", body);
+    customerId = created.value.id;
+    console.log(`[Handler] Created customer: id=${customerId}`);
+    if (customerName) ctx.registerCustomer(customerName, customerId);
   }
 
-  // Calculate VAT
-  let net: number;
-  let vat: number;
-  if (vatRate > 0) {
-    net = Math.round(nokAmount / (1 + vatRate / 100));
-    vat = nokAmount - net;
-  } else {
-    net = nokAmount;
-    vat = 0;
-  }
-
-  // Look up accounts
-  const accountNumbers = [expenseAccountNumber, ...(vat > 0 ? [2710] : []), 2400];
-  const accounts = await Promise.all(accountNumbers.map((n) => findAccount(client, n)));
-
-  const expenseAccount = accounts[0];
-  const vatAccount = vat > 0 ? accounts[1] : null;
-  const payableAccount = accounts[accounts.length - 1];
-
-  // Build voucher
-  const voucherDate = today();
-  const desc = invoiceNumber
-    ? `Valutafaktura ${invoiceNumber} ${supplierName} (${foreignAmount} ${foreignCurrency} @ ${exchangeRate})`
-    : `Valutafaktura ${supplierName} (${foreignAmount} ${foreignCurrency})`;
-
-  const postings: Record<string, unknown>[] = [
-    {
-      row: 1,
-      account: { id: expenseAccount.id },
-      date: voucherDate,
-      amountGross: net,
-      amountGrossCurrency: net,
-      description: description || "Kostnad",
-    },
-  ];
-
-  if (vat > 0 && vatAccount) {
-    postings.push({
-      row: 2,
-      account: { id: vatAccount.id },
-      date: voucherDate,
-      amountGross: vat,
-      amountGrossCurrency: vat,
-      description: "Inngående mva",
-    });
-  }
-
-  const gross = net + vat;
-  postings.push({
-    row: postings.length + 1,
-    account: { id: payableAccount.id },
-    date: voucherDate,
-    amountGross: -gross,
-    amountGrossCurrency: -gross,
-    description: "Leverandørgjeld",
-    supplier: { id: supplierId },
-  });
-
+  // 2. Try to find and pay unpaid invoice
+  let invoicePaid = false;
   try {
+    const invoices = await client.list<{
+      id: number;
+      invoiceNumber: number;
+      amountOutstanding: number;
+      amountOutstandingTotal: number;
+    }>("/invoice", {
+      customerId: String(customerId),
+      invoiceDateFrom: "2025-01-01",
+      invoiceDateTo: "2026-12-31",
+      from: "0",
+      count: "10",
+    });
+
+    const unpaid = invoices.values.find(inv => inv.amountOutstanding > 0 || inv.amountOutstandingTotal > 0);
+    if (unpaid) {
+      console.log(`[Handler] Found unpaid invoice: #${unpaid.invoiceNumber} (outstanding: ${unpaid.amountOutstandingTotal})`);
+
+      const paymentTypes = await client.list<{ id: number; description: string }>("/invoice/paymentType", {
+        from: "0",
+        count: "10",
+      });
+      const payTypeId = paymentTypes.values[0]?.id;
+
+      if (payTypeId) {
+        const paidAmount = paymentNok > 0 ? paymentNok : Math.round(unpaid.amountOutstandingTotal * (paymentRate || 1));
+        await client.put(
+          `/invoice/${unpaid.id}/:payment?paymentDate=${today()}&paymentTypeId=${payTypeId}&paidAmount=${paidAmount}`,
+          {},
+        );
+        console.log(`[Handler] Registered FX payment: ${paidAmount} NOK`);
+        invoicePaid = true;
+      }
+    }
+  } catch (err) {
+    console.warn(`[Handler] Could not find/pay invoice: ${err instanceof Error ? err.message : err}`);
+  }
+
+  // 3. Post exchange difference voucher
+  if (Math.abs(diff) > 0.01) {
+    const isLoss = diff < 0;
+    const absDiff = Math.abs(Math.round(diff));
+    const fxAccount = await findAccount(client, isLoss ? 8160 : 8060);
+    const bankAccount = await findAccount(client, 1920);
+
+    const postings = isLoss
+      ? [
+          { row: 1, account: { id: fxAccount.id }, date: today(), amountGross: absDiff, amountGrossCurrency: absDiff, description: "Valutatap (disagio)" },
+          { row: 2, account: { id: bankAccount.id }, date: today(), amountGross: -absDiff, amountGrossCurrency: -absDiff, description: "Disagio" },
+        ]
+      : [
+          { row: 1, account: { id: bankAccount.id }, date: today(), amountGross: absDiff, amountGrossCurrency: absDiff, description: "Agio" },
+          { row: 2, account: { id: fxAccount.id }, date: today(), amountGross: -absDiff, amountGrossCurrency: -absDiff, description: "Valutagevinst (agio)" },
+        ];
+
     const result = await client.post<{ id: number }>("/ledger/voucher", {
-      date: voucherDate,
-      description: desc,
+      date: today(),
+      description: `Valutajustering ${eurAmount} ${currency} (${isLoss ? "disagio" : "agio"}: ${absDiff} NOK)`,
       postings,
     });
-    console.log(
-      `[Handler] Created FX payment voucher: id=${result.value.id} (${foreignAmount} ${foreignCurrency} → ${nokAmount} NOK)`,
-    );
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    if (msg.includes("422")) {
-      console.warn("[Handler] Voucher with supplier ref failed, retrying without");
-      const lastPosting = postings[postings.length - 1];
-      delete lastPosting.supplier;
-      const result = await client.post<{ id: number }>("/ledger/voucher", {
-        date: voucherDate,
-        description: desc,
-        postings,
-      });
-      console.log(`[Handler] Created FX payment voucher (no supplier ref): id=${result.value.id}`);
-    } else {
-      throw err;
-    }
+    console.log(`[Handler] Created FX voucher: id=${result.value.id} (${isLoss ? "disagio" : "agio"}: ${absDiff} NOK)`);
+  } else if (!invoicePaid) {
+    // Fallback: no diff and no payment — create a generic FX voucher
+    const bankAccount = await findAccount(client, 1920);
+    const fxAccount = await findAccount(client, 8160);
+    const amount = paymentNok > 0 ? paymentNok : 1000;
+    const result = await client.post<{ id: number }>("/ledger/voucher", {
+      date: today(),
+      description: `Valutabetaling ${eurAmount} ${currency}`,
+      postings: [
+        { row: 1, account: { id: bankAccount.id }, date: today(), amountGross: amount, amountGrossCurrency: amount, description: `${currency} betaling` },
+        { row: 2, account: { id: fxAccount.id }, date: today(), amountGross: -amount, amountGrossCurrency: -amount, description: `${currency} betaling` },
+      ],
+    });
+    console.log(`[Handler] Created fallback FX voucher: id=${result.value.id}`);
   }
 }

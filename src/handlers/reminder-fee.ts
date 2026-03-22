@@ -8,6 +8,15 @@ import {
   findOrCreateProduct,
 } from "../lib/tripletex-helpers.js";
 
+function parseNum(v: unknown, fallback: number): number {
+  if (typeof v === "number" && !isNaN(v)) return v;
+  if (typeof v === "string") {
+    const n = Number(v.replace(/[^0-9.,\-]/g, "").replace(",", "."));
+    if (!isNaN(n) && n > 0) return n;
+  }
+  return fallback;
+}
+
 interface Invoice {
   id: number;
   invoiceNumber: number;
@@ -17,11 +26,18 @@ interface Invoice {
   comment?: string;
 }
 
+interface PaymentType {
+  id: number;
+  description: string;
+}
+
 /**
  * Reminder fee handler.
  *
- * Registers a reminder fee/charge on an overdue invoice.
- * Creates a new invoice for the reminder fee amount, linked to the customer.
+ * 1. Find overdue invoice
+ * 2. Post reminder fee voucher (debit 1500, credit 3400)
+ * 3. Create & send reminder fee invoice
+ * 4. Register partial payment on overdue invoice
  */
 export async function handleReminderFee(
   client: TripletexClient,
@@ -30,11 +46,12 @@ export async function handleReminderFee(
 ): Promise<void> {
   const entity = task.entities[0] ?? {};
 
-  const customerName = String(entity.customerName ?? entity.customer ?? "");
+  const customerName = String(entity.customerName ?? entity.customer ?? "").replace(/^null$/i, "");
   const orgNumber = String(entity.organizationNumber ?? entity.orgNumber ?? "");
-  const reminderFeeAmount = Number(entity.reminderFeeAmount ?? entity.feeAmount ?? entity.amount ?? 70);
-  const invoiceDescription = String(entity.invoiceDescription ?? entity.description ?? "");
-  const invoiceAmount = Number(entity.invoiceAmount ?? 0);
+  const reminderFeeAmount = parseNum(entity.reminderFeeAmount ?? entity.feeAmount ?? entity.amount, 70);
+  const partialPaymentAmount = parseNum(entity.partialPaymentAmount ?? entity.paymentAmount, 0);
+  const debitAccountNumber = parseNum(entity.debitAccount ?? entity.debitAccountNumber, 1500);
+  const creditAccountNumber = parseNum(entity.creditAccount ?? entity.creditAccountNumber, 3400);
 
   await ensureBankAccountConfigured(client);
 
@@ -44,9 +61,7 @@ export async function handleReminderFee(
     customerId = ctx.getCustomerId(customerName);
     if (!customerId) {
       const existing = await findCustomerByName(client, customerName);
-      if (existing) {
-        customerId = existing.id;
-      }
+      if (existing) customerId = existing.id;
     }
   }
 
@@ -59,19 +74,30 @@ export async function handleReminderFee(
     if (byOrg.values.length > 0) customerId = byOrg.values[0].id;
   }
 
+  // Find customer with overdue invoices if no specific customer given
   if (!customerId) {
-    const body: Record<string, unknown> = {
-      name: customerName || "Ukjent kunde",
-      isCustomer: true,
-    };
+    const allInvoices = await client.list<Invoice>("/invoice", {
+      invoiceDateFrom: "2020-01-01",
+      invoiceDateTo: "2030-12-31",
+      from: "0",
+      count: "50",
+    });
+    const overdueInv = allInvoices.values.find((inv) => inv.amountOutstanding > 0);
+    if (overdueInv) {
+      customerId = overdueInv.customer.id;
+      console.log(`[Handler] Found overdue invoice #${overdueInv.invoiceNumber} for customer ${overdueInv.customer.name}`);
+    }
+  }
+
+  if (!customerId) {
+    const body: Record<string, unknown> = { name: customerName || "Ukjent kunde", isCustomer: true };
     if (orgNumber) body.organizationNumber = orgNumber;
     const created = await client.post<{ id: number }>("/customer", body);
     customerId = created.value.id;
     if (customerName) ctx.registerCustomer(customerName, customerId);
-    console.log(`[Handler] Created customer: id=${customerId}`);
   }
 
-  // 2. Find the overdue invoice (if it exists)
+  // 2. Find overdue invoice
   const invoices = await client.list<Invoice>("/invoice", {
     customerId: String(customerId),
     invoiceDateFrom: "2020-01-01",
@@ -80,25 +106,39 @@ export async function handleReminderFee(
     count: "20",
   });
 
-  let overdueInvoice: Invoice | null = null;
-  if (invoices.values.length > 0) {
-    // Prefer an invoice with outstanding balance
-    overdueInvoice = invoices.values.find((inv) => inv.amountOutstanding > 0) ?? null;
+  const overdueInvoice = invoices.values.find((inv) => inv.amountOutstanding > 0)
+    ?? invoices.values[0]
+    ?? null;
 
-    // If description matches, prefer that
-    if (invoiceDescription && !overdueInvoice) {
-      const desc = invoiceDescription.toLowerCase();
-      overdueInvoice = invoices.values.find(
-        (inv) => inv.comment?.toLowerCase()?.includes(desc),
-      ) ?? null;
-    }
+  // 3. Post reminder fee voucher (debit 1500 accounts receivable, credit 3400 reminder income)
+  const debitAcct = await findAccountByNumber(client, debitAccountNumber);
+  const creditAcct = await findAccountByNumber(client, creditAccountNumber);
 
-    if (!overdueInvoice) {
-      overdueInvoice = invoices.values[0];
-    }
+  const debitPosting: Record<string, unknown> = {
+    row: 1,
+    account: { id: debitAcct.id },
+    date: today(),
+    amountGross: reminderFeeAmount,
+    amountGrossCurrency: reminderFeeAmount,
+    description: "Purregebyr",
+  };
+  if (debitAccountNumber === 1500 && customerId) {
+    debitPosting.customer = { id: customerId };
   }
 
-  // 3. Create reminder fee invoice
+  await client.post("/ledger/voucher", {
+    date: today(),
+    description: overdueInvoice
+      ? `Purregebyr for faktura ${overdueInvoice.invoiceNumber}`
+      : "Purregebyr",
+    postings: [
+      debitPosting,
+      { row: 2, account: { id: creditAcct.id }, date: today(), amountGross: -reminderFeeAmount, amountGrossCurrency: -reminderFeeAmount, description: "Purregebyr inntekt" },
+    ],
+  });
+  console.log(`[Handler] Posted reminder fee voucher: ${reminderFeeAmount} NOK (debit ${debitAccountNumber}, credit ${creditAccountNumber})`);
+
+  // 4. Create reminder fee invoice and send it
   const product = await findOrCreateProduct(client, "Purregebyr", reminderFeeAmount);
 
   const order = await client.post<{ id: number }>("/order", {
@@ -118,13 +158,48 @@ export async function handleReminderFee(
     invoiceDate: today(),
     invoiceDueDate: today(),
     orders: [{ id: order.value.id }],
-    comment: overdueInvoice
-      ? `Purregebyr for faktura ${overdueInvoice.invoiceNumber}`
-      : "Purregebyr",
+    comment: overdueInvoice ? `Purregebyr for faktura ${overdueInvoice.invoiceNumber}` : "Purregebyr",
   });
+  console.log(`[Handler] Created reminder fee invoice: id=${inv.value.id}`);
 
-  console.log(
-    `[Handler] Created reminder fee invoice: id=${inv.value.id}, fee=${reminderFeeAmount} NOK` +
-    (overdueInvoice ? `, for overdue invoice #${overdueInvoice.invoiceNumber}` : ""),
-  );
+  // Send the reminder fee invoice
+  try {
+    const qs = new URLSearchParams({ sendType: "EMAIL", overrideEmailAddress: "faktura@example.no" });
+    await client.put(`/invoice/${inv.value.id}/:send?${qs.toString()}`, {});
+    console.log(`[Handler] Sent reminder fee invoice: id=${inv.value.id}`);
+  } catch (err) {
+    console.warn(`[Handler] Could not send reminder fee invoice: ${err instanceof Error ? err.message : err}`);
+  }
+
+  // 5. Register partial payment on the overdue invoice
+  if (partialPaymentAmount > 0 && overdueInvoice) {
+    const paymentTypes = await client.list<PaymentType>("/invoice/paymentType", {
+      from: "0",
+      count: "5",
+    });
+    const paymentTypeId = paymentTypes.values[0]?.id;
+    if (paymentTypeId) {
+      const qs = new URLSearchParams({
+        paymentDate: today(),
+        paymentTypeId: String(paymentTypeId),
+        paidAmount: String(partialPaymentAmount),
+      });
+      await client.put(`/invoice/${overdueInvoice.id}/:payment?${qs.toString()}`, undefined);
+      console.log(`[Handler] Registered partial payment of ${partialPaymentAmount} on invoice ${overdueInvoice.id}`);
+    }
+  }
+}
+
+async function findAccountByNumber(
+  client: TripletexClient,
+  accountNumber: number,
+): Promise<{ id: number; number: number }> {
+  const result = await client.list<{ id: number; number: number }>("/ledger/account", {
+    number: String(accountNumber),
+    from: "0",
+    count: "1",
+  });
+  const account = result.values[0];
+  if (!account) throw new Error(`Ledger account ${accountNumber} not found`);
+  return account;
 }

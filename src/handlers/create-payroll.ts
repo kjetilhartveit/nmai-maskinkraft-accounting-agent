@@ -8,24 +8,11 @@ import {
   today,
 } from "../lib/tripletex-helpers.js";
 
-interface SalaryType {
-  id: number;
-  number: string;
-  name: string;
-  description?: string;
-}
-
 /**
  * Deterministic payroll handler.
  *
- * Competition checks:
- *   1. Employee found/created
- *   2. Employment record exists
- *   3. Base salary recorded
- *   4. Bonus recorded
- *
- * Strategy: employee → employment → salary types → salary transaction
- * Fallback: if salary API returns 403, fall back to manual voucher approach.
+ * Strategy: find/create employee → create voucher with salary + tax postings.
+ * Uses voucher approach directly — salary BETA endpoints are unreliable in sandbox.
  */
 export async function handleCreatePayroll(
   client: TripletexClient,
@@ -82,109 +69,8 @@ export async function handleCreatePayroll(
     if (firstName && lastName) ctx.registerEmployee(`${firstName} ${lastName}`, employeeId);
   }
 
-  // 2. Create employment record (required for salary processing)
-  const startDate = today().slice(0, 8) + "01";
-  try {
-    await client.post("/employee/employment", {
-      employee: { id: employeeId },
-      startDate,
-      employmentType: "ORDINARY",
-      percentageOfFullTimeEquivalent: 100,
-    });
-    console.log(`[Handler] Created employment for employee ${employeeId}`);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    if (msg.includes("403")) {
-      console.log("[Handler] Employment endpoint returned 403 (BETA), continuing with voucher fallback");
-      await createPayrollVoucher(client, employeeId, baseSalary, bonus, firstName, lastName);
-      return;
-    }
-    if (msg.includes("already") || msg.includes("allerede") || msg.includes("overlapping")) {
-      console.log("[Handler] Employment already exists, continuing");
-    } else {
-      console.warn(`[Handler] Employment creation failed: ${msg}, continuing anyway`);
-    }
-  }
-
-  // 3. Get salary types to find base salary and bonus type IDs
-  let salaryTypes: SalaryType[] = [];
-  try {
-    const result = await client.list<SalaryType>("/salary/type", {
-      from: "0",
-      count: "100",
-    });
-    salaryTypes = result.values;
-    console.log(`[Handler] Found ${salaryTypes.length} salary types`);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    if (msg.includes("403")) {
-      console.log("[Handler] Salary type endpoint returned 403, falling back to voucher");
-      await createPayrollVoucher(client, employeeId, baseSalary, bonus, firstName, lastName);
-      return;
-    }
-    throw err;
-  }
-
-  // Find base salary type (typically "Fastlønn" or number "1") and bonus type
-  const baseSalaryType = salaryTypes.find(
-    (t) => t.number === "1" || t.name?.toLowerCase().includes("fastlønn") || t.name?.toLowerCase().includes("månedslønn"),
-  ) ?? salaryTypes[0];
-
-  const bonusType = salaryTypes.find(
-    (t) => t.name?.toLowerCase().includes("bonus") || t.name?.toLowerCase().includes("tillegg") || t.number === "30",
-  );
-
-  // 4. Create salary transaction
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth() + 1;
-
-  const specifications: Record<string, unknown>[] = [];
-
-  if (baseSalary > 0 && baseSalaryType) {
-    specifications.push({
-      salaryType: { id: baseSalaryType.id },
-      rate: baseSalary,
-      count: 1,
-      amount: baseSalary,
-      description: "Grunnlønn",
-    });
-  }
-
-  if (bonus > 0) {
-    const bt = bonusType ?? baseSalaryType;
-    if (bt) {
-      specifications.push({
-        salaryType: { id: bt.id },
-        rate: bonus,
-        count: 1,
-        amount: bonus,
-        description: "Bonus",
-      });
-    }
-  }
-
-  try {
-    const txBody = {
-      employee: { id: employeeId },
-      date: today(),
-      year,
-      month,
-      specifications,
-    };
-
-    const result = await client.post<{ id: number }>("/salary/transaction", txBody);
-    console.log(`[Handler] Created salary transaction: id=${result.value.id} (base=${baseSalary}, bonus=${bonus})`);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    if (msg.includes("403")) {
-      console.log("[Handler] Salary transaction returned 403, falling back to voucher");
-      await createPayrollVoucher(client, employeeId, baseSalary, bonus, firstName, lastName);
-      return;
-    }
-    console.warn(`[Handler] Salary transaction failed: ${msg}, trying voucher fallback`);
-    await createPayrollVoucher(client, employeeId, baseSalary, bonus, firstName, lastName);
-  }
+  // 2. Create payroll voucher (reliable approach — salary BETA endpoints are unstable in sandbox)
+  await createPayrollVoucher(client, employeeId, baseSalary, bonus, firstName, lastName);
 }
 
 interface LedgerAccount {

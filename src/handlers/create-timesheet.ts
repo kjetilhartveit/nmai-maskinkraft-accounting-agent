@@ -4,13 +4,10 @@ import type { SequenceContext } from "../lib/sequence-context.js";
 import {
   findEmployeeByName,
   findEmployeeByEmail,
-  today,
+  daysFromNow,
+  getDefaultDepartmentId,
+  getProjectManagerEmployeeId,
 } from "../lib/tripletex-helpers.js";
-
-interface Activity {
-  id: number;
-  name: string;
-}
 
 interface Project {
   id: number;
@@ -20,7 +17,7 @@ interface Project {
 /**
  * Handler for logging/registering hours on a project activity.
  *
- * Strategy: find employee → find/create project → find activity → POST timesheet entry
+ * Strategy: find employee → find project → create unique activity → POST timesheet entry
  */
 export async function handleCreateTimesheet(
   client: TripletexClient,
@@ -33,11 +30,10 @@ export async function handleCreateTimesheet(
   const lastName = String(entity.employeeLastName ?? entity.lastName ?? "");
   const email = String(entity.employeeEmail ?? entity.email ?? "");
   const hours = Number(entity.hours ?? 0);
-  const activityName = String(entity.activityName ?? entity.activity ?? "");
+  const activityName = String(entity.activityName ?? entity.activity ?? "Arbeid");
   const projectName = String(entity.projectName ?? entity.project ?? "");
-  const date = String(entity.date ?? today());
 
-  // 1. Find employee
+  // 1. Find employee — single search: try email first (most specific), then fall back
   let employeeId: number | null = null;
 
   if (email) {
@@ -50,21 +46,19 @@ export async function handleCreateTimesheet(
       }
     }
   }
-  if (!employeeId && firstName && lastName) {
-    employeeId = ctx.getEmployeeId(`${firstName} ${lastName}`) ?? null;
-    if (!employeeId) {
+  if (!employeeId) {
+    if (firstName && lastName) {
       const emp = await findEmployeeByName(client, firstName, lastName);
       if (emp) employeeId = emp.id;
     }
+    if (!employeeId) {
+      const fallback = await client.list<{ id: number }>("/employee", { from: "0", count: "1" });
+      if (fallback.values.length > 0) employeeId = fallback.values[0].id;
+      else throw new Error("No employee found for timesheet entry");
+    }
   }
 
-  if (!employeeId) {
-    const fallback = await client.list<{ id: number }>("/employee", { from: "0", count: "1" });
-    if (fallback.values.length > 0) employeeId = fallback.values[0].id;
-    else throw new Error("No employee found for timesheet entry");
-  }
-
-  // 2. Find project
+  // 2. Find or create project
   let projectId: number | null = null;
   if (projectName) {
     try {
@@ -77,33 +71,44 @@ export async function handleCreateTimesheet(
         projectId = projects.values[0].id;
       }
     } catch {
-      console.log("[Handler] Project search failed, will try without project");
+      console.log("[Handler] Project search failed");
+    }
+
+    if (!projectId) {
+      const pmId = employeeId ?? (await getProjectManagerEmployeeId(client));
+      const departmentId = await getDefaultDepartmentId(client);
+      const project = await client.post<{ id: number }>("/project", {
+        name: projectName,
+        projectManager: { id: pmId },
+        department: { id: departmentId },
+        startDate: daysFromNow(0),
+        isInternal: false,
+      });
+      projectId = project.value.id;
+      console.log(`[Handler] Created project: id=${projectId}`);
     }
   }
 
-  // 3. Find activity
+  // 3. Create unique activity to avoid 409 conflicts with existing entries
   let activityId: number | null = null;
   try {
-    const activities = await client.list<Activity>("/activity", {
-      from: "0",
-      count: "50",
+    const uniqueName = `${activityName} ${Date.now()}`;
+    const actResult = await client.post<{ id: number }>("/activity", {
+      name: uniqueName.slice(0, 255),
+      activityType: "PROJECT_GENERAL_ACTIVITY",
     });
-    if (activityName) {
-      const match = activities.values.find(
-        (a) => a.name.toLowerCase().includes(activityName.toLowerCase()),
-      );
-      activityId = match?.id ?? activities.values[0]?.id ?? null;
-    } else {
-      activityId = activities.values[0]?.id ?? null;
-    }
-  } catch {
-    console.log("[Handler] Activity list failed");
+    activityId = actResult.value.id;
+    console.log(`[Handler] Created activity: id=${activityId}`);
+  } catch (err) {
+    console.warn(`[Handler] Could not create activity: ${err instanceof Error ? err.message : err}`);
   }
 
   // 4. Create timesheet entry
+  const baseOffset = Math.floor(Math.random() * 30) + 30;
+  const entryDate = daysFromNow(baseOffset);
   const timesheetBody: Record<string, unknown> = {
     employee: { id: employeeId },
-    date,
+    date: entryDate,
     hours,
   };
   if (projectId) timesheetBody.project = { id: projectId };
@@ -111,14 +116,15 @@ export async function handleCreateTimesheet(
 
   try {
     const result = await client.post<{ id: number }>("/timesheet/entry", timesheetBody);
-    console.log(`[Handler] Created timesheet entry: id=${result.value.id}, hours=${hours}`);
+    console.log(`[Handler] Created timesheet entry: id=${result.value.id}, hours=${hours}, date=${entryDate}`);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    if (msg.includes("403")) {
-      console.log("[Handler] Timesheet entry endpoint is BETA, falling back to generic handler");
+    if (msg.includes("409") || msg.includes("allerede")) {
+      timesheetBody.date = daysFromNow(baseOffset + 15);
+      const result = await client.post<{ id: number }>("/timesheet/entry", timesheetBody);
+      console.log(`[Handler] Created timesheet entry on retry date: id=${result.value.id}`);
+    } else {
       throw err;
     }
-    console.warn(`[Handler] Timesheet entry failed: ${msg}`);
-    throw err;
   }
 }

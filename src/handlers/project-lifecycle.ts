@@ -8,16 +8,31 @@ import {
   getDefaultDepartmentId,
   getProjectManagerEmployeeId,
   today,
+  daysFromNow,
   ensureBankAccountConfigured,
   findOrCreateProduct,
 } from "../lib/tripletex-helpers.js";
 import { grantProjectManagerEntitlement } from "./create-employee.js";
 
+interface EmployeeEntry {
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  hours: number;
+  hourlyRate?: number;
+}
+
+interface SupplierCost {
+  supplierName?: string;
+  amount: number;
+  description?: string;
+}
+
 /**
  * Full project lifecycle handler.
  *
- * Creates a project → registers hours → invoices the project.
- * Composes the logic of create_project + create_timesheet + create_invoice.
+ * Creates project → registers hours for employees → registers supplier costs →
+ * creates invoice to customer.
  */
 export async function handleProjectLifecycle(
   client: TripletexClient,
@@ -29,14 +44,27 @@ export async function handleProjectLifecycle(
   const projectName = String(entity.projectName ?? entity.name ?? "Prosjekt");
   const customerName = String(entity.customerName ?? entity.customer ?? "");
   const orgNumber = String(entity.organizationNumber ?? entity.orgNumber ?? "");
-  const pmFirstName = String(entity.projectManagerFirstName ?? "");
-  const pmLastName = String(entity.projectManagerLastName ?? "");
-  const pmEmail = String(entity.projectManagerEmail ?? "");
-  const budget = Number(entity.budget ?? 0);
-  const hours = Number(entity.hours ?? 0);
-  const activityName = String(entity.activityName ?? entity.activity ?? "Utvikling");
-  const hourlyRate = Number(entity.hourlyRate ?? 0);
+  const budget = Number(entity.budgetAmount ?? entity.budget ?? 0);
   const invoicePercentage = Number(entity.invoicePercentage ?? 100);
+
+  // Parse employee entries from entity extraction
+  const employeeEntries: EmployeeEntry[] = [];
+  const rawEmployees = (entity.employees ?? []) as Record<string, unknown>[];
+  for (const emp of rawEmployees) {
+    employeeEntries.push({
+      firstName: String(emp.firstName ?? ""),
+      lastName: String(emp.lastName ?? ""),
+      email: emp.email ? String(emp.email) : undefined,
+      hours: Number(emp.hours ?? 0),
+      hourlyRate: emp.hourlyRate ? Number(emp.hourlyRate) : undefined,
+    });
+  }
+
+  // Parse supplier cost
+  const supplierCostRaw = entity.supplierCost as SupplierCost | undefined;
+  const supplierCost: SupplierCost | null = supplierCostRaw?.amount
+    ? { supplierName: String(supplierCostRaw.supplierName ?? ""), amount: Number(supplierCostRaw.amount), description: String(supplierCostRaw.description ?? "") }
+    : null;
 
   // 1. Find or create customer
   let customerId: number | undefined;
@@ -56,24 +84,8 @@ export async function handleProjectLifecycle(
     }
   }
 
-  // 2. Resolve project manager
-  let pmId: number | null = null;
-  if (pmFirstName && pmLastName) {
-    const ctxId = ctx.getEmployeeId(`${pmFirstName} ${pmLastName}`);
-    if (ctxId) {
-      pmId = ctxId;
-    } else {
-      const emp = await findEmployeeByName(client, pmFirstName, pmLastName);
-      if (emp) pmId = emp.id;
-    }
-  }
-  if (!pmId && pmEmail) {
-    const emp = await findEmployeeByEmail(client, pmEmail);
-    if (emp) pmId = emp.id;
-  }
-  if (!pmId) {
-    pmId = await getProjectManagerEmployeeId(client);
-  }
+  // 2. Resolve project manager (first employee in sandbox)
+  const pmId = await getProjectManagerEmployeeId(client);
   if (!pmId) throw new Error("No project manager found");
 
   // 3. Create project
@@ -96,71 +108,103 @@ export async function handleProjectLifecycle(
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     if (msg.includes("prosjektleder") || msg.includes("project manager") || msg.includes("rettighet")) {
-      const fallbackPM = await getProjectManagerEmployeeId(client);
-      if (fallbackPM && fallbackPM !== pmId) {
-        projectBody.projectManager = { id: fallbackPM };
-        const result = await client.post<{ id: number }>("/project", projectBody);
-        projectId = result.value.id;
-      } else {
-        const knownExtended = ctx.isEmployeeExtended(pmId);
-        await grantProjectManagerEntitlement(client, pmId, knownExtended);
-        const result = await client.post<{ id: number }>("/project", projectBody);
-        projectId = result.value.id;
-      }
+      const knownExtended = ctx.isEmployeeExtended(pmId);
+      await grantProjectManagerEntitlement(client, pmId, knownExtended);
+      const result = await client.post<{ id: number }>("/project", projectBody);
+      projectId = result.value.id;
     } else {
       throw err;
     }
   }
-
   ctx.registerProject(projectName, projectId);
 
-  // 4. Register hours (timesheet) if specified
-  if (hours > 0) {
+  // 4. Create project activity with unique name
+  let defaultActivityId: number | null = null;
+  try {
+    const actResult = await client.post<{ id: number }>("/activity", {
+      name: `${projectName} ${Date.now()}`,
+      activityType: "PROJECT_GENERAL_ACTIVITY",
+    });
+    defaultActivityId = actResult.value.id;
+    console.log(`[Handler] Created activity: id=${defaultActivityId}`);
+  } catch {
+    console.log("[Handler] Could not create activity, proceeding without");
+  }
+
+  // 5. Register hours for each employee
+  let totalHoursRevenue = 0;
+  for (let i = 0; i < employeeEntries.length; i++) {
+    const emp = employeeEntries[i];
+    if (emp.hours <= 0) continue;
+
+    let empId: number | null = null;
+    if (emp.firstName && emp.lastName) {
+      const found = await findEmployeeByName(client, emp.firstName, emp.lastName);
+      if (found) empId = found.id;
+    }
+    if (!empId && emp.email) {
+      const found = await findEmployeeByEmail(client, emp.email);
+      if (found) empId = found.id;
+    }
+    if (!empId) empId = pmId;
+
+    const baseOffset = Math.floor(Math.random() * 30) + 30;
+    const entryDate = daysFromNow(baseOffset + i);
+    const timesheetBody: Record<string, unknown> = {
+      employee: { id: empId },
+      project: { id: projectId },
+      date: entryDate,
+      hours: emp.hours,
+    };
+    if (defaultActivityId) timesheetBody.activity = { id: defaultActivityId };
+
     try {
-      // Get or create activity
-      const activities = await client.list<{ id: number; name: string }>("/activity", {
-        from: "0",
-        count: "100",
-      });
-      let activityId = activities.values.find(
-        (a) => a.name?.toLowerCase() === activityName.toLowerCase(),
-      )?.id;
-
-      if (!activityId && activities.values.length > 0) {
-        activityId = activities.values[0].id;
-      }
-
-      if (!activityId) {
-        try {
-          const created = await client.post<{ id: number }>("/activity", { name: activityName });
-          activityId = created.value.id;
-        } catch {
-          console.warn("[Handler] Could not create activity, skipping timesheet");
-        }
-      }
-
-      if (activityId) {
-        await client.post("/timesheet/entry", {
-          employee: { id: pmId },
-          project: { id: projectId },
-          activity: { id: activityId },
-          date: today(),
-          hours,
-          ...(hourlyRate > 0 ? { hourlyRate } : {}),
-        });
-        console.log(`[Handler] Registered ${hours} hours on project`);
-      }
+      await client.post("/timesheet/entry", timesheetBody);
+      console.log(`[Handler] Registered ${emp.hours}h for ${emp.firstName} ${emp.lastName}`);
+      totalHoursRevenue += emp.hours * (emp.hourlyRate ?? 0);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      console.warn(`[Handler] Timesheet entry failed: ${msg}`);
+      if (msg.includes("409") || msg.includes("allerede")) {
+        timesheetBody.date = daysFromNow(baseOffset + i + 15);
+        try {
+          await client.post("/timesheet/entry", timesheetBody);
+          console.log(`[Handler] Registered ${emp.hours}h on alternate date`);
+          totalHoursRevenue += emp.hours * (emp.hourlyRate ?? 0);
+        } catch {
+          console.warn(`[Handler] Timesheet retry also failed`);
+        }
+      } else {
+        console.warn(`[Handler] Timesheet entry failed: ${msg}`);
+      }
     }
   }
 
-  // 5. Invoice the project
+  // 6. Register supplier cost as voucher
+  if (supplierCost && supplierCost.amount > 0) {
+    try {
+      const [expenseAcct, bankAcct] = await Promise.all([
+        findAccountByNumber(client, 6300),
+        findAccountByNumber(client, 1920),
+      ]);
+      await client.post("/ledger/voucher", {
+        date: today(),
+        description: supplierCost.description || `Leverandørkostnad: ${supplierCost.supplierName}`,
+        postings: [
+          { row: 1, account: { id: expenseAcct.id }, date: today(), amountGross: supplierCost.amount, amountGrossCurrency: supplierCost.amount, description: supplierCost.description || "Leverandørkostnad" },
+          { row: 2, account: { id: bankAcct.id }, date: today(), amountGross: -supplierCost.amount, amountGrossCurrency: -supplierCost.amount, description: "Betaling" },
+        ],
+      });
+      console.log(`[Handler] Registered supplier cost: ${supplierCost.amount} NOK`);
+    } catch (err) {
+      console.warn(`[Handler] Supplier voucher failed: ${err}`);
+    }
+  }
+
+  // 7. Invoice the project
   await ensureBankAccountConfigured(client);
   const invoiceAmount = budget > 0
     ? Math.round(budget * (invoicePercentage / 100))
-    : (hours > 0 && hourlyRate > 0 ? Math.round(hours * hourlyRate * (invoicePercentage / 100)) : 0);
+    : (totalHoursRevenue > 0 ? Math.round(totalHoursRevenue * (invoicePercentage / 100)) : 0);
 
   if (invoiceAmount > 0 && customerId) {
     try {
@@ -188,7 +232,19 @@ export async function handleProjectLifecycle(
     } catch (err) {
       console.warn(`[Handler] Project invoice failed: ${err}`);
     }
-  } else {
-    console.log("[Handler] No invoice amount calculated or no customer, skipping invoice step");
   }
+}
+
+async function findAccountByNumber(
+  client: TripletexClient,
+  accountNumber: number,
+): Promise<{ id: number; number: number }> {
+  const result = await client.list<{ id: number; number: number }>("/ledger/account", {
+    number: String(accountNumber),
+    from: "0",
+    count: "1",
+  });
+  const account = result.values[0];
+  if (!account) throw new Error(`Ledger account ${accountNumber} not found`);
+  return account;
 }

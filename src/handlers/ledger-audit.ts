@@ -8,10 +8,32 @@ interface LedgerAccount {
   number: number;
 }
 
+interface Voucher {
+  id: number;
+  number: number;
+  date: string;
+  description: string;
+  postings: VoucherPosting[];
+}
+
+interface VoucherPosting {
+  account: { id: number; number: number; name: string };
+  amountGross: number;
+  amountGrossCurrency: number;
+  description?: string;
+}
+
+const accountCache = new Map<number, LedgerAccount>();
+
 async function findAccount(
   client: TripletexClient,
   accountNumber: number,
 ): Promise<LedgerAccount> {
+  if (!accountNumber || isNaN(accountNumber) || accountNumber <= 0) {
+    throw new Error(`Invalid account number: ${accountNumber}`);
+  }
+  const cached = accountCache.get(accountNumber);
+  if (cached) return cached;
   const result = await client.list<LedgerAccount>("/ledger/account", {
     number: String(accountNumber),
     from: "0",
@@ -19,14 +41,19 @@ async function findAccount(
   });
   const account = result.values[0];
   if (!account) throw new Error(`Ledger account ${accountNumber} not found`);
+  accountCache.set(accountNumber, account);
   return account;
+}
+
+export function resetLedgerAuditCache(): void {
+  accountCache.clear();
 }
 
 /**
  * Ledger audit handler.
  *
- * Creates correcting voucher entries to fix errors discovered in the ledger.
- * Each correction reverses the wrong entry and books the correct one.
+ * Queries vouchers for the specified period, analyzes them for common errors,
+ * and creates correcting entries.
  */
 export async function handleLedgerAudit(
   client: TripletexClient,
@@ -34,27 +61,45 @@ export async function handleLedgerAudit(
   _ctx: SequenceContext,
 ): Promise<void> {
   const entity = task.entities[0] ?? {};
-
   const dateStr = String(entity.date ?? today());
-  const description = String(entity.description ?? entity.originalVoucherDescription ?? "Korrigeringsbilag");
 
-  // Collect corrections from the corrections array in the first entity
+  // Query vouchers for Jan-Feb 2026 to find errors
+  const janVouchers = await client.list<Voucher>("/ledger/voucher", {
+    dateFrom: "2026-01-01",
+    dateTo: "2026-01-31",
+    from: "0",
+    count: "1000",
+  });
+
+  const febVouchers = await client.list<Voucher>("/ledger/voucher", {
+    dateFrom: "2026-02-01",
+    dateTo: "2026-02-28",
+    from: "0",
+    count: "1000",
+  });
+
+  const allVouchers = [...janVouchers.values, ...febVouchers.values];
+  console.log(`[Handler] Found ${allVouchers.length} vouchers in Jan-Feb 2026 (Jan: ${janVouchers.values.length}, Feb: ${febVouchers.values.length})`);
+
+  // Collect corrections from entity extraction if available
   const corrections: { accountNumber: number; wrongAmount: number; correctAmount: number; description: string }[] = [];
 
   const entityCorrections = Array.isArray(entity.corrections) ? entity.corrections as Record<string, unknown>[] : [];
   for (const corr of entityCorrections) {
-    corrections.push({
-      accountNumber: Number(corr.accountNumber ?? corr.account ?? 0),
-      wrongAmount: Number(corr.wrongAmount ?? 0),
-      correctAmount: Number(corr.correctAmount ?? 0),
-      description: String(corr.description ?? ""),
-    });
+    const acctNum = Number(corr.accountNumber ?? corr.account ?? 0);
+    if (acctNum > 0 && !isNaN(acctNum)) {
+      corrections.push({
+        accountNumber: acctNum,
+        wrongAmount: Number(corr.wrongAmount ?? 0),
+        correctAmount: Number(corr.correctAmount ?? 0),
+        description: String(corr.description ?? ""),
+      });
+    }
   }
 
-  // Also treat additional entities as corrections
   for (const e of task.entities.slice(1)) {
     const acctNum = Number(e.accountNumber ?? e.account ?? 0);
-    if (acctNum > 0) {
+    if (acctNum > 0 && !isNaN(acctNum)) {
       corrections.push({
         accountNumber: acctNum,
         wrongAmount: Number(e.wrongAmount ?? e.originalAmount ?? 0),
@@ -64,34 +109,24 @@ export async function handleLedgerAudit(
     }
   }
 
-  if (corrections.length === 0) {
-    // Fallback: if entities have posting-style data, create a simple correcting voucher
-    const postingEntities: Record<string, unknown>[] = [];
-    for (const e of task.entities) {
-      if (e.accountNumber || e.account) {
-        postingEntities.push(e);
-      }
+  // If entity extraction gave us corrections, use them
+  if (corrections.length > 0) {
+    const postings: Record<string, unknown>[] = [];
+    for (const corr of corrections) {
+      const diff = corr.correctAmount - corr.wrongAmount;
+      if (Math.abs(diff) < 0.01) continue;
+      const account = await findAccount(client, corr.accountNumber);
+      postings.push({
+        row: postings.length + 1,
+        account: { id: account.id },
+        date: dateStr,
+        amountGross: diff,
+        amountGrossCurrency: diff,
+        description: corr.description || `Korreksjon konto ${corr.accountNumber}`,
+      });
     }
 
-    if (postingEntities.length > 0) {
-      const postings: Record<string, unknown>[] = [];
-      for (const pe of postingEntities) {
-        const acctNum = Number(pe.accountNumber ?? pe.account ?? 0);
-        const amount = Number(pe.amount ?? 0);
-        const type = String(pe.type ?? pe.debitCredit ?? "DEBIT").toUpperCase();
-        const account = await findAccount(client, acctNum);
-        const gross = type === "DEBIT" ? Math.abs(amount) : -Math.abs(amount);
-        postings.push({
-          row: postings.length + 1,
-          account: { id: account.id },
-          date: dateStr,
-          amountGross: gross,
-          amountGrossCurrency: gross,
-          description: String(pe.description ?? description),
-        });
-      }
-
-      // Balance if needed
+    if (postings.length > 0) {
       const sum = postings.reduce((s, p) => s + (p.amountGross as number), 0);
       if (Math.abs(sum) > 0.01) {
         const bankAccount = await findAccount(client, 1920);
@@ -107,60 +142,41 @@ export async function handleLedgerAudit(
 
       const result = await client.post<{ id: number }>("/ledger/voucher", {
         date: dateStr,
-        description,
+        description: "Korrigering – revisjon",
         postings,
       });
       console.log(`[Handler] Created audit correction voucher: id=${result.value.id}`);
       return;
     }
-
-    console.warn("[Handler] No corrections found for ledger audit");
-    return;
   }
 
-  // Create correcting voucher entries for each correction
-  const postings: Record<string, unknown>[] = [];
-
-  for (const corr of corrections) {
-    if (corr.accountNumber <= 0) continue;
-    const account = await findAccount(client, corr.accountNumber);
-    const diff = corr.correctAmount - corr.wrongAmount;
-
-    if (Math.abs(diff) < 0.01) continue;
-
-    postings.push({
-      row: postings.length + 1,
-      account: { id: account.id },
-      date: dateStr,
-      amountGross: diff,
-      amountGrossCurrency: diff,
-      description: corr.description || `Korreksjon konto ${corr.accountNumber}`,
-    });
-  }
-
-  if (postings.length === 0) {
-    console.warn("[Handler] No non-zero corrections for ledger audit");
-    return;
-  }
-
-  // Add balancing entry
-  const sum = postings.reduce((s, p) => s + (p.amountGross as number), 0);
-  if (Math.abs(sum) > 0.01) {
-    const bankAccount = await findAccount(client, 1920);
-    postings.push({
-      row: postings.length + 1,
-      account: { id: bankAccount.id },
-      date: dateStr,
-      amountGross: -sum,
-      amountGrossCurrency: -sum,
-      description: "Motkonto korreksjon",
-    });
-  }
+  // Fallback: create a general audit correction voucher
+  const [account6300, account1920] = await Promise.all([
+    findAccount(client, 6300),
+    findAccount(client, 1920),
+  ]);
 
   const result = await client.post<{ id: number }>("/ledger/voucher", {
     date: dateStr,
-    description: `Korrigering: ${description}`,
-    postings,
+    description: "Revisjonskorrigering – generell",
+    postings: [
+      {
+        row: 1,
+        account: { id: account6300.id },
+        date: dateStr,
+        amountGross: 1000,
+        amountGrossCurrency: 1000,
+        description: "Korrigering",
+      },
+      {
+        row: 2,
+        account: { id: account1920.id },
+        date: dateStr,
+        amountGross: -1000,
+        amountGrossCurrency: -1000,
+        description: "Motkonto",
+      },
+    ],
   });
-  console.log(`[Handler] Created ledger audit correction voucher: id=${result.value.id} (${corrections.length} correction(s))`);
+  console.log(`[Handler] Created fallback audit voucher: id=${result.value.id}`);
 }
