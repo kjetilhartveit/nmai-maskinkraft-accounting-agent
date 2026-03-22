@@ -34,16 +34,45 @@ export async function handleCreateOrder(
     entity.customerName ?? entity.customer ?? entity.name ?? "",
   );
   let customerId: number | null = null;
-  if (customerName) {
-    const ctxId = ctx.getCustomerId(customerName);
-    if (ctxId) {
-      console.log(`[Handler] Using customer from context: ${customerName} → id=${ctxId}`);
-      customerId = ctxId;
-    } else {
-      const customer = await findCustomerByName(client, customerName);
-      if (customer) customerId = customer.id;
+  const ctxCustomerId = customerName ? ctx.getCustomerId(customerName) : undefined;
+
+  // Collect products upfront so we can parallelize lookups
+  const products: ProductLine[] = Array.isArray(entity.products)
+    ? (entity.products as ProductLine[])
+    : [];
+  const productEntities = task.entities
+    .slice(1)
+    .filter((e) => e.name && (e.unitPrice ?? e.price));
+  if (productEntities.length > 0) {
+    for (const pe of productEntities) {
+      products.push({
+        name: String(pe.name ?? ""),
+        productNumber: (pe.productNumber ?? pe.number) as string | number | undefined,
+        quantity: Number(pe.quantity ?? pe.count ?? 1),
+        unitPrice: Number(pe.unitPrice ?? pe.price ?? 0),
+        vatRate: pe.vatRate !== undefined ? Number(pe.vatRate) : undefined,
+      });
     }
   }
+
+  const unresolvedCount = products.filter((p) => {
+    const name = String(p.name ?? "Produkt");
+    return !ctx.getProductId(name) && !(p.productNumber && ctx.getProductId(String(p.productNumber)));
+  }).length;
+
+  // Parallel: customer lookup + product catalog preload (independent operations)
+  if (ctxCustomerId) {
+    customerId = ctxCustomerId;
+    console.log(`[Handler] Using customer from context: ${customerName} → id=${ctxCustomerId}`);
+    if (unresolvedCount >= 2) await loadProductCatalog(client);
+  } else if (customerName) {
+    const [customer] = await Promise.all([
+      findCustomerByName(client, customerName),
+      unresolvedCount >= 2 ? loadProductCatalog(client) : Promise.resolve(null),
+    ]);
+    if (customer) customerId = customer.id;
+  }
+
   if (!customerId && entity.customerId) customerId = Number(entity.customerId);
   if (!customerId) {
     console.warn("[Handler] No customer found for order, cannot proceed");
@@ -70,34 +99,11 @@ export async function handleCreateOrder(
   console.log(`[Handler] Created order: id=${orderId}`);
   ctx.registerOrder(customerName, orderId);
 
-  // Add order lines if products are specified
-  const products: ProductLine[] = Array.isArray(entity.products)
-    ? (entity.products as ProductLine[])
-    : [];
-
-  // Also check if individual entities describe products
-  const productEntities = task.entities
-    .slice(1)
-    .filter((e) => e.name && (e.unitPrice ?? e.price));
-  if (productEntities.length > 0) {
-    for (const pe of productEntities) {
-      products.push({
-        name: String(pe.name ?? ""),
-        productNumber: (pe.productNumber ?? pe.number) as string | number | undefined,
-        quantity: Number(pe.quantity ?? pe.count ?? 1),
-        unitPrice: Number(pe.unitPrice ?? pe.price ?? 0),
-        vatRate: pe.vatRate !== undefined ? Number(pe.vatRate) : undefined,
-      });
-    }
-  }
-
   if (products.length > 0) {
-    // Batch load product catalog when ≥2 unresolved products
-    const unresolvedCount = products.filter((p) => {
-      const name = String(p.name ?? "Produkt");
-      return !ctx.getProductId(name) && !(p.productNumber && ctx.getProductId(String(p.productNumber)));
-    }).length;
-    if (unresolvedCount >= 2) {
+    // Product catalog already warm from parallel batch (if ≥2 unresolved)
+    if (unresolvedCount >= 2 && !ctxCustomerId) {
+      // Already loaded in parallel above
+    } else if (unresolvedCount >= 2) {
       await loadProductCatalog(client);
     }
 

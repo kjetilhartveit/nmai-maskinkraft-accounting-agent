@@ -52,16 +52,11 @@ export async function handleCreateProduct(
   task: ParsedTask,
   ctx: SequenceContext,
 ): Promise<void> {
-  const [departmentId, defaultVatTypeId, unitId] = await Promise.all([
-    getDefaultDepartmentId(client),
-    getDefaultProductVatTypeId(client),
-    getDefaultProductUnitId(client),
-  ]);
+  const toCreate: { entity: Record<string, unknown> }[] = [];
 
-  const toCreate: Record<string, unknown>[] = [];
-
+  // First pass: search for existing products BEFORE warming caches.
+  // Saves 3 API calls (dept + vatType + unit) when all products already exist.
   for (const entity of task.entities) {
-    // Search for existing product by number first, then by name
     const productNumber = entity.number ?? entity.productNumber;
     const productName = String(entity.name ?? "");
 
@@ -80,17 +75,28 @@ export async function handleCreateProduct(
       continue;
     }
 
-    let vatTypeId = defaultVatTypeId;
-    if (entity.vatRate !== undefined) {
-      vatTypeId = await findVatTypeIdByRate(client, Number(entity.vatRate));
-    }
-
-    toCreate.push(buildProductBody(entity, departmentId, vatTypeId, unitId));
+    toCreate.push({ entity });
   }
 
   if (toCreate.length === 0) {
     console.log("[Handler] All products already exist, nothing to create");
     return;
+  }
+
+  // Only warm caches when we actually need to create products
+  const [departmentId, defaultVatTypeId, unitId] = await Promise.all([
+    getDefaultDepartmentId(client),
+    getDefaultProductVatTypeId(client),
+    getDefaultProductUnitId(client),
+  ]);
+
+  const bodies: Record<string, unknown>[] = [];
+  for (const { entity } of toCreate) {
+    let vatTypeId = defaultVatTypeId;
+    if (entity.vatRate !== undefined) {
+      vatTypeId = await findVatTypeIdByRate(client, Number(entity.vatRate));
+    }
+    bodies.push(buildProductBody(entity, departmentId, vatTypeId, unitId));
   }
 
   const NO_VAT_FALLBACK_ID = 6;
@@ -122,14 +128,14 @@ export async function handleCreateProduct(
     }
   }
 
-  if (toCreate.length === 1) {
-    const product = await postProductWithFallback(toCreate[0]);
+  if (bodies.length === 1) {
+    const product = await postProductWithFallback(bodies[0]);
     console.log(`[Handler] Created product: id=${product.id}`);
-    const name = String(toCreate[0].name ?? "");
+    const name = String(bodies[0].name ?? "");
     if (name) ctx.registerProduct(name, product.id);
   } else {
     try {
-      const result = await client.postList<Product>("/product/list", toCreate);
+      const result = await client.postList<Product>("/product/list", bodies);
       console.log(`[Handler] Created ${result.values.length} products`);
       for (const p of result.values) {
         if (p.name) ctx.registerProduct(p.name, p.id);
@@ -138,7 +144,7 @@ export async function handleCreateProduct(
       const msg = err instanceof Error ? err.message : String(err);
       if (msg.includes("vatTypeId") || msg.includes("mva-kode") || msg.includes("vatType")) {
         console.warn("[Handler] Batch product create failed on vatType, falling back to individual creates");
-        for (const body of toCreate) {
+        for (const body of bodies) {
           const product = await postProductWithFallback(body);
           console.log(`[Handler] Created product: id=${product.id}`);
           const name = String(body.name ?? "");

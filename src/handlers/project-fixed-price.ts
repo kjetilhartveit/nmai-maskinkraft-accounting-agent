@@ -9,7 +9,9 @@ import {
   getDefaultDepartmentId,
   today,
   getProjectManagerEmployeeId,
-  ensureBankAccountConfigured,
+  loadAllAccounts,
+  ensureBankAccountFromBulkAccounts,
+  findProductByName,
 } from "../lib/tripletex-helpers.js";
 import { grantProjectManagerEntitlement } from "./create-employee.js";
 
@@ -39,11 +41,13 @@ export async function handleProjectFixedPrice(
   const pmLastName = String(entity.projectManagerLastName ?? "");
   const pmEmail = String(entity.projectManagerEmail ?? "");
 
-  // 1. Parallel: resolve customer + employees + department (saves sequential round-trips)
+  const productSearchName = projectName || "Prosjekttjeneste";
+
+  // 1. Parallel: resolve customer + employees + department + accounts + product (5 independent lookups)
   let customerId: number | undefined;
   const ctxCustomerId = customerName ? ctx.getCustomerId(customerName) : undefined;
 
-  const [customerResult, , departmentId] = await Promise.all([
+  const [customerResult, , departmentId, accts, existingProduct] = await Promise.all([
     ctxCustomerId
       ? Promise.resolve(null)
       : customerName
@@ -51,6 +55,8 @@ export async function handleProjectFixedPrice(
         : Promise.resolve(null),
     loadEmployees(client),
     getDefaultDepartmentId(client),
+    loadAllAccounts(client),
+    findProductByName(client, productSearchName),
   ]);
 
   if (ctxCustomerId) {
@@ -125,13 +131,13 @@ export async function handleProjectFixedPrice(
 
   // 5. Invoice the project (if percentage specified)
   if (fixedPrice > 0 && invoicePercentage > 0 && customerId) {
-    await ensureBankAccountConfigured(client);
+    await ensureBankAccountFromBulkAccounts(client, accts);
 
     const invoiceAmount = Math.round(fixedPrice * (invoicePercentage / 100));
 
-    // Create order-based invoice (direct project→invoice is not supported)
+    // Use pre-fetched product or create one
     const { findOrCreateProduct } = await import("../lib/tripletex-helpers.js");
-    const product = await findOrCreateProduct(client, projectName || "Prosjekttjeneste", invoiceAmount);
+    const product = existingProduct ?? await findOrCreateProduct(client, productSearchName, invoiceAmount, undefined, true);
 
     const order = await client.post<{ id: number }>("/order", {
       customer: { id: customerId },

@@ -8,6 +8,7 @@ import {
   findOrCreateProduct,
   findProductByName,
   loadAllAccounts,
+  getPaymentTypeId,
 } from "../lib/tripletex-helpers.js";
 
 function parseNum(v: unknown, fallback: number): number {
@@ -28,28 +29,8 @@ interface Invoice {
   comment?: string;
 }
 
-interface PaymentType {
-  id: number;
-  description: string;
-}
-
-let cachedPaymentTypeId: number | null = null;
-
-async function getPaymentTypeId(client: TripletexClient): Promise<number> {
-  if (cachedPaymentTypeId) return cachedPaymentTypeId;
-  const result = await client.list<PaymentType>("/invoice/paymentType", {
-    from: "0",
-    count: "5",
-  });
-  if (result.values.length > 0) {
-    cachedPaymentTypeId = result.values[0].id;
-    return cachedPaymentTypeId;
-  }
-  throw new Error("No payment types available");
-}
-
 export function resetReminderFeeCache(): void {
-  cachedPaymentTypeId = null;
+  // Payment type cache is now centralized in tripletex-helpers
 }
 
 /**

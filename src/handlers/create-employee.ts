@@ -163,9 +163,7 @@ export async function handleCreateEmployee(
 ): Promise<void> {
   const deptName = String(task.entities[0]?.department ?? task.entities[0]?.departmentName ?? "");
   let departmentId = deptName ? ctx.getDepartmentId(deptName) : undefined;
-  if (!departmentId) {
-    departmentId = await getDefaultDepartmentId(client);
-  } else {
+  if (departmentId) {
     console.log(`[Handler] Using department from context: ${deptName} → id=${departmentId}`);
   }
 
@@ -197,6 +195,11 @@ export async function handleCreateEmployee(
         }
         continue;
       }
+    }
+
+    // Only fetch department when we actually need to create an employee
+    if (!departmentId) {
+      departmentId = await getDefaultDepartmentId(client);
     }
 
     const entityDept = String(entity.department ?? entity.departmentName ?? "");

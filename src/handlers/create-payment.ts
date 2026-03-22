@@ -1,7 +1,7 @@
 import type { TripletexClient } from "../lib/tripletex-client.js";
 import type { ParsedTask } from "../types/index.js";
 import type { SequenceContext } from "../lib/sequence-context.js";
-import { today, findCustomerByName, findOrCreateProduct, ensureBankAccountConfigured } from "../lib/tripletex-helpers.js";
+import { today, findCustomerByName, findOrCreateProduct, ensureBankAccountConfigured, getPaymentTypeId } from "../lib/tripletex-helpers.js";
 
 interface Invoice {
   id: number;
@@ -12,11 +12,6 @@ interface Invoice {
   amountOutstanding: number;
   amountCurrencyOutstanding: number;
   customer: { id: number; name: string };
-}
-
-interface PaymentType {
-  id: number;
-  description: string;
 }
 
 async function findInvoiceForPayment(
@@ -69,23 +64,8 @@ async function findInvoiceForPayment(
   return unpaid[0] ?? result.values[0];
 }
 
-let cachedPaymentTypeId: number | null = null;
-
-async function getPaymentTypeId(client: TripletexClient): Promise<number> {
-  if (cachedPaymentTypeId) return cachedPaymentTypeId;
-  const result = await client.list<PaymentType>("/invoice/paymentType", {
-    from: "0",
-    count: "20",
-  });
-  if (result.values.length > 0) {
-    cachedPaymentTypeId = result.values[0].id;
-    return cachedPaymentTypeId;
-  }
-  throw new Error("No payment types available");
-}
-
 export function resetPaymentCache(): void {
-  cachedPaymentTypeId = null;
+  // Payment type cache is now centralized in tripletex-helpers
 }
 
 export async function handleCreatePayment(

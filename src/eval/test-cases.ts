@@ -46,7 +46,7 @@ export const testCases: TestCase[] = [
         email: "erik.hansen@example.com",
       },
     ],
-    expectedApiCalls: { max: 2, maxErrors: 0 },
+    expectedApiCalls: { max: 1, maxErrors: 0 },
   },
 
   {
@@ -96,7 +96,7 @@ export const testCases: TestCase[] = [
         vatRate: 25,
       },
     ],
-    expectedApiCalls: { max: 4, maxErrors: 0 },
+    expectedApiCalls: { max: 1, maxErrors: 0 },
   },
 
   // ═══════════════════════════════════════════════════════════════════

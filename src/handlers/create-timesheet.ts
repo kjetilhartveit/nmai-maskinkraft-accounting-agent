@@ -34,48 +34,38 @@ export async function handleCreateTimesheet(
   const activityName = String(entity.activityName ?? entity.activity ?? "Arbeid");
   const projectName = String(entity.projectName ?? entity.project ?? "");
 
-  // 1. Find employee — single search: try email first (most specific), then fall back
-  let employeeId: number | null = null;
-
-  if (email) {
-    employeeId = ctx.getEmployeeId(email) ?? null;
-    if (!employeeId) {
+  // 1. Parallel: find employee + find project (independent lookups)
+  const employeePromise = (async (): Promise<number> => {
+    if (email) {
+      const ctxId = ctx.getEmployeeId(email);
+      if (ctxId) return ctxId;
       const emp = await findEmployeeByEmail(client, email);
       if (emp) {
-        employeeId = emp.id;
         ctx.registerEmployee(email, emp.id);
+        return emp.id;
       }
     }
-  }
-  if (!employeeId) {
     if (firstName && lastName) {
       const emp = await findEmployeeByName(client, firstName, lastName);
-      if (emp) employeeId = emp.id;
+      if (emp) return emp.id;
     }
-    if (!employeeId) {
-      const allEmps = await loadEmployees(client);
-      if (allEmps.length > 0) employeeId = allEmps[0].id;
-      else throw new Error("No employee found for timesheet entry");
-    }
-  }
+    const allEmps = await loadEmployees(client);
+    if (allEmps.length > 0) return allEmps[0].id;
+    throw new Error("No employee found for timesheet entry");
+  })();
 
-  // 2. Find or create project
+  const projectPromise = projectName
+    ? client.list<Project>("/project", { name: projectName, from: "0", count: "5" }).catch(() => ({ values: [] as Project[] }))
+    : Promise.resolve({ values: [] as Project[] });
+
+  const [employeeId, projectSearchResult] = await Promise.all([employeePromise, projectPromise]);
+
+  // 2. Resolve project ID (create if not found)
   let projectId: number | null = null;
   if (projectName) {
-    try {
-      const projects = await client.list<Project>("/project", {
-        name: projectName,
-        from: "0",
-        count: "5",
-      });
-      if (projects.values.length > 0) {
-        projectId = projects.values[0].id;
-      }
-    } catch {
-      console.log("[Handler] Project search failed");
-    }
-
-    if (!projectId) {
+    if (projectSearchResult.values.length > 0) {
+      projectId = projectSearchResult.values[0].id;
+    } else {
       const pmId = employeeId ?? (await getProjectManagerEmployeeId(client));
       const departmentId = await getDefaultDepartmentId(client);
       const project = await client.post<{ id: number }>("/project", {

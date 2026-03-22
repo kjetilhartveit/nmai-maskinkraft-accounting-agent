@@ -442,6 +442,21 @@ export function daysFromNow(days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+let cachedPaymentTypeId: number | null = null;
+
+export async function getPaymentTypeId(client: TripletexClient): Promise<number> {
+  if (cachedPaymentTypeId) return cachedPaymentTypeId;
+  const result = await client.list<{ id: number; description: string }>("/invoice/paymentType", {
+    from: "0",
+    count: "5",
+  });
+  if (result.values.length > 0) {
+    cachedPaymentTypeId = result.values[0].id;
+    return cachedPaymentTypeId;
+  }
+  throw new Error("No payment types available");
+}
+
 export function resetCaches(): void {
   cachedDefaultDepartmentId = null;
   cachedNokCurrencyId = null;
@@ -456,6 +471,7 @@ export function resetCaches(): void {
   cachedProductCatalog = null;
   cachedProductCatalogById = null;
   cachedProductCatalogByNumber = null;
+  cachedPaymentTypeId = null;
 }
 
 // === Bulk Account Loader ===

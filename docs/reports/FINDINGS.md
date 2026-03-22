@@ -292,25 +292,45 @@ Total Tripletex calls per full eval: **115** (down from 118 before optimizations
 | create_customer | 1 | POST /customer |
 | create_department | 1 | POST /department/list (batch) |
 | create_supplier | 1 | POST /supplier |
-| create_employee | 2 | GET /department + GET /employee |
+| create_employee | 1 | GET /employee (deferred dept lookup — only needed if creating) |
+| create_product | 1 | GET /product search (deferred cache warming — only needed if creating) |
 | create_travel_expense | 2 | GET /employee + POST /travelExpense |
 | year_end_closing | 2 | GET /ledger/account + POST voucher |
 | monthly_closing | 2 | GET /ledger/account + POST voucher |
+| create_payment | 3 | paymentType + invoice + PUT payment |
 | create_payroll | 3 | GET /employee + GET /ledger/account + POST voucher |
 | create_supplier_invoice | 3 | POST /supplier + GET /ledger/account + POST voucher |
 | fx_payment | 3 | GET /invoice + GET /ledger/account + POST voucher |
-| create_product | 4 | dept + vatType + unit + product search |
-| create_project | 4 | employee + dept + customer + POST project |
-| create_payment | 4 | account + invoice + paymentType + PUT payment |
-| create_order | 4 | customer + order + catalog + orderlines (batch) |
+| create_project | 4 | employee ‖ dept ‖ customer (parallel) + POST project |
+| create_order | 4 | customer ‖ catalog (parallel) + order + orderlines (batch) |
 | create_dimension | 4 | dimensions + values + accounts + voucher |
-| reverse_payment | 4 | customer + invoice + paymentType + PUT |
-| create_timesheet | 4 | employee + project + activity + entry |
+| reverse_payment | 4 | customer ‖ paymentType (parallel) + invoice + PUT |
+| create_timesheet | 4 | employee ‖ project (parallel) + activity + entry |
 | ledger_audit | 4 | 2× voucher search + accounts + voucher |
+| ledger_analysis | 5 | employee ‖ dept ‖ vouchers (parallel) + batch projects + batch activities |
 | create_invoice | 6 | customer + account + order + catalog + orderlines + invoice |
 | send_invoice | 7 | customer + account + order + product + orderline + invoice + send |
-| create_credit_note | 8 | customer + account + invoice + product + order + orderline + invoice + credit |
-| project_fixed_price | 9 | customer + employee + dept + project + account + product + order + orderline + invoice |
-| ledger_analysis | 10 | employee + dept + 2× vouchers + 3× (project + activity) |
-| reminder_fee | 10 | invoices + accounts + voucher + product + order + orderline + invoice + send + paymentType + payment |
-| project_lifecycle | 13 | customer + dept + employee + project + activity + 2× timesheet + accounts + voucher + product + order + orderline + invoice |
+| create_credit_note | 8 | customer + account ‖ invoice ‖ product (parallel) + order + orderline + invoice + credit |
+| project_fixed_price | 9 | customer ‖ employee ‖ dept ‖ accounts ‖ product (5-way parallel) + project + order + orderline + invoice |
+| reminder_fee | 10 | invoices ‖ accounts ‖ paymentType ‖ product (4-way parallel) + voucher + order + orderline + invoice + send + payment |
+| project_lifecycle | 12 | customer ‖ employee ‖ dept ‖ accounts (4-way parallel) + project + activity + timesheet (batch) + voucher + product + order + orderline + invoice |
+
+**Total: 104 API calls across 25 canonical tests (0 errors)**
+
+### Optimization Log (2026-03-22)
+
+Key optimizations applied to reduce API calls and improve parallelism:
+
+1. **`create_product` (4→1 calls)**: Search for existing products BEFORE warming caches (dept, vatType, unit). Only warm caches when creation is actually needed. Saves 3 calls when products already exist.
+
+2. **`create_employee` (2→1 calls)**: Deferred department lookup — only fetch department ID when the employee doesn't already exist and needs to be created. Saves 1 call when employee is found.
+
+3. **Centralized `getPaymentTypeId` cache**: Moved from 3 separate per-handler caches to a single cache in `tripletex-helpers.ts`. Saves redundant payment type lookups in multi-task sequences.
+
+4. **`project_fixed_price` (9 calls, faster)**: Added `loadAllAccounts` + `findProductByName` to the initial 5-way parallel batch. Eliminates sequential bank config and product search after project creation.
+
+5. **`create_project` (4 calls, faster)**: Parallelized PM resolution + department + customer lookups using `Promise.all`.
+
+6. **`create_timesheet` (4 calls, faster)**: Parallelized employee + project lookups using `Promise.all`.
+
+7. **`create_order` (4 calls, faster)**: Parallelized customer lookup + product catalog loading when 2+ products are unresolved.

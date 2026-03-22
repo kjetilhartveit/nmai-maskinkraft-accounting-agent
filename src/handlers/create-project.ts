@@ -57,14 +57,23 @@ export async function handleCreateProject(
   const grantedPMs = new Set<number>();
 
   for (const entity of task.entities) {
-    let projectManagerId = await resolveProjectManagerId(client, entity, ctx);
+    const customerName = String(entity.customerName ?? entity.customer ?? "");
+    const ctxCustomerId = customerName ? ctx.getCustomerId(customerName) : undefined;
+
+    // Parallel: resolve PM + department + customer (3 independent lookups)
+    const [projectManagerId, departmentId, customerResult] = await Promise.all([
+      resolveProjectManagerId(client, entity, ctx),
+      getDefaultDepartmentId(client),
+      !ctxCustomerId && customerName
+        ? findCustomerByName(client, customerName)
+        : Promise.resolve(null),
+    ]);
 
     if (!projectManagerId) {
       console.warn("[Handler] No employee with project manager rights found, skipping entity");
       continue;
     }
 
-    const departmentId = await getDefaultDepartmentId(client);
     const body: Record<string, unknown> = {
       name: entity.name ?? entity.projectName ?? "",
       projectManager: { id: projectManagerId },
@@ -76,16 +85,11 @@ export async function handleCreateProject(
     if (entity.endDate) body.endDate = entity.endDate;
     if (entity.description) body.description = entity.description;
 
-    const customerName = String(entity.customerName ?? entity.customer ?? "");
-    if (customerName) {
-      const ctxCustomerId = ctx.getCustomerId(customerName);
-      if (ctxCustomerId) {
-        console.log(`[Handler] Using customer from context: ${customerName} → id=${ctxCustomerId}`);
-        body.customer = { id: ctxCustomerId };
-      } else {
-        const customer = await findCustomerByName(client, customerName);
-        if (customer) body.customer = { id: customer.id };
-      }
+    if (ctxCustomerId) {
+      console.log(`[Handler] Using customer from context: ${customerName} → id=${ctxCustomerId}`);
+      body.customer = { id: ctxCustomerId };
+    } else if (customerResult) {
+      body.customer = { id: customerResult.id };
     } else if (entity.customerId) {
       body.customer = { id: Number(entity.customerId) };
     }
