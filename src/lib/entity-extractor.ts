@@ -14,13 +14,17 @@ import { PDFParse } from "pdf-parse";
 
 // ── Extraction response schema ───────────────────────────────────────
 
-// Flexible prerequisite schema - accepts either strings or objects
+// Flexible prerequisite schema - accepts strings, objects with taskType, or any object
 const PrerequisiteItemSchema = z.union([
   z.string().transform((s) => ({ taskType: s, reason: "" })),
   z.object({
     taskType: z.string(),
     reason: z.string().optional().default(""),
   }),
+  z.record(z.unknown()).transform((obj) => ({
+    taskType: String(obj.taskType ?? obj.type ?? obj.task ?? "unknown"),
+    reason: String(obj.reason ?? ""),
+  })),
 ]);
 
 const ExtractionResponseSchema = z.object({
