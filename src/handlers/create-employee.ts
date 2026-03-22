@@ -147,7 +147,7 @@ async function createEmployment(
       employee: { id: employeeId },
       startDate,
       employmentType: "ORDINARY",
-      percentageOfFullTimeEquivalent: 100,
+      percentOfFullTimeEquivalent: 100,
     });
     console.log(`[Handler] Created employment for employee ${employeeId}, startDate=${startDate}`);
   } catch (err) {
