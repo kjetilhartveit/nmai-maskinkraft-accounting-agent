@@ -84,15 +84,42 @@ export async function handleReceiptExpense(
 
   const gross = net + vat;
 
-  // Look up accounts
-  const accountNumbers = [expenseAccountNumber, ...(vat > 0 ? [2710] : []), 1920];
+  // Create supplier from receipt vendor name
+  const supplierName = String(entity.supplierName ?? entity.vendor ?? entity.storeName ?? description);
+  let supplierId: number | null = null;
+  if (supplierName && supplierName !== "Kvittering") {
+    try {
+      const existing = await client.list<{ id: number; name: string }>("/supplier", {
+        from: "0",
+        count: "20",
+      });
+      const match = existing.values.find(
+        (s) => s.name?.toLowerCase().includes(supplierName.toLowerCase()),
+      );
+      if (match) {
+        supplierId = match.id;
+      } else {
+        const created = await client.post<{ id: number }>("/supplier", {
+          name: supplierName,
+          isSupplier: true,
+        });
+        supplierId = created.value.id;
+        console.log(`[Handler] Created supplier: ${supplierName} id=${supplierId}`);
+      }
+    } catch {
+      // supplier creation optional
+    }
+  }
+
+  // Look up accounts: expense + input VAT + accounts payable (2400)
+  const accountNumbers = [expenseAccountNumber, ...(vat > 0 ? [2710] : []), 2400];
   const accounts = await Promise.all(accountNumbers.map((n) => findAccount(client, n)));
 
   const expenseAccount = accounts[0];
   const vatAccount = vat > 0 ? accounts[1] : null;
-  const bankAccount = accounts[accounts.length - 1];
+  const apAccount = accounts[accounts.length - 1];
 
-  // Build voucher
+  // Build voucher: debit expense + debit VAT + credit accounts payable (with supplier)
   const postings: Record<string, unknown>[] = [
     {
       row: 1,
@@ -116,14 +143,16 @@ export async function handleReceiptExpense(
     });
   }
 
-  postings.push({
+  const creditPosting: Record<string, unknown> = {
     row: postings.length + 1,
-    account: { id: bankAccount.id },
+    account: { id: apAccount.id },
     date: dateStr,
     amountGross: -gross,
     amountGrossCurrency: -gross,
-    description: "Utbetaling",
-  });
+    description: supplierName || "Leverandørgjeld",
+  };
+  if (supplierId) creditPosting.supplier = { id: supplierId };
+  postings.push(creditPosting);
 
   const result = await client.post<{ id: number }>("/ledger/voucher", {
     date: dateStr,
@@ -131,6 +160,6 @@ export async function handleReceiptExpense(
     postings,
   });
   console.log(
-    `[Handler] Created receipt expense voucher: id=${result.value.id} (net=${net}, vat=${vat}, dept=${departmentName || "default"})`,
+    `[Handler] Created receipt expense voucher: id=${result.value.id} (net=${net}, vat=${vat}, dept=${departmentName || "default"}, supplier=${supplierName})`,
   );
 }
