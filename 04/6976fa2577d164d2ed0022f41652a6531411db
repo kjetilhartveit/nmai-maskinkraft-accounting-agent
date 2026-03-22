@@ -1,0 +1,23 @@
+AGENTS.md
+  446c05efad1fdaea 160-161
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.17",
+  "base_commit_sha": "046976fa2577d164d2ed0022f41652a6531411db",
+  "prompts": {
+    "446c05efad1fdaea": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5c2ab0f6-dd72-4f3e-8012-315cbe4ceafb",
+        "model": "claude-opus-4-5-20251101"
+      },
+      "human_author": "Kjetil Hårtveit <kjetil_runescape@hotmail.com>",
+      "messages": [],
+      "total_additions": 265,
+      "total_deletions": 262,
+      "accepted_lines": 185,
+      "overriden_lines": 1
+    }
+  }
+}
