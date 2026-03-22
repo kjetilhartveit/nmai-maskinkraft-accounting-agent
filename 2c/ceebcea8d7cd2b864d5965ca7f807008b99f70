@@ -1,0 +1,25 @@
+data/verified/promoted-test-cases.json
+  f37659e9c2cc9de6 1566-1567
+src/eval/test-cases.ts
+  f37659e9c2cc9de6 342
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.17",
+  "base_commit_sha": "2cceebcea8d7cd2b864d5965ca7f807008b99f70",
+  "prompts": {
+    "f37659e9c2cc9de6": {
+      "agent_id": {
+        "tool": "gemini",
+        "id": "d0d08df3-3eb8-4a6e-a8f2-f601984ad04b",
+        "model": "gemini-3.1-pro-preview-customtools"
+      },
+      "human_author": "Kjetil Hårtveit <kjetil_runescape@hotmail.com>",
+      "messages": [],
+      "total_additions": 441,
+      "total_deletions": 439,
+      "accepted_lines": 441,
+      "overriden_lines": 0
+    }
+  }
+}
