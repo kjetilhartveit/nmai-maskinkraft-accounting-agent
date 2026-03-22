@@ -8,23 +8,23 @@ There are many caveats to consider which are well documented in the official doc
 
 In order for us to create the best possible system there are many things we need to know first; many of which are mentioned in [RECOMMENDATIONS.md](docs/reports/RECOMMENDATIONS.md).
 
-The system parses natural-language prompts (in Norwegian, Nynorsk, English, Spanish, Portuguese, German, or French) into structured task sequences. There are exactly **30 task types** — one per competition prompt template — with no "unknown" fallback. Each type has a dedicated handler.
+The system parses natural-language prompts (in Norwegian, Nynorsk, English, Spanish, Portuguese, German, or French) into structured task sequences. There are exactly **31 task types** — one per competition prompt template — with no "unknown" fallback. Each type has a dedicated handler.
 
 ## Solver pipeline architecture
 
 The solver (`POST /solve`) follows a **3-step pipeline** (no council, no unknown):
 
-1. **Classify** (`task-classifier.ts`) — LLM (Gemini) matches the prompt against 30 English template prompts baked into the system prompt. Falls back to regex. Returns exactly one `TaskType`.
+1. **Classify** (`task-classifier.ts`) — LLM (Gemini) matches the prompt against 31 English template prompts baked into the system prompt. Falls back to regex. Returns exactly one `TaskType`.
 2. **Extract entities** (`entity-extractor.ts`) — LLM extracts variables specific to that template (e.g., for `create_invoice`: customerName, organizationNumber, lines[]. For `fx_payment`: currency, invoiceRate, paymentRate). Also identifies prerequisites (e.g., `create_customer` before `send_invoice`).
 3. **Execute** (`handlers/index.ts`) — Runs each task in sequence with a shared `SequenceContext`. Every type has a dedicated deterministic handler with minimal API calls.
 
-The 30 templates and their variable schemas are defined in `task-classifier.ts` (PROMPT_TEMPLATES) and `entity-extractor.ts` (TASK_PROMPTS). The `SequenceContext` passes IDs between tasks (e.g., customer ID from step 1 used in invoice creation in step 2).
+The 31 templates and their variable schemas are defined in `task-classifier.ts` (PROMPT_TEMPLATES) and `entity-extractor.ts` (TASK_PROMPTS). The `SequenceContext` passes IDs between tasks (e.g., customer ID from step 1 used in invoice creation in step 2).
 
 ## Current work plan
 
 **Architecture**: Refactored from 5-step (classify → extract → build → council → execute) to 3-step pipeline. Removed `unknown` type, LLM council, and 4 speculative types. Added 3 new types: `employee_contract_pdf`, `supplier_invoice_pdf`, `ledger_analysis`.
 
-**Eval system** (2026-03-22): Cleaned up to **30 canonical test cases** — one per task type (`src/eval/test-cases.ts`). Each case has:
+**Eval system** (2026-03-22): Cleaned up to **31 canonical test cases** — one per task type (`src/eval/test-cases.ts`). Each case has:
 - English prompt matching the competition template structure
 - Precise expected entities (what the entity extractor must produce)
 - Expected API sequence (from Python reference `templates.py`)
@@ -32,7 +32,7 @@ The 30 templates and their variable schemas are defined in `task-classifier.ts` 
 - File-based types have fixtures in `data/pdf/` and `data/csv/`
 
 **Next priorities:**
-1. Run `pnpm eval` to get baseline across all 30 task types
+1. Run `pnpm eval` to get baseline across all 31 task types
 2. Fix failing task types one by one using the feedback loop
 3. For each type: ensure 0 API errors, correct classification, correct entity extraction
 4. Secondary: optimize API call counts (batching, remove duplicates)
@@ -110,7 +110,7 @@ Tripletex is a module-based accounting system. Many endpoints marked `[BETA]` in
 
 ### Dedicated handlers
 
-All 30 task types have dedicated handlers in `src/handlers/`. See [`src/handlers/index.ts`](src/handlers/index.ts) for the complete mapping with API call counts. There is no "unknown" fallback — every competition prompt maps to exactly one of the 30 types.
+All 31 task types have dedicated handlers in `src/handlers/`. See [`src/handlers/index.ts`](src/handlers/index.ts) for the complete mapping with API call counts. There is no "unknown" fallback — every competition prompt maps to exactly one of the 31 types.
 
 ### SequenceContext
 
@@ -129,12 +129,12 @@ When optimizing handlers, focus on reducing redundant POST/PUT/DELETE calls, not
 
 ## Evaluation system
 
-There are exactly **30 test cases** — one per task type — defined in `src/eval/test-cases.ts`. Each case runs the full solver pipeline (classify → extract → execute) against the Tripletex sandbox.
+There are exactly **31 test cases** — one per task type — defined in `src/eval/test-cases.ts`. Each case runs the full solver pipeline (classify → extract → execute) against the Tripletex sandbox.
 
 ### Eval commands
 
 ```bash
-# Run all 30 task types
+# Run all 31 task types
 pnpm eval
 
 # Run a single task type
@@ -223,7 +223,7 @@ Once solved, move to the next worst-performing type. Do not re-test solved types
 
 ### Key principles
 
-- **30 canonical tests, one per type.** A full eval takes ~2-3 minutes. Use `--task-type` to focus on a single type.
+- **31 canonical tests, one per type.** A full eval takes ~2-3 minutes. Use `--task-type` to focus on a single type.
 - **Work one task type at a time.** Finish the feedback loop for one type before moving to the next.
 - **Probe before eval.** If the error is an API 422/403, debug with `pnpm probe` first — it's instant and doesn't require the full agent loop.
 - **Zero errors is the target.** Every canonical test should pass with 0 API errors. The `maxErrors: 0` bound enforces this.

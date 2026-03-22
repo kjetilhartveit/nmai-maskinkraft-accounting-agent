@@ -1,4 +1,4 @@
-import type { TripletexClient } from "./tripletex-client.js";
+import { TripletexApiError, type TripletexClient } from "./tripletex-client.js";
 
 interface Department {
   id: number;
@@ -393,8 +393,69 @@ interface Activity {
 }
 
 async function loadActivities(client: TripletexClient): Promise<Activity[]> {
-  const result = await client.list<Activity>("/activity", { from: "0", count: "1000" });
+  const result = await client.list<Activity>("/activity", { from: "0", count: "2000" });
   return result.values;
+}
+
+function normActivityName(s: string): string {
+  return s.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+async function findActivityIdByName(client: TripletexClient, name: string): Promise<number | null> {
+  const n = normActivityName(name);
+  try {
+    const filtered = await client.list<Activity>("/activity", {
+      name: name.slice(0, 255),
+      from: "0",
+      count: "50",
+    });
+    const hit = filtered.values.find((a) => normActivityName(a.name ?? "") === n);
+    if (hit) return hit.id;
+  } catch {
+    /* name filter may be unsupported */
+  }
+  const activities = await loadActivities(client);
+  const exact = activities.find((a) => normActivityName(a.name ?? "") === n);
+  if (exact) return exact.id;
+  const partial = activities.find((a) => {
+    const an = normActivityName(a.name ?? "");
+    return an.includes(n) || n.includes(an);
+  });
+  return partial?.id ?? null;
+}
+
+/**
+ * POST /ledger/voucher — some sandboxes use AP accounts where `supplier` on a posting
+ * is rejected as an unknown property; others require it. Retry without supplier on 422.
+ */
+export async function postLedgerVoucherWithSupplierFallback(
+  client: TripletexClient,
+  body: Record<string, unknown>,
+): Promise<{ value: { id: number } }> {
+  try {
+    return await client.post<{ id: number }>("/ledger/voucher", body);
+  } catch (err) {
+    if (!(err instanceof TripletexApiError) || err.status !== 422) throw err;
+    const text = `${err.body} ${err.message}`;
+    const supplierUnknown =
+      text.includes("supplier") &&
+      (text.includes("eksisterer ikke") ||
+        text.includes("does not exist") ||
+        text.includes("Unknown") ||
+        text.includes("Unrecognized"));
+    if (!supplierUnknown) throw err;
+    const postings = body.postings as Record<string, unknown>[] | undefined;
+    if (!Array.isArray(postings)) throw err;
+    const stripped = {
+      ...body,
+      postings: postings.map((p) => {
+        const { supplier: _s, ...rest } = p;
+        return rest;
+      }),
+    };
+    console.warn("[Helper] Retrying voucher POST without supplier on posting (API rejected supplier field)");
+    return await client.post<{ id: number }>("/ledger/voucher", stripped);
+  }
 }
 
 /**
@@ -405,13 +466,10 @@ export async function findOrCreateActivity(
   client: TripletexClient,
   name: string,
 ): Promise<number> {
-  const activities = await loadActivities(client);
-  const match = activities.find(
-    (a) => a.name?.toLowerCase() === name.toLowerCase(),
-  );
-  if (match) {
-    console.log(`[Helper] Found existing activity: "${name}" id=${match.id}`);
-    return match.id;
+  const existingId = await findActivityIdByName(client, name);
+  if (existingId != null) {
+    console.log(`[Helper] Found existing activity: "${name}" id=${existingId}`);
+    return existingId;
   }
 
   try {
@@ -424,14 +482,12 @@ export async function findOrCreateActivity(
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     if (msg.includes("422") || msg.includes("i bruk") || msg.includes("in use")) {
-      const refreshed = await loadActivities(client);
-      const retry = refreshed.find(
-        (a) => a.name?.toLowerCase() === name.toLowerCase(),
-      );
-      if (retry) {
-        console.log(`[Helper] Found activity on retry: "${name}" id=${retry.id}`);
-        return retry.id;
+      const retryId = await findActivityIdByName(client, name);
+      if (retryId != null) {
+        console.log(`[Helper] Found activity on retry: "${name}" id=${retryId}`);
+        return retryId;
       }
+      const refreshed = await loadActivities(client);
       if (refreshed.length > 0) {
         const fallback = refreshed[0];
         console.log(`[Helper] Using fallback activity: "${fallback.name}" id=${fallback.id}`);

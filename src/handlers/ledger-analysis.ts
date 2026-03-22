@@ -1,7 +1,7 @@
 import type { TripletexClient } from "../lib/tripletex-client.js";
 import type { ParsedTask } from "../types/index.js";
 import type { SequenceContext } from "../lib/sequence-context.js";
-import { today, getDefaultDepartmentId, getProjectManagerEmployeeId, findOrCreateActivity } from "../lib/tripletex-helpers.js";
+import { today, getDefaultDepartmentId, getProjectManagerEmployeeId } from "../lib/tripletex-helpers.js";
 
 interface Posting {
   account: { id: number; number: number; name: string };
@@ -10,12 +10,12 @@ interface Posting {
   date: string;
 }
 
-/**
- * Ledger analysis handler.
- *
- * Queries postings for two periods, compares expense accounts (4000-7999),
- * finds the three with the largest cost increase, and creates a project + activity for each.
- */
+interface Activity {
+  id: number;
+  name: string;
+  number: string;
+}
+
 export async function handleLedgerAnalysis(
   client: TripletexClient,
   task: ParsedTask,
@@ -46,32 +46,20 @@ export async function handleLedgerAnalysis(
 
   console.log(`[Handler] Postings: Jan=${janPostings.values.length}, Feb=${febPostings.values.length}`);
 
-  if (janPostings.values.length > 0) {
-    const sample = janPostings.values[0];
-    console.log(`[Handler] Sample posting keys: ${Object.keys(sample).join(", ")}`);
-    console.log(`[Handler] Sample: acct=${sample.account?.number}, amt=${sample.amount}, gross=${sample.amountGross}`);
-  }
-
   const janTotals = new Map<number, { total: number; name: string }>();
   const febTotals = new Map<number, { total: number; name: string }>();
 
   function aggregate(postings: Posting[], map: Map<number, { total: number; name: string }>, label: string) {
-    const accountsSeen = new Set<number>();
     for (const p of postings) {
       const acctNum = p.account?.number;
-      if (acctNum) accountsSeen.add(acctNum);
       if (acctNum >= 4000 && acctNum <= 7999) {
         const amt = p.amount ?? p.amountGross ?? 0;
-        if (amt !== 0) {
-          const absAmt = Math.abs(amt);
-          const existing = map.get(acctNum) ?? { total: 0, name: p.account.name };
-          existing.total += absAmt;
-          map.set(acctNum, existing);
-        }
+        const existing = map.get(acctNum) ?? { total: 0, name: p.account.name };
+        existing.total += amt;
+        map.set(acctNum, existing);
       }
     }
-    console.log(`[Handler] ${label} accounts seen: ${[...accountsSeen].sort((a, b) => a - b).join(", ")}`);
-    console.log(`[Handler] ${label} expense totals: ${[...map.entries()].map(([k, v]) => `${k}=${v.total}`).join(", ")}`);
+    console.log(`[Handler] ${label} expense totals: ${[...map.entries()].sort((a, b) => a[0] - b[0]).map(([k, v]) => `${k}=${v.total}`).join(", ")}`);
   }
 
   aggregate(janPostings.values, janTotals, "Jan");
@@ -103,27 +91,27 @@ export async function handleLedgerAnalysis(
   const top3 = increases.slice(0, 3);
   console.log(`[Handler] Top 3 expense increases: ${top3.map(a => `${a.accountNumber} (${a.name}): +${a.increase}`).join(", ")}`);
 
-  // If no data from vouchers, use entity-extracted accounts as fallback
   const accountsToProcess = top3.length > 0 ? top3 : (
     (Array.isArray(entity.accounts) ? entity.accounts : []) as Array<{ accountNumber: number; name?: string }>
   ).map(a => ({ accountNumber: Number(a.accountNumber), name: a.name ?? `Konto ${a.accountNumber}`, increase: 0 }));
 
   if (accountsToProcess.length === 0) {
     for (let i = 1; i <= 3; i++) {
-      const name = `Kostnadsanalyse ${i}`;
       const project = await client.post<{ id: number }>("/project", {
-        name,
+        name: `Kostnadsanalyse ${i}`,
         projectManager: { id: pmId },
         department: { id: departmentId },
         startDate: today(),
         isInternal: true,
       });
+      const uniqueLabel = `Kostnadsanalyse ${i} (prosjekt ${project.value.id})`;
       console.log(`[Handler] Created generic analysis project ${i}: id=${project.value.id}`);
-      await findOrCreateActivity(client, name);
+      await createProjectActivity(client, uniqueLabel, 90000 + i);
     }
     return;
   }
 
+  let activitySeq = 1;
   for (const acct of accountsToProcess) {
     const projectName = acct.name;
 
@@ -136,6 +124,46 @@ export async function handleLedgerAnalysis(
     });
     console.log(`[Handler] Created analysis project: ${projectName} (id=${project.value.id})`);
     ctx.registerProject(projectName, project.value.id);
-    await findOrCreateActivity(client, projectName);
+    const activityLabel = `${acct.accountNumber} ${projectName}`.trim().slice(0, 255);
+    await createProjectActivity(client, activityLabel, acct.accountNumber || (90000 + activitySeq));
+    activitySeq++;
+  }
+}
+
+async function createProjectActivity(
+  client: TripletexClient,
+  name: string,
+  activityNumber: number,
+): Promise<number> {
+  const existing = await client.list<Activity>("/activity", { from: "0", count: "2000" });
+  const match = existing.values.find(a => a.name?.toLowerCase().trim() === name.toLowerCase().trim());
+  if (match) {
+    console.log(`[Helper] Found existing activity: "${name}" id=${match.id}`);
+    return match.id;
+  }
+
+  try {
+    const result = await client.post<Activity>("/activity", {
+      name: name.slice(0, 255),
+      number: activityNumber,
+      activityType: "PROJECT_GENERAL_ACTIVITY",
+      isProjectActivity: true,
+    });
+    console.log(`[Helper] Created activity: "${name}" number=${activityNumber} id=${result.value.id}`);
+    return result.value.id;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes("422") || msg.includes("i bruk") || msg.includes("in use")) {
+      const refreshed = await client.list<Activity>("/activity", { from: "0", count: "2000" });
+      const retry = refreshed.values.find(a => a.name?.toLowerCase().trim() === name.toLowerCase().trim());
+      if (retry) return retry.id;
+    }
+    const suffix = ` #${activityNumber}`;
+    const short = name.slice(0, Math.max(1, 255 - suffix.length));
+    const fallbackResult = await client.post<Activity>("/activity", {
+      name: `${short}${suffix}`.slice(0, 255),
+      activityType: "PROJECT_GENERAL_ACTIVITY",
+    });
+    return fallbackResult.value.id;
   }
 }

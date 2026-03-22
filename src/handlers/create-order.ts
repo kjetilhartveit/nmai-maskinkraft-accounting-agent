@@ -132,12 +132,18 @@ export async function handleCreateOrder(
         }
       }
 
-      orderLines.push({
+      const olBody: Record<string, unknown> = {
         order: { id: orderId },
         product: { id: productId },
         count: Number(p.quantity ?? p.count ?? 1),
         unitPriceExcludingVatCurrency: Number(p.unitPrice ?? p.price ?? 0),
-      });
+      };
+      if (p.vatRate !== undefined) {
+        const ratePct = p.vatRate <= 1 && p.vatRate > 0 ? Math.round(p.vatRate * 100) : Math.round(p.vatRate);
+        const vtId = await findVatTypeIdByRate(client, ratePct);
+        olBody.vatType = { id: vtId };
+      }
+      orderLines.push(olBody);
     }
 
     if (orderLines.length === 1) {

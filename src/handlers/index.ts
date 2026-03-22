@@ -6,6 +6,7 @@ import { handleCreateCustomer } from "./create-customer.js";
 import { handleCreateDepartment } from "./create-department.js";
 import { handleCreateSupplier } from "./create-supplier.js";
 import { handleCreateProduct } from "./create-product.js";
+import { handleActivateModule } from "./activate-module.js";
 import { handleCreateOrder } from "./create-order.js";
 import { handleCreateInvoice, handleSendInvoice } from "./create-invoice.js";
 import { handleCreateTravelExpense } from "./create-travel-expense.js";
@@ -37,7 +38,7 @@ export type TaskHandler = (
 ) => Promise<void>;
 
 /**
- * All 30 task types mapped to their dedicated handlers.
+ * All 31 task types mapped to their dedicated handlers.
  * No "unknown" fallback — every prompt type has a handler.
  */
 const handlers: Record<TaskType, TaskHandler> = {
@@ -47,6 +48,7 @@ const handlers: Record<TaskType, TaskHandler> = {
   create_department: handleCreateDepartment,       // 1 call: batch POST /department/list
   create_supplier: handleCreateSupplier,           // 1 call: POST /supplier
   create_product: handleCreateProduct,             // 3-5 calls: dept + VAT + unit + POST
+  activate_module: handleActivateModule,           // 0 calls: modules pre-enabled in sandbox
 
   // Tier 2 — Multi-step (3-10 API calls)
   create_project: handleCreateProject,             // 3-8 calls: PM entitlements + POST /project

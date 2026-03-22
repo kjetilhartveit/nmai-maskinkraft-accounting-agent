@@ -26,7 +26,7 @@ export interface SolveResponse {
 }
 
 /**
- * Exactly 30 task types — one per competition prompt template.
+ * Exactly 31 task types — one per competition prompt template.
  * No "unknown" fallback; every prompt maps to exactly one type.
  */
 export type TaskType =
@@ -36,6 +36,7 @@ export type TaskType =
   | "create_department"
   | "create_supplier"
   | "create_product"
+  | "activate_module"
   // Tier 2 — Multi-step
   | "create_project"
   | "create_invoice"
@@ -66,6 +67,7 @@ export type TaskType =
 
 export const ALL_TASK_TYPES: TaskType[] = [
   "create_customer", "create_employee", "create_department", "create_supplier", "create_product",
+  "activate_module",
   "create_project", "create_invoice", "send_invoice", "create_order", "create_payment",
   "create_credit_note", "create_travel_expense", "create_payroll", "create_supplier_invoice",
   "create_dimension", "reverse_payment", "project_fixed_price", "create_timesheet",

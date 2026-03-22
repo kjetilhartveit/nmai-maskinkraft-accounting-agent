@@ -71,6 +71,11 @@ For multiple departments, return each as a separate entity.`,
 - email
 - phoneNumber`,
 
+  activate_module: `Extract:
+- moduleName (the module to activate, e.g. "prosjektstyring", "project management", "Projektsteuerung")
+
+Normalize module names to a canonical form: project, invoicing, salary, travel, etc.`,
+
   create_product: `Extract:
 - name (product name, required)
 - number (product number/code)

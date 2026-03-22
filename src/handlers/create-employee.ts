@@ -13,7 +13,7 @@ function isAdminRequested(entity: Record<string, unknown>): boolean {
   return t === "ADMINISTRATOR" || t === "ADMIN";
 }
 
-function buildEmployeeBody(
+export function buildEmployeeBody(
   entity: Record<string, unknown>,
   departmentId: number,
 ): Record<string, unknown> {
@@ -136,7 +136,7 @@ export async function grantProjectManagerEntitlement(
   return ok1 && ok2;
 }
 
-async function createEmployment(
+export async function createEmployment(
   client: TripletexClient,
   employeeId: number,
   startDate: string,

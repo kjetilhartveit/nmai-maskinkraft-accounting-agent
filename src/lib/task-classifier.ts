@@ -1,5 +1,5 @@
 /**
- * Task classifier — matches competition prompts to exactly 30 task types.
+ * Task classifier — matches competition prompts to exactly 31 task types.
  *
  * Each task type corresponds to a unique prompt template. The classifier
  * shows the LLM all 30 English templates and asks it to match the incoming
@@ -37,6 +37,10 @@ export const PROMPT_TEMPLATES: PromptTemplate[] = [
   {
     taskType: "create_product",
     template: `Create the product "{NAME}" with product number {NUM}. The price is {AMOUNT} NOK excluding VAT, using the {PERCENT}% VAT rate.`,
+  },
+  {
+    taskType: "activate_module",
+    template: `Activate the {MODULE} module in Tripletex.`,
   },
   {
     taskType: "create_project",
@@ -147,9 +151,9 @@ function buildClassifierPrompt(): string {
     (t) => `${t.taskType}: "${t.template}"`,
   ).join("\n");
 
-  return `You classify accounting task prompts into exactly one of 30 task types.
+  return `You classify accounting task prompts into exactly one of 31 task types.
 
-The prompts may be in English, Norwegian (bokmål/nynorsk), German, French, Spanish, or Portuguese — but they always match one of the 30 templates below. Variables like names, amounts, and dates differ between prompts but the structure is the same.
+The prompts may be in English, Norwegian (bokmål/nynorsk), German, French, Spanish, or Portuguese — but they always match one of the 31 templates below. Variables like names, amounts, and dates differ between prompts but the structure is the same.
 
 TEMPLATES:
 ${templateList}
@@ -294,6 +298,9 @@ function re(pattern: string): RegExp {
 
 export function classifyPromptRegex(prompt: string): TaskType {
   const p = prompt.toLowerCase();
+
+  // Module activation — very specific, check first
+  if (re("(aktiver|activate|activer|activar|ativar|aktivieren|slå på|enable).*(modul|module|módulo)").test(p)) return "activate_module";
 
   // Tier 3 — complex (check first, more specific patterns)
   if (re("\\b(reconcil|avstem|rapprocher|concili|abgleich)").test(p)) return "bank_reconciliation";

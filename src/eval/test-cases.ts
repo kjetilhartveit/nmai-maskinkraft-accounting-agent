@@ -1,7 +1,7 @@
 import type { TestCase } from "./types.js";
 
 /**
- * 30 canonical test cases — one per task type.
+ * 31 canonical test cases — one per task type.
  *
  * Each case uses an English prompt matching the competition template structure.
  * expectedEntities describe what should exist in the sandbox after execution.
@@ -80,6 +80,17 @@ export const testCases: TestCase[] = [
     expectedEntities: [
       { _type: "product", name: "Premium Konsulentpakke" },
     ],
+    expectedApiCalls: { max: 0, maxErrors: 0 },
+  },
+
+  {
+    id: "canonical-activate_module",
+    prompt:
+      "Activate the project management module in Tripletex.",
+    language: "en",
+    tier: 1,
+    taskType: "activate_module",
+    expectedEntities: [],
     expectedApiCalls: { max: 0, maxErrors: 0 },
   },
 

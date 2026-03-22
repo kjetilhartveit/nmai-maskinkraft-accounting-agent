@@ -1,7 +1,7 @@
 import type { TripletexClient } from "../lib/tripletex-client.js";
 import type { ParsedTask } from "../types/index.js";
 import type { SequenceContext } from "../lib/sequence-context.js";
-import { today, getDefaultDepartmentId } from "../lib/tripletex-helpers.js";
+import { today, getDefaultDepartmentId, postLedgerVoucherWithSupplierFallback } from "../lib/tripletex-helpers.js";
 
 interface LedgerAccount {
   id: number;
@@ -148,7 +148,7 @@ export async function handleReceiptExpense(
   if (supplierId) creditPosting.supplier = { id: supplierId };
   postings.push(creditPosting);
 
-  const result = await client.post<{ id: number }>("/ledger/voucher", {
+  const result = await postLedgerVoucherWithSupplierFallback(client, {
     date: dateStr,
     description: `Kvittering: ${description}`,
     postings,

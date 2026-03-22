@@ -12,8 +12,9 @@ import {
   daysFromNow,
   ensureBankAccountConfigured,
   findOrCreateProduct,
+  postLedgerVoucherWithSupplierFallback,
 } from "../lib/tripletex-helpers.js";
-import { grantProjectManagerEntitlement } from "./create-employee.js";
+import { buildEmployeeBody, createEmployment, grantProjectManagerEntitlement } from "./create-employee.js";
 
 interface EmployeeEntry {
   firstName?: string;
@@ -126,8 +127,8 @@ export async function handleProjectLifecycle(
   }
   ctx.registerProject(projectName, projectId);
 
-  // 4. Find or create project activity
-  const defaultActivityId = await findOrCreateActivity(client, projectName);
+  // 4. Find or create project activity (scoped name avoids global "name in use" on shared titles)
+  const defaultActivityId = await findOrCreateActivity(client, `${projectName} (${projectId})`);
 
   // 5. Register hours for each employee
   let totalHoursRevenue = 0;
@@ -147,16 +148,37 @@ export async function handleProjectLifecycle(
     if (!empId && emp.firstName && emp.lastName) {
       try {
         const email = emp.email || `${emp.firstName.toLowerCase()}.${emp.lastName.toLowerCase()}@example.com`;
-        const empBody: Record<string, unknown> = {
+        const empEntity: Record<string, unknown> = {
           firstName: emp.firstName,
           lastName: emp.lastName,
-          dateOfBirth: "1990-01-01",
-          department: { id: departmentId },
           email,
-          userType: "EXTENDED",
         };
-        const created = await client.post<{ id: number }>("/employee", empBody);
+        let body = buildEmployeeBody(empEntity, departmentId);
+        if (!empEntity.email) {
+          body = { ...body, dateOfBirth: "1990-01-01" };
+        }
+        let created: { value: { id: number } };
+        try {
+          created = await client.post<{ id: number }>("/employee", body);
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          if (msg.includes("422")) {
+            const minimal: Record<string, unknown> = {
+              firstName: emp.firstName,
+              lastName: emp.lastName,
+              department: { id: departmentId },
+            };
+            if (email) {
+              minimal.email = email;
+              minimal.userType = "EXTENDED";
+            }
+            created = await client.post<{ id: number }>("/employee", minimal);
+          } else {
+            throw err;
+          }
+        }
         empId = created.value.id;
+        await createEmployment(client, empId, today());
         console.log(`[Handler] Created employee: ${emp.firstName} ${emp.lastName} (id=${empId})`);
       } catch (err) {
         console.warn(`[Handler] Failed to create employee ${emp.firstName}: ${err}`);
@@ -230,7 +252,7 @@ export async function handleProjectLifecycle(
       };
       if (supplierId) creditPosting.supplier = { id: supplierId };
 
-      await client.post("/ledger/voucher", {
+      await postLedgerVoucherWithSupplierFallback(client, {
         date: today(),
         description: supplierCost.description || `Leverandørkostnad: ${supplierCost.supplierName}`,
         postings: [
