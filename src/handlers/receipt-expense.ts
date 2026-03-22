@@ -111,40 +111,34 @@ export async function handleReceiptExpense(
     }
   }
 
-  // Look up accounts: expense + input VAT + accounts payable (2400)
-  const accountNumbers = [expenseAccountNumber, ...(vat > 0 ? [2710] : []), 2400];
+  // Look up accounts: expense + AP (VAT handled via vatType)
+  const accountNumbers = [expenseAccountNumber, 2400];
   const accounts = await Promise.all(accountNumbers.map((n) => findAccount(client, n)));
 
   const expenseAccount = accounts[0];
-  const vatAccount = vat > 0 ? accounts[1] : null;
-  const apAccount = accounts[accounts.length - 1];
+  const apAccount = accounts[1];
 
-  // Build voucher: debit expense + debit VAT + credit accounts payable (with supplier)
+  // Use vatType for automatic VAT handling (1 = 25% input VAT)
+  const vatTypeMap: Record<number, number> = { 25: 1, 15: 11, 12: 13, 0: 0 };
+  const resolvedVatRate = vatRate > 20 ? 25 : vatRate > 13 ? 15 : vatRate > 5 ? 12 : 0;
+  const vatTypeId = vatTypeMap[resolvedVatRate] ?? 1;
+
+  // Build voucher: expense with vatType + credit AP with supplier
   const postings: Record<string, unknown>[] = [
     {
       row: 1,
       account: { id: expenseAccount.id },
       date: dateStr,
-      amountGross: net,
-      amountGrossCurrency: net,
+      amountGross: gross,
+      amountGrossCurrency: gross,
       description,
       department: { id: departmentId },
+      ...(vat > 0 ? { vatType: { id: vatTypeId } } : {}),
     },
   ];
 
-  if (vat > 0 && vatAccount) {
-    postings.push({
-      row: 2,
-      account: { id: vatAccount.id },
-      date: dateStr,
-      amountGross: vat,
-      amountGrossCurrency: vat,
-      description: "Inngående mva",
-    });
-  }
-
   const creditPosting: Record<string, unknown> = {
-    row: postings.length + 1,
+    row: 2,
     account: { id: apAccount.id },
     date: dateStr,
     amountGross: -gross,

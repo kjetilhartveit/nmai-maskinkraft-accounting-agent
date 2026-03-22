@@ -127,52 +127,47 @@ export async function handleCreateSupplierInvoice(
     vat = 0;
   }
 
-  // 3. Look up all accounts in parallel
-  const accountNumbers = [expenseAccountNumber, ...(vat > 0 ? [2710] : []), 2400];
+  // 3. Look up accounts: expense + AP (VAT handled via vatType)
+  const accountNumbers = [expenseAccountNumber, 2400];
   const accounts = await Promise.all(accountNumbers.map((n) => findAccount(client, n)));
 
   const expenseAccount = accounts[0];
-  const vatAccount = vat > 0 ? accounts[1] : null;
-  const payableAccount = accounts[accounts.length - 1];
+  const payableAccount = accounts[1];
 
-  // 4. Build voucher postings — use invoice date from PDF if available
+  // 4. Build voucher postings — use vatType for automatic VAT handling
   const voucherDate = invoiceDate && /^\d{4}-\d{2}-\d{2}$/.test(invoiceDate) ? invoiceDate : today();
   const desc = invoiceNumber
     ? `Leverandørfaktura ${invoiceNumber} ${supplierName}`
     : `Leverandørfaktura ${supplierName}`;
+
+  const gross = net + vat;
+
+  // Expense posting with vatType lets Tripletex auto-split net/VAT
+  // vatType 1 = "Fradrag inngående avgift, høy sats" (25% input VAT)
+  const vatTypeMap: Record<number, number> = { 25: 1, 15: 11, 12: 13, 0: 0 };
+  const resolvedVatRate = vatRate > 20 ? 25 : vatRate > 13 ? 15 : vatRate > 5 ? 12 : 0;
+  const vatTypeId = vatTypeMap[resolvedVatRate] ?? 1;
 
   const postings: Record<string, unknown>[] = [
     {
       row: 1,
       account: { id: expenseAccount.id },
       date: voucherDate,
-      amountGross: net,
-      amountGrossCurrency: net,
+      amountGross: gross,
+      amountGrossCurrency: gross,
       description: description || "Kostnad",
+      ...(vat > 0 ? { vatType: { id: vatTypeId } } : {}),
+    },
+    {
+      row: 2,
+      account: { id: payableAccount.id },
+      date: voucherDate,
+      amountGross: -gross,
+      amountGrossCurrency: -gross,
+      description: "Leverandørgjeld",
+      supplier: { id: supplierId },
     },
   ];
-
-  if (vat > 0 && vatAccount) {
-    postings.push({
-      row: 2,
-      account: { id: vatAccount.id },
-      date: voucherDate,
-      amountGross: vat,
-      amountGrossCurrency: vat,
-      description: "Inngående mva",
-    });
-  }
-
-  const gross = net + vat;
-  postings.push({
-    row: postings.length + 1,
-    account: { id: payableAccount.id },
-    date: voucherDate,
-    amountGross: -gross,
-    amountGrossCurrency: -gross,
-    description: "Leverandørgjeld",
-    supplier: { id: supplierId },
-  });
 
   // 5. Create voucher with vendor invoice number for traceability
   const body: Record<string, unknown> = {
