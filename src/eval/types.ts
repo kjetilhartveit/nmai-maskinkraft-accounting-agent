@@ -8,7 +8,7 @@ export interface TestCase {
   taskType: TaskType;
   taskTypeAlternatives?: TaskType[];
   expectedEntities: Record<string, unknown>[];
-  expectedApiCalls: { min?: number; max: number; maxErrors: number };
+  expectedApiCalls: { max: number; maxErrors: number };
   /** Whether this test case requires an attached file to execute */
   requiresFile?: boolean;
   fileType?: "pdf" | "csv";

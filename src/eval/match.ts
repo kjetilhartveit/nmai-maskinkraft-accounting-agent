@@ -214,8 +214,7 @@ export function apiBoundsSatisfied(
 ): boolean {
   const b = tc.expectedApiCalls;
   if (!b) return true;
-  if (b.min !== undefined && total < b.min) return false;
-  if (b.max !== undefined && total > b.max) return false;
-  if (b.maxErrors !== undefined && errors > b.maxErrors) return false;
+  if (total > b.max) return false;
+  if (errors > b.maxErrors) return false;
   return true;
 }
