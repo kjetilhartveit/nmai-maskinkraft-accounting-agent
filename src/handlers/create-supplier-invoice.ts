@@ -174,12 +174,15 @@ export async function handleCreateSupplierInvoice(
     supplier: { id: supplierId },
   });
 
-  // 5. Create voucher
-  const body = {
+  // 5. Create voucher with vendor invoice number for traceability
+  const body: Record<string, unknown> = {
     date: voucherDate,
     description: desc,
     postings,
   };
+  if (invoiceNumber) body.vendorInvoiceNumber = invoiceNumber;
+  if (invoiceNumber) body.externalVoucherNumber = invoiceNumber;
+  if (supplierId) body.supplier = { id: supplierId };
 
   try {
     const result = await client.post<{ id: number }>("/ledger/voucher", body);
