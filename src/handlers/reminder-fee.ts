@@ -111,8 +111,10 @@ export async function handleReminderFee(
     ?? null;
 
   // 3. Post reminder fee voucher (debit 1500 accounts receivable, credit 3400 reminder income)
-  const debitAcct = await findAccountByNumber(client, debitAccountNumber);
-  const creditAcct = await findAccountByNumber(client, creditAccountNumber);
+  const [debitAcct, creditAcct] = await Promise.all([
+    findAccountByNumber(client, debitAccountNumber),
+    findAccountByNumber(client, creditAccountNumber),
+  ]);
 
   const debitPosting: Record<string, unknown> = {
     row: 1,

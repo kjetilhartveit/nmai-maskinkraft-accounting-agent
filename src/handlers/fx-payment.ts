@@ -133,8 +133,10 @@ export async function handleFxPayment(
   if (Math.abs(diff) > 0.01) {
     const isLoss = diff < 0;
     const absDiff = Math.abs(Math.round(diff));
-    const fxAccount = await findAccount(client, isLoss ? 8160 : 8060);
-    const bankAccount = await findAccount(client, 1920);
+    const [fxAccount, bankAccount] = await Promise.all([
+      findAccount(client, isLoss ? 8160 : 8060),
+      findAccount(client, 1920),
+    ]);
 
     const postings = isLoss
       ? [

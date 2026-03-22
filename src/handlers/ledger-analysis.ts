@@ -29,20 +29,21 @@ export async function handleLedgerAnalysis(
   if (!pmId) throw new Error("No employee found to use as project manager");
   const departmentId = await getDefaultDepartmentId(client);
 
-  // Query vouchers for January and February 2026
-  const janVouchers = await client.list<Voucher>("/ledger/voucher", {
-    dateFrom: "2026-01-01",
-    dateTo: "2026-01-31",
-    from: "0",
-    count: "1000",
-  });
-
-  const febVouchers = await client.list<Voucher>("/ledger/voucher", {
-    dateFrom: "2026-02-01",
-    dateTo: "2026-02-28",
-    from: "0",
-    count: "1000",
-  });
+  // Query vouchers for January and February 2026 in parallel
+  const [janVouchers, febVouchers] = await Promise.all([
+    client.list<Voucher>("/ledger/voucher", {
+      dateFrom: "2026-01-01",
+      dateTo: "2026-01-31",
+      from: "0",
+      count: "1000",
+    }),
+    client.list<Voucher>("/ledger/voucher", {
+      dateFrom: "2026-02-01",
+      dateTo: "2026-02-28",
+      from: "0",
+      count: "1000",
+    }),
+  ]);
 
   // Aggregate expense per account (accounts 4000-7999) per period
   const janTotals = new Map<number, { total: number; name: string }>();

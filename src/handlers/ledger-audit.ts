@@ -63,25 +63,7 @@ export async function handleLedgerAudit(
   const entity = task.entities[0] ?? {};
   const dateStr = String(entity.date ?? today());
 
-  // Query vouchers for Jan-Feb 2026 to find errors
-  const janVouchers = await client.list<Voucher>("/ledger/voucher", {
-    dateFrom: "2026-01-01",
-    dateTo: "2026-01-31",
-    from: "0",
-    count: "1000",
-  });
-
-  const febVouchers = await client.list<Voucher>("/ledger/voucher", {
-    dateFrom: "2026-02-01",
-    dateTo: "2026-02-28",
-    from: "0",
-    count: "1000",
-  });
-
-  const allVouchers = [...janVouchers.values, ...febVouchers.values];
-  console.log(`[Handler] Found ${allVouchers.length} vouchers in Jan-Feb 2026 (Jan: ${janVouchers.values.length}, Feb: ${febVouchers.values.length})`);
-
-  // Collect corrections from entity extraction if available
+  // Collect corrections from entity extraction first (avoids heavy voucher queries)
   const corrections: { accountNumber: number; wrongAmount: number; correctAmount: number; description: string }[] = [];
 
   const entityCorrections = Array.isArray(entity.corrections) ? entity.corrections as Record<string, unknown>[] : [];
@@ -109,13 +91,26 @@ export async function handleLedgerAudit(
     }
   }
 
-  // If entity extraction gave us corrections, use them
+  // If entity extraction gave us corrections, use them (skip heavy voucher queries)
   if (corrections.length > 0) {
+    const uniqueAccounts = [...new Set([...corrections.map(c => c.accountNumber), 1920])];
+    const resolvedMap = new Map<number, LedgerAccount>();
+    const lookupResults = await Promise.allSettled(
+      uniqueAccounts.map(async (num) => {
+        const acct = await findAccount(client, num);
+        return { num, acct };
+      }),
+    );
+    for (const r of lookupResults) {
+      if (r.status === "fulfilled") resolvedMap.set(r.value.num, r.value.acct);
+    }
+
     const postings: Record<string, unknown>[] = [];
     for (const corr of corrections) {
       const diff = corr.correctAmount - corr.wrongAmount;
       if (Math.abs(diff) < 0.01) continue;
-      const account = await findAccount(client, corr.accountNumber);
+      const account = resolvedMap.get(corr.accountNumber);
+      if (!account) continue;
       postings.push({
         row: postings.length + 1,
         account: { id: account.id },
@@ -129,15 +124,17 @@ export async function handleLedgerAudit(
     if (postings.length > 0) {
       const sum = postings.reduce((s, p) => s + (p.amountGross as number), 0);
       if (Math.abs(sum) > 0.01) {
-        const bankAccount = await findAccount(client, 1920);
-        postings.push({
-          row: postings.length + 1,
-          account: { id: bankAccount.id },
-          date: dateStr,
-          amountGross: -sum,
-          amountGrossCurrency: -sum,
-          description: "Motkonto korreksjon",
-        });
+        const bankAccount = resolvedMap.get(1920);
+        if (bankAccount) {
+          postings.push({
+            row: postings.length + 1,
+            account: { id: bankAccount.id },
+            date: dateStr,
+            amountGross: -sum,
+            amountGrossCurrency: -sum,
+            description: "Motkonto korreksjon",
+          });
+        }
       }
 
       const result = await client.post<{ id: number }>("/ledger/voucher", {
@@ -149,6 +146,25 @@ export async function handleLedgerAudit(
       return;
     }
   }
+
+  // Only fetch vouchers when we need to analyze the ledger (no corrections from entities)
+  const [janVouchers, febVouchers] = await Promise.all([
+    client.list<Voucher>("/ledger/voucher", {
+      dateFrom: "2026-01-01",
+      dateTo: "2026-01-31",
+      from: "0",
+      count: "1000",
+    }),
+    client.list<Voucher>("/ledger/voucher", {
+      dateFrom: "2026-02-01",
+      dateTo: "2026-02-28",
+      from: "0",
+      count: "1000",
+    }),
+  ]);
+
+  const allVouchers = [...janVouchers.values, ...febVouchers.values];
+  console.log(`[Handler] Found ${allVouchers.length} vouchers in Jan-Feb 2026 (Jan: ${janVouchers.values.length}, Feb: ${febVouchers.values.length})`);
 
   // Fallback: create a general audit correction voucher
   const [account6300, account1920] = await Promise.all([

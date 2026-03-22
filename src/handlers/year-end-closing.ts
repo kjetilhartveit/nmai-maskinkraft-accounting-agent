@@ -109,12 +109,24 @@ export async function handleYearEndClosing(
     );
   }
 
-  // Build voucher — skip entries where account doesn't exist in sandbox
+  // Pre-resolve all unique accounts in parallel
+  const uniqueAccounts = [...new Set(postings.map(p => p.accountNumber))];
+  const resolvedMap = new Map<number, LedgerAccount>();
+  const results = await Promise.allSettled(
+    uniqueAccounts.map(async (num) => {
+      const acct = await findAccount(client, num);
+      return { num, acct };
+    }),
+  );
+  for (const r of results) {
+    if (r.status === "fulfilled") resolvedMap.set(r.value.num, r.value.acct);
+  }
+
   const voucherPostings: Record<string, unknown>[] = [];
   const skippedEntries: typeof postings = [];
   for (const entry of postings) {
-    try {
-      const account = await findAccount(client, entry.accountNumber);
+    const account = resolvedMap.get(entry.accountNumber);
+    if (account) {
       voucherPostings.push({
         row: voucherPostings.length + 1,
         account: { id: account.id },
@@ -123,7 +135,7 @@ export async function handleYearEndClosing(
         amountGrossCurrency: entry.amount,
         description: entry.description,
       });
-    } catch {
+    } else {
       console.warn(`[Handler] Skipping entry: account ${entry.accountNumber} not found`);
       skippedEntries.push(entry);
     }

@@ -146,31 +146,43 @@ export async function handleMonthlyClosing(
     );
   }
 
-  // Build voucher postings — skip entries where accounts don't exist in sandbox
+  // Pre-resolve all unique accounts in parallel
+  const uniqueAccounts = [...new Set(entries.flatMap(e => [e.debitAccount, e.creditAccount]))];
+  const resolvedMap = new Map<number, LedgerAccount>();
+  const lookupResults = await Promise.allSettled(
+    uniqueAccounts.map(async (num) => {
+      const acct = await findAccount(client, num);
+      return { num, acct };
+    }),
+  );
+  for (const r of lookupResults) {
+    if (r.status === "fulfilled") resolvedMap.set(r.value.num, r.value.acct);
+  }
+
   const postings: Record<string, unknown>[] = [];
   for (const entry of entries) {
-    try {
-      const debitAcct = await findAccount(client, entry.debitAccount);
-      const creditAcct = await findAccount(client, entry.creditAccount);
-      postings.push({
-        row: postings.length + 1,
-        account: { id: debitAcct.id },
-        date: dateStr,
-        amountGross: entry.amount,
-        amountGrossCurrency: entry.amount,
-        description: entry.description || "Månedsavslutning",
-      });
-      postings.push({
-        row: postings.length + 1,
-        account: { id: creditAcct.id },
-        date: dateStr,
-        amountGross: -entry.amount,
-        amountGrossCurrency: -entry.amount,
-        description: entry.description || "Månedsavslutning",
-      });
-    } catch (err) {
-      console.warn(`[Handler] Skipping entry: ${err instanceof Error ? err.message : err}`);
+    const debitAcct = resolvedMap.get(entry.debitAccount);
+    const creditAcct = resolvedMap.get(entry.creditAccount);
+    if (!debitAcct || !creditAcct) {
+      console.warn(`[Handler] Skipping entry: account ${!debitAcct ? entry.debitAccount : entry.creditAccount} not found`);
+      continue;
     }
+    postings.push({
+      row: postings.length + 1,
+      account: { id: debitAcct.id },
+      date: dateStr,
+      amountGross: entry.amount,
+      amountGrossCurrency: entry.amount,
+      description: entry.description || "Månedsavslutning",
+    });
+    postings.push({
+      row: postings.length + 1,
+      account: { id: creditAcct.id },
+      date: dateStr,
+      amountGross: -entry.amount,
+      amountGrossCurrency: -entry.amount,
+      description: entry.description || "Månedsavslutning",
+    });
   }
 
   if (postings.length === 0) {
