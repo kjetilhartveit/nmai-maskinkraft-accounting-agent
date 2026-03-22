@@ -163,47 +163,60 @@ export async function handleBankReconciliation(
     if (acct) resolvedAccounts.set(num, acct);
   }
 
-  const postings: Record<string, unknown>[] = [];
-  let bankTotal = 0;
-
+  // Group adjustments by date so each voucher is balanced
+  const byDate = new Map<string, typeof adjustments>();
   for (const adj of adjustments) {
     const targetAcct = resolvedAccounts.get(adj.accountNumber);
     if (!targetAcct) {
       console.warn(`[Handler] Account ${adj.accountNumber} not found, skipping`);
       continue;
     }
-
-    postings.push({
-      row: postings.length + 1,
-      account: { id: targetAcct.id },
-      date: adj.date,
-      amountGross: adj.amount,
-      amountGrossCurrency: adj.amount,
-      description: adj.description,
-    });
-    bankTotal -= adj.amount;
+    const d = adj.date || dateStr;
+    if (!byDate.has(d)) byDate.set(d, []);
+    byDate.get(d)!.push(adj);
   }
 
-  if (postings.length > 0 && Math.abs(bankTotal) > 0.01) {
-    postings.push({
-      row: postings.length + 1,
-      account: { id: bankAccount.id },
-      date: dateStr,
-      amountGross: bankTotal,
-      amountGrossCurrency: bankTotal,
-      description: "Bank motkonto",
-    });
-  }
-
-  if (postings.length === 0) {
-    console.warn("[Handler] No valid postings could be created");
+  if (byDate.size === 0) {
+    console.warn("[Handler] No valid adjustments could be created");
     return;
   }
 
-  const result = await client.post<{ id: number }>("/ledger/voucher", {
-    date: dateStr,
-    description: "Bankavstemmelse",
-    postings,
-  });
-  console.log(`[Handler] Created bank reconciliation voucher: id=${result.value.id} (${postings.length} postings)`);
+  let voucherCount = 0;
+  for (const [vDate, dateAdjs] of byDate) {
+    const postings: Record<string, unknown>[] = [];
+    let bankTotal = 0;
+
+    for (const adj of dateAdjs) {
+      const targetAcct = resolvedAccounts.get(adj.accountNumber)!;
+      postings.push({
+        row: postings.length + 1,
+        account: { id: targetAcct.id },
+        date: vDate,
+        amountGross: adj.amount,
+        amountGrossCurrency: adj.amount,
+        description: adj.description,
+      });
+      bankTotal -= adj.amount;
+    }
+
+    if (Math.abs(bankTotal) > 0.01) {
+      postings.push({
+        row: postings.length + 1,
+        account: { id: bankAccount.id },
+        date: vDate,
+        amountGross: bankTotal,
+        amountGrossCurrency: bankTotal,
+        description: "Bank motkonto",
+      });
+    }
+
+    const result = await client.post<{ id: number }>("/ledger/voucher", {
+      date: vDate,
+      description: `Bankavstemmelse ${vDate}`,
+      postings,
+    });
+    voucherCount++;
+    console.log(`[Handler] Created bank reconciliation voucher ${voucherCount}: id=${result.value.id} (date=${vDate}, ${postings.length} postings)`);
+  }
+  console.log(`[Handler] Bank reconciliation complete: ${voucherCount} vouchers created`);
 }
