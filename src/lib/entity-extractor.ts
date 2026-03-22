@@ -295,11 +295,28 @@ Common patterns: bank fees → account 7770, interest income → account 8040, i
 For payments that match invoices, include the invoice reference.`,
 
   ledger_audit: `Extract:
-- date (YYYY-MM-DD for corrections)
+- date (YYYY-MM-DD for corrections — use last day of the audit period)
 - description (audit description)
-- corrections: array of { accountNumber, wrongAmount, correctAmount, description }
+- corrections: array of { accountNumber, amount, description }
 
-Each correction represents an error found in the ledger that needs fixing.`,
+Each correction is ONE voucher posting line. "amount" is SIGNED:
+  positive = debit (increase the account)
+  negative = credit (decrease the account)
+
+Correction patterns (FOLLOW EXACTLY):
+1. Wrong account (posted to A instead of B, amount X):
+   → { accountNumber: A, amount: -X } (credit wrong account)
+   → { accountNumber: B, amount: +X } (debit correct account)
+   BOTH lines are required.
+2. Duplicate voucher (account A, amount X):
+   → { accountNumber: A, amount: -X } (credit to reverse)
+3. Missing VAT line (expense account A, net amount X, VAT account B):
+   → { accountNumber: B, amount: +VAT_amount } (debit missing VAT; 25% rate = X * 0.25)
+4. Wrong amount (account A, posted X instead of correct Y):
+   → { accountNumber: A, amount: -(X - Y) } (credit the overstated difference)
+
+CRITICAL: For wrong-account errors you MUST output TWO correction lines (credit wrong + debit correct).
+Do NOT include a balancing entry to account 1920 — the system adds it automatically.`,
 
   ledger_analysis: `Extract:
 - periodStart, periodEnd (YYYY-MM-DD for comparison periods)
@@ -348,7 +365,9 @@ Extract ALL closing entries mentioned in the prompt.`,
 - currency (e.g. "EUR")
 - invoiceRate (exchange rate when invoice was sent)
 - paymentRate (exchange rate when payment received)
-- productName (what the invoice was for)`,
+- productName (what the invoice was for)
+
+IMPORTANT: Do NOT add prerequisites. The handler creates the customer internally.`,
 
   project_lifecycle: `Extract:
 - projectName (required)
