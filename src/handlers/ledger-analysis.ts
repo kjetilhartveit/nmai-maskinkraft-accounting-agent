@@ -106,10 +106,10 @@ export async function handleLedgerAnalysis(
   ).map(a => ({ accountNumber: Number(a.accountNumber), name: a.name ?? `Konto ${a.accountNumber}`, increase: 0 }));
 
   if (accountsToProcess.length === 0) {
-    // Last resort: create 3 generic cost analysis projects
     for (let i = 1; i <= 3; i++) {
+      const name = `Kostnadsanalyse ${i}`;
       const project = await client.post<{ id: number }>("/project", {
-        name: `Kostnadsanalyse ${i}`,
+        name,
         projectManager: { id: pmId },
         department: { id: departmentId },
         startDate: today(),
@@ -119,7 +119,7 @@ export async function handleLedgerAnalysis(
 
       try {
         await client.post("/activity", {
-          name: `Kostnadsanalyse ${i} ${Date.now()}`,
+          name,
           activityType: "PROJECT_GENERAL_ACTIVITY",
         });
       } catch {
@@ -130,7 +130,7 @@ export async function handleLedgerAnalysis(
   }
 
   for (const acct of accountsToProcess) {
-    const projectName = `${acct.name}`;
+    const projectName = acct.name;
 
     const project = await client.post<{ id: number }>("/project", {
       name: projectName.slice(0, 255),
@@ -143,12 +143,11 @@ export async function handleLedgerAnalysis(
     ctx.registerProject(projectName, project.value.id);
 
     try {
-      const activityName = `${acct.name} analyse ${Date.now()}`;
       await client.post("/activity", {
-        name: activityName.slice(0, 255),
+        name: projectName.slice(0, 255),
         activityType: "PROJECT_GENERAL_ACTIVITY",
       });
-      console.log(`[Handler] Created activity for project ${project.value.id}`);
+      console.log(`[Handler] Created activity: ${projectName}`);
     } catch (err) {
       console.warn(`[Handler] Could not create activity: ${err instanceof Error ? err.message : err}`);
     }
