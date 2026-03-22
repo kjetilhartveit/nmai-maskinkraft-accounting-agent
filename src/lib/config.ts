@@ -19,7 +19,7 @@ export const config = {
 
   google: {
     apiKey: required("GOOGLE_API_KEY"),
-    model: optional("GOOGLE_MODEL", "gemini-3.1-pro-preview"),
+    model: optional("GOOGLE_MODEL", "google/gemini-3.1-flash-lite-preview"),
   },
 
   sandbox: {

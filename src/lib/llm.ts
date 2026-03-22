@@ -1,6 +1,5 @@
 import { z } from "zod";
-import { config } from "./config.js";
-import { geminiGenerateStructured } from "./gemini.js";
+import { openrouterGenerateStructured } from "./openrouter.js";
 import type { FileAttachment, ParsedTask, ParsedTaskSequence, TaskType } from "../types/index.js";
 import { ALL_TASK_TYPES } from "../types/index.js";
 
@@ -99,13 +98,13 @@ export async function parsePrompt(
   options?: ParsePromptOptions,
 ): Promise<ParsedTaskSequence> {
   const userContent = buildUserMessage(prompt, files);
-  const modelId = options?.model ?? config.google.model;
+  const modelId = options?.model ?? "google/gemini-3.1-flash-lite-preview";
   const system = resolveSystemPrompt(options?.systemPromptVariant);
 
   const formatInstruction = `\n\nRespond with valid JSON matching this exact structure:
 {"tasks": [{"taskType": "<type>", "entities": [{...}]}], "language": "<lang_code>"}`;
 
-  const { object, durationMs } = await geminiGenerateStructured({
+  const { object, durationMs } = await openrouterGenerateStructured({
     model: modelId,
     system: system + formatInstruction,
     prompt: userContent,

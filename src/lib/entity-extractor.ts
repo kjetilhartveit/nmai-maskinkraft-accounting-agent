@@ -7,24 +7,25 @@
  */
 
 import { z } from "zod";
-import { geminiGenerateStructured, type GeminiJsonSchema } from "./gemini.js";
+import { openrouterGenerateStructured } from "./openrouter.js";
 import type { ParsedTask, TaskType, FileAttachment } from "../types/index.js";
-import { config } from "./config.js";
 import { PROMPT_TEMPLATES } from "./task-classifier.js";
 
 // ── Extraction response schema ───────────────────────────────────────
 
+// Flexible prerequisite schema - accepts either strings or objects
+const PrerequisiteItemSchema = z.union([
+  z.string().transform((s) => ({ taskType: s, reason: "" })),
+  z.object({
+    taskType: z.string(),
+    reason: z.string().optional().default(""),
+  }),
+]);
+
 const ExtractionResponseSchema = z.object({
   entities: z.array(z.record(z.unknown())),
   language: z.string(),
-  requiresPrerequisites: z
-    .array(
-      z.object({
-        taskType: z.string(),
-        reason: z.string(),
-      })
-    )
-    .optional(),
+  requiresPrerequisites: z.array(PrerequisiteItemSchema).optional(),
 });
 
 // ── Per-type extraction prompts ──────────────────────────────────────
@@ -298,11 +299,8 @@ export async function extractEntities(
   taskType: TaskType,
   prompt: string,
   files: FileAttachment[] = [],
-  options?: { model?: string }
+  _options?: { model?: string }
 ): Promise<ExtractionResult> {
-  const start = performance.now();
-  const modelId = "gemini-3.1-flash-lite-preview";
-
   const taskPrompt = TASK_PROMPTS[taskType];
   const template = PROMPT_TEMPLATES.find((t) => t.taskType === taskType);
 
@@ -327,13 +325,31 @@ Respond with JSON: { "entities": [...], "language": "...", "requiresPrerequisite
       .join(", ")}`;
   }
 
-  const { object, durationMs } = await geminiGenerateStructured({
-    model: modelId,
-    system: systemPrompt,
-    prompt: userMessage,
-    schema: ExtractionResponseSchema,
-    maxTokens: 2048,
-  });
+  let result;
+  try {
+    result = await openrouterGenerateStructured({
+      model: "google/gemini-3.1-flash-lite-preview",
+      system: systemPrompt,
+      prompt: userMessage,
+      schema: ExtractionResponseSchema,
+      maxTokens: 2048,
+    });
+  } catch (llmError) {
+    const msg = llmError instanceof Error ? llmError.message : String(llmError);
+    console.error("[EntityExtractor] OpenRouter call failed:", msg);
+    throw new Error(`Entity extraction LLM call failed: ${msg}`);
+  }
+
+  if (!result || typeof result !== "object") {
+    console.error("[EntityExtractor] OpenRouter returned invalid result:", result);
+    throw new Error("OpenRouter returned invalid result");
+  }
+
+  const { object, durationMs } = result;
+
+  if (!object || !Array.isArray(object.entities)) {
+    throw new Error(`Invalid extraction response: missing entities array`);
+  }
 
   const prerequisites: {
     taskType: TaskType;
@@ -358,7 +374,7 @@ Respond with JSON: { "entities": [...], "language": "...", "requiresPrerequisite
     entities: object.entities,
     language: object.language,
     prerequisites,
-    durationMs: durationMs ?? Math.round(performance.now() - start),
+    durationMs,
   };
 }
 
