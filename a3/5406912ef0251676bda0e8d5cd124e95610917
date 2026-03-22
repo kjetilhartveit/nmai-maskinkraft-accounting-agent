@@ -1,0 +1,42 @@
+src/lib/solve-trace.ts
+  81c19158e52393a9 230-231
+src/handlers/employee-onboarding-pdf.ts
+  39bcea66073fd112 33,123-156
+src/lib/entity-extractor.ts
+  39bcea66073fd112 242,245,250,351,356-360
+src/handlers/monthly-closing.ts
+  39bcea66073fd112 65,123,126-128,130-131,134,141,143,192
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.17",
+  "base_commit_sha": "a35406912ef0251676bda0e8d5cd124e95610917",
+  "prompts": {
+    "39bcea66073fd112": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "e2d170b0-397b-46d5-83c8-e7ecd0507e14",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Kjetil Hårtveit <kjetil_runescape@hotmail.com>",
+      "messages": [],
+      "total_additions": 1026,
+      "total_deletions": 1006,
+      "accepted_lines": 999,
+      "overriden_lines": 0
+    },
+    "81c19158e52393a9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "731da486-05b9-4fa0-bba7-cf4254b5379e",
+        "model": "claude-opus-4-5-20251101"
+      },
+      "human_author": "Kjetil Hårtveit <kjetil_runescape@hotmail.com>",
+      "messages": [],
+      "total_additions": 248,
+      "total_deletions": 246,
+      "accepted_lines": 248,
+      "overriden_lines": 0
+    }
+  }
+}
