@@ -114,30 +114,49 @@ export async function handleCreateTimesheet(
     }
   }
 
-  // Create activity (use exact name from prompt for scorer matching)
+  // Find or create activity
   let activityId: number | null = null;
   try {
-    const actResult = await client.post<{ id: number }>("/activity", {
-      name: activityName.slice(0, 255),
-      activityType: "PROJECT_GENERAL_ACTIVITY",
+    const existing = await client.list<{ id: number; name: string }>("/activity", {
+      name: activityName,
+      from: "0",
+      count: "5",
     });
-    activityId = actResult.value.id;
-    console.log(`[Handler] Created activity: "${activityName}" id=${activityId}`);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    if (msg.includes("409") || msg.includes("duplicate") || msg.includes("already")) {
-      const uniqueName = `${activityName} ${Date.now()}`;
-      try {
-        const actResult = await client.post<{ id: number }>("/activity", {
-          name: uniqueName.slice(0, 255),
-          activityType: "PROJECT_GENERAL_ACTIVITY",
-        });
-        activityId = actResult.value.id;
-      } catch {
-        console.warn(`[Handler] Could not create activity even with unique name`);
+    const match = existing.values.find(
+      (a) => a.name?.toLowerCase() === activityName.toLowerCase()
+    );
+    if (match) {
+      activityId = match.id;
+      console.log(`[Handler] Found existing activity: "${activityName}" id=${activityId}`);
+    }
+  } catch {
+    // activity search not available, will create
+  }
+
+  if (!activityId) {
+    try {
+      const actResult = await client.post<{ id: number }>("/activity", {
+        name: activityName.slice(0, 255),
+        activityType: "PROJECT_GENERAL_ACTIVITY",
+      });
+      activityId = actResult.value.id;
+      console.log(`[Handler] Created activity: "${activityName}" id=${activityId}`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes("422") || msg.includes("i bruk") || msg.includes("in use")) {
+        // Name already taken - search again
+        try {
+          const retry = await client.list<{ id: number; name: string }>("/activity", {
+            from: "0",
+            count: "100",
+          });
+          const match = retry.values.find(
+            (a) => a.name?.toLowerCase() === activityName.toLowerCase()
+          );
+          if (match) activityId = match.id;
+        } catch { /* ignore */ }
       }
-    } else {
-      console.warn(`[Handler] Could not create activity: ${msg}`);
+      if (!activityId) console.warn(`[Handler] Could not create or find activity: ${msg}`);
     }
   }
 
