@@ -158,10 +158,14 @@ IMPORTANT: For per-diem, compute total = days × daily rate.`,
 - supplierName (required)
 - organizationNumber
 - amount (invoice total)
+- netAmount (amount excluding VAT, if stated separately)
+- vatAmount (VAT amount, if stated separately)
 - amountIncludesVat (true if "including VAT" / "inkl. mva")
 - accountNumber (expense account, e.g. 6300)
 - vatRate (percentage, usually 25)
 - invoiceNumber
+- invoiceDate (YYYY-MM-DD format)
+- dueDate (YYYY-MM-DD format, if mentioned)
 - description
 
 Add prerequisite create_supplier.`,
