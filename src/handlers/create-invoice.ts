@@ -6,8 +6,9 @@ import {
   daysFromNow,
   findCustomerByName,
   findOrCreateProduct,
-  findProductByNumber,
-  findVatTypeIdByRate,
+  loadProductCatalog,
+  findProductInCatalog,
+  findProductInCatalogByNumber,
   ensureBankAccountConfigured,
 } from "../lib/tripletex-helpers.js";
 
@@ -127,8 +128,18 @@ async function createOrderForInvoice(
   const orderId = orderResult.value.id;
   console.log(`[Handler] Created order for invoice: id=${orderId}`);
 
-  // Resolve all product IDs
+  // Resolve all product IDs — batch lookup when ≥2 unresolved products
   const resolvedLines: { productId: number; line: ProductLine }[] = [];
+  const unresolvedLines = productLines.filter((line) => {
+    const cachedId = ctx?.getProductId(line.productName) ??
+      (line.productNumber ? ctx?.getProductId(String(line.productNumber)) : undefined);
+    return !cachedId;
+  });
+
+  if (unresolvedLines.length >= 2) {
+    await loadProductCatalog(client);
+  }
+
   for (const line of productLines) {
     const cachedId = ctx?.getProductId(line.productName) ??
       (line.productNumber ? ctx?.getProductId(String(line.productNumber)) : undefined);
@@ -137,27 +148,38 @@ async function createOrderForInvoice(
       console.log(`[Handler] Using product from context: ${line.productName} → id=${cachedId}`);
       productId = cachedId;
     } else {
-      // Try product number lookup first
+      let found: { id: number } | null = null;
+
       if (line.productNumber) {
-        const existing = await findProductByNumber(client, String(line.productNumber));
-        if (existing) {
-          console.log(`[Handler] Found product by number ${line.productNumber}: id=${existing.id}`);
-          productId = existing.id;
-          ctx?.registerProduct(line.productName, existing.id);
-          ctx?.registerProduct(String(line.productNumber), existing.id);
-          resolvedLines.push({ productId, line });
-          continue;
+        found = findProductInCatalogByNumber(String(line.productNumber));
+        if (found) {
+          console.log(`[Handler] Found product by number ${line.productNumber}: id=${found.id}`);
+        }
+      }
+      if (!found) {
+        found = findProductInCatalog(line.productName);
+        if (found) {
+          console.log(`[Handler] Found product by name ${line.productName}: id=${found.id}`);
         }
       }
 
-      const product = await findOrCreateProduct(
-        client,
-        line.productName,
-        line.unitPrice,
-      );
-      productId = product.id;
-      ctx?.registerProduct(line.productName, productId);
-      if (line.productNumber) ctx?.registerProduct(String(line.productNumber), productId);
+      if (found) {
+        productId = found.id;
+        ctx?.registerProduct(line.productName, productId);
+        if (line.productNumber) ctx?.registerProduct(String(line.productNumber), productId);
+      } else {
+        const skipSearch = unresolvedLines.length >= 2;
+        const product = await findOrCreateProduct(
+          client,
+          line.productName,
+          line.unitPrice,
+          undefined,
+          skipSearch,
+        );
+        productId = product.id;
+        ctx?.registerProduct(line.productName, productId);
+        if (line.productNumber) ctx?.registerProduct(String(line.productNumber), productId);
+      }
     }
     resolvedLines.push({ productId, line });
   }

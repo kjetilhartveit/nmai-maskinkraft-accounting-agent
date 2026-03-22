@@ -264,3 +264,53 @@ A hosted HTTPS endpoint that:
 5. Returns `{"status": "completed"}`
 
 All within 5 minutes, deployed somewhere accessible via HTTPS.
+
+---
+
+## Optimization Findings (2026-03-22)
+
+### Eval Results: 25/25 non-file tasks pass, 0 API errors
+
+Total Tripletex calls per full eval: **115** (down from 118 before optimizations).
+
+### Key Optimizations Applied
+
+1. **Product catalog batching** (`create-invoice`, `create-order`): When resolving ≥2 products, a single unfiltered `GET /product` loads the full catalog (~82 products in sandbox) into an in-memory map. Products are then resolved by name/number without additional API calls. Savings: 2 calls for 3-product invoices (8→6), 1 call for 2-product orders (5→4).
+
+2. **Lazy payment type loading** (`reminder-fee`): Moved `GET /invoice/paymentType` out of the upfront parallel batch. Now only fetched right before registering the partial payment on the overdue invoice. Saves 1 call when no overdue invoice exists in the sandbox.
+
+3. **Parallelized initial lookups**:
+   - `ledger-analysis`: PM employee + department + 2 voucher period queries now run in a single `Promise.all` instead of sequentially (same call count, ~40% latency reduction).
+   - `project-lifecycle`: Customer + PM + department lookups now parallel (same call count, faster execution).
+
+4. **Fixed missing cache resets**: `resetReminderFeeCache()` and `resetBankReconciliationCache()` were not called in `solve.ts`, causing the `cachedPaymentTypeId` and bank reconciliation account cache to leak between solve requests. This caused non-deterministic eval results (sometimes 9 calls, sometimes 10 for reminder_fee).
+
+### API Call Counts by Task Type (canonical tests)
+
+| Task Type | Calls | Notes |
+|-----------|-------|-------|
+| create_customer | 1 | POST /customer |
+| create_department | 1 | POST /department/list (batch) |
+| create_supplier | 1 | POST /supplier |
+| create_employee | 2 | GET /department + GET /employee |
+| create_travel_expense | 2 | GET /employee + POST /travelExpense |
+| year_end_closing | 2 | GET /ledger/account + POST voucher |
+| monthly_closing | 2 | GET /ledger/account + POST voucher |
+| create_payroll | 3 | GET /employee + GET /ledger/account + POST voucher |
+| create_supplier_invoice | 3 | POST /supplier + GET /ledger/account + POST voucher |
+| fx_payment | 3 | GET /invoice + GET /ledger/account + POST voucher |
+| create_product | 4 | dept + vatType + unit + product search |
+| create_project | 4 | employee + dept + customer + POST project |
+| create_payment | 4 | account + invoice + paymentType + PUT payment |
+| create_order | 4 | customer + order + catalog + orderlines (batch) |
+| create_dimension | 4 | dimensions + values + accounts + voucher |
+| reverse_payment | 4 | customer + invoice + paymentType + PUT |
+| create_timesheet | 4 | employee + project + activity + entry |
+| ledger_audit | 4 | 2× voucher search + accounts + voucher |
+| create_invoice | 6 | customer + account + order + catalog + orderlines + invoice |
+| send_invoice | 7 | customer + account + order + product + orderline + invoice + send |
+| create_credit_note | 8 | customer + account + invoice + product + order + orderline + invoice + credit |
+| project_fixed_price | 9 | customer + employee + dept + project + account + product + order + orderline + invoice |
+| ledger_analysis | 10 | employee + dept + 2× vouchers + 3× (project + activity) |
+| reminder_fee | 10 | invoices + accounts + voucher + product + order + orderline + invoice + send + paymentType + payment |
+| project_lifecycle | 13 | customer + dept + employee + project + activity + 2× timesheet + accounts + voucher + product + order + orderline + invoice |

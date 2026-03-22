@@ -25,12 +25,11 @@ export async function handleLedgerAnalysis(
   ctx: SequenceContext,
 ): Promise<void> {
   const entity = task.entities[0] ?? {};
-  const pmId = await getProjectManagerEmployeeId(client);
-  if (!pmId) throw new Error("No employee found to use as project manager");
-  const departmentId = await getDefaultDepartmentId(client);
 
-  // Query vouchers for January and February 2026 in parallel
-  const [janVouchers, febVouchers] = await Promise.all([
+  // Parallel: resolve PM + department + query both voucher periods (4 calls → same count but parallel)
+  const [pmId, departmentId, janVouchers, febVouchers] = await Promise.all([
+    getProjectManagerEmployeeId(client),
+    getDefaultDepartmentId(client),
     client.list<Voucher>("/ledger/voucher", {
       dateFrom: "2026-01-01",
       dateTo: "2026-01-31",
@@ -44,6 +43,7 @@ export async function handleLedgerAnalysis(
       count: "1000",
     }),
   ]);
+  if (!pmId) throw new Error("No employee found to use as project manager");
 
   // Aggregate expense per account (accounts 4000-7999) per period
   const janTotals = new Map<number, { total: number; name: string }>();

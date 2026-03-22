@@ -41,6 +41,47 @@ interface Product {
   name: string;
 }
 
+let cachedProductCatalog: Map<string, Product> | null = null;
+let cachedProductCatalogById: Map<number, Product> | null = null;
+let cachedProductCatalogByNumber: Map<string, Product> | null = null;
+
+/**
+ * Loads all products in a single GET call and caches them.
+ * Subsequent lookups resolve in-memory without additional API calls.
+ * Useful when resolving ≥2 products (saves N-1 calls).
+ */
+export async function loadProductCatalog(
+  client: TripletexClient,
+): Promise<Map<string, Product>> {
+  if (cachedProductCatalog) return cachedProductCatalog;
+  const result = await client.list<Product & { number?: string }>("/product", {
+    from: "0",
+    count: "1000",
+  });
+  cachedProductCatalog = new Map();
+  cachedProductCatalogById = new Map();
+  cachedProductCatalogByNumber = new Map();
+  for (const p of result.values) {
+    cachedProductCatalog.set(p.name.trim().toLowerCase(), p);
+    cachedProductCatalogById.set(p.id, p);
+    if ((p as unknown as Record<string, unknown>).number) {
+      cachedProductCatalogByNumber.set(
+        String((p as unknown as Record<string, unknown>).number).trim(),
+        p,
+      );
+    }
+  }
+  return cachedProductCatalog;
+}
+
+export function findProductInCatalog(name: string): Product | null {
+  return cachedProductCatalog?.get(name.trim().toLowerCase()) ?? null;
+}
+
+export function findProductInCatalogByNumber(num: string): Product | null {
+  return cachedProductCatalogByNumber?.get(num.trim()) ?? null;
+}
+
 let cachedDefaultDepartmentId: number | null = null;
 let cachedNokCurrencyId: number | null = null;
 let cachedProductVatTypeId: number | null = null;
@@ -412,6 +453,9 @@ export function resetCaches(): void {
   cachedProjectManagerId = null;
   bulkAccountMap = null;
   cachedEmployees = null;
+  cachedProductCatalog = null;
+  cachedProductCatalogById = null;
+  cachedProductCatalogByNumber = null;
 }
 
 // === Bulk Account Loader ===

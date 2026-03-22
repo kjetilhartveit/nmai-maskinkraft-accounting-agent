@@ -4,7 +4,9 @@ import type { SequenceContext } from "../lib/sequence-context.js";
 import {
   findCustomerByName,
   findOrCreateProduct,
-  findProductByNumber,
+  loadProductCatalog,
+  findProductInCatalog,
+  findProductInCatalogByNumber,
   findVatTypeIdByRate,
   today,
   daysFromNow,
@@ -90,6 +92,15 @@ export async function handleCreateOrder(
   }
 
   if (products.length > 0) {
+    // Batch load product catalog when ≥2 unresolved products
+    const unresolvedCount = products.filter((p) => {
+      const name = String(p.name ?? "Produkt");
+      return !ctx.getProductId(name) && !(p.productNumber && ctx.getProductId(String(p.productNumber)));
+    }).length;
+    if (unresolvedCount >= 2) {
+      await loadProductCatalog(client);
+    }
+
     const orderLines: Record<string, unknown>[] = [];
     for (const p of products) {
       const productName = String(p.name ?? "Produkt");
@@ -99,17 +110,27 @@ export async function handleCreateOrder(
       if (productId) {
         console.log(`[Handler] Using product from context: ${productName} → id=${productId}`);
       } else {
+        let found: { id: number } | null = null;
+
         if (p.productNumber) {
-          const existing = await findProductByNumber(client, String(p.productNumber));
-          if (existing) {
-            console.log(`[Handler] Found product by number ${p.productNumber}: id=${existing.id}`);
-            productId = existing.id;
-            ctx.registerProduct(productName, existing.id);
-            ctx.registerProduct(String(p.productNumber), existing.id);
+          found = findProductInCatalogByNumber(String(p.productNumber));
+          if (found) {
+            console.log(`[Handler] Found product by number ${p.productNumber}: id=${found.id}`);
+          }
+        }
+        if (!found) {
+          found = findProductInCatalog(productName);
+          if (found) {
+            console.log(`[Handler] Found product by name ${productName}: id=${found.id}`);
           }
         }
 
-        if (!productId) {
+        if (found) {
+          productId = found.id;
+          ctx.registerProduct(productName, productId);
+          if (p.productNumber) ctx.registerProduct(String(p.productNumber), productId);
+        } else {
+          const skipSearch = unresolvedCount >= 2;
           let vatTypeId: number | undefined;
           if (p.vatRate !== undefined) {
             vatTypeId = await findVatTypeIdByRate(client, p.vatRate);
@@ -119,6 +140,7 @@ export async function handleCreateOrder(
             productName,
             Number(p.unitPrice ?? p.price ?? 0),
             vatTypeId,
+            skipSearch,
           );
           productId = product.id;
           ctx.registerProduct(productName, productId);

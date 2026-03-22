@@ -67,30 +67,34 @@ export async function handleProjectLifecycle(
     ? { supplierName: String(supplierCostRaw.supplierName ?? ""), amount: Number(supplierCostRaw.amount), description: String(supplierCostRaw.description ?? "") }
     : null;
 
-  // 1. Find or create customer
+  // 1. Parallel: resolve customer + PM + department
   let customerId: number | undefined;
-  if (customerName) {
-    customerId = ctx.getCustomerId(customerName);
-    if (!customerId) {
-      const existing = await findCustomerByName(client, customerName);
-      if (existing) {
-        customerId = existing.id;
-      } else {
-        const body: Record<string, unknown> = { name: customerName, isCustomer: true };
-        if (orgNumber) body.organizationNumber = orgNumber;
-        const created = await client.post<{ id: number }>("/customer", body);
-        customerId = created.value.id;
-      }
-      ctx.registerCustomer(customerName, customerId);
-    }
+  const ctxCustomerId = customerName ? ctx.getCustomerId(customerName) : undefined;
+
+  const [customerResult, pmId, departmentId] = await Promise.all([
+    ctxCustomerId
+      ? Promise.resolve(null)
+      : customerName
+        ? findCustomerByName(client, customerName)
+        : Promise.resolve(null),
+    getProjectManagerEmployeeId(client),
+    getDefaultDepartmentId(client),
+  ]);
+
+  if (ctxCustomerId) {
+    customerId = ctxCustomerId;
+  } else if (customerResult) {
+    customerId = customerResult.id;
+    ctx.registerCustomer(customerName, customerId);
+  } else if (customerName) {
+    const body: Record<string, unknown> = { name: customerName, isCustomer: true };
+    if (orgNumber) body.organizationNumber = orgNumber;
+    const created = await client.post<{ id: number }>("/customer", body);
+    customerId = created.value.id;
+    ctx.registerCustomer(customerName, customerId);
   }
 
-  // 2. Resolve project manager (first employee in sandbox)
-  const pmId = await getProjectManagerEmployeeId(client);
   if (!pmId) throw new Error("No project manager found");
-
-  // 3. Create project
-  const departmentId = await getDefaultDepartmentId(client);
   const projectBody: Record<string, unknown> = {
     name: projectName,
     projectManager: { id: pmId },

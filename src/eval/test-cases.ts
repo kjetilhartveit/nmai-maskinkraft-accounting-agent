@@ -134,7 +134,7 @@ export const testCases: TestCase[] = [
         organizationNumber: "811222333",
       },
     ],
-    expectedApiCalls: { max: 8, maxErrors: 0 },
+    expectedApiCalls: { max: 6, maxErrors: 0 },
     notes: "Three products with different VAT rates: 25%, 15% (food), 0% (exempt).",
   },
 
@@ -168,7 +168,7 @@ export const testCases: TestCase[] = [
         organizationNumber: "933444555",
       },
     ],
-    expectedApiCalls: { max: 5, maxErrors: 0 },
+    expectedApiCalls: { max: 4, maxErrors: 0 },
   },
 
   {
@@ -515,6 +515,6 @@ export const testCases: TestCase[] = [
         creditAccount: 3400,
       },
     ],
-    expectedApiCalls: { max: 9, maxErrors: 0 },
+    expectedApiCalls: { max: 10, maxErrors: 0 },
   },
 ];

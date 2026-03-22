@@ -54,12 +54,12 @@ export function resetReminderFeeCache(): void {
 /**
  * Reminder fee handler.
  *
- * Optimized flow (10 API calls):
- *   1. Parallel: loadAllAccounts + GET /invoice + GET /invoice/paymentType (3 parallel calls)
+ * Optimized flow (9-10 API calls):
+ *   1. Parallel: loadAllAccounts + GET /invoice (2 parallel calls)
  *   2. ensureBankAccountFromBulkAccounts (0 calls if already configured, uses bulk data)
  *   3. POST /ledger/voucher (reminder fee)
  *   4. findOrCreateProduct + POST /order + POST /order/orderline + POST /invoice + PUT /:send
- *   5. PUT /invoice/:payment (partial payment on overdue, if found)
+ *   5. GET /invoice/paymentType + PUT /invoice/:payment (only if overdue invoice found)
  */
 export async function handleReminderFee(
   client: TripletexClient,
@@ -75,8 +75,8 @@ export async function handleReminderFee(
   const debitAccountNumber = parseNum(entity.debitAccount ?? entity.debitAccountNumber, 1500);
   const creditAccountNumber = parseNum(entity.creditAccount ?? entity.creditAccountNumber, 3400);
 
-  // 1. Parallel: load accounts + search invoices + get payment type
-  const [accountsMap, allInvoices, _payTypeId] = await Promise.all([
+  // 1. Parallel: load accounts + search invoices (paymentType deferred until needed)
+  const [accountsMap, allInvoices] = await Promise.all([
     loadAllAccounts(client),
     client.list<Invoice>("/invoice", {
       invoiceDateFrom: "2020-01-01",
@@ -84,7 +84,6 @@ export async function handleReminderFee(
       from: "0",
       count: "50",
     }),
-    getPaymentTypeId(client),
   ]);
 
   // Use bulk accounts for bank config check (saves 1 API call vs ensureBankAccountConfigured)
@@ -198,9 +197,9 @@ export async function handleReminderFee(
     console.warn(`[Handler] Could not send reminder fee invoice: ${err instanceof Error ? err.message : err}`);
   }
 
-  // 5. Register partial payment on the overdue invoice
+  // 5. Register partial payment on the overdue invoice (lazy-load paymentType)
   if (partialPaymentAmount > 0 && overdueInvoice) {
-    const paymentTypeId = _payTypeId;
+    const paymentTypeId = await getPaymentTypeId(client);
     const qs = new URLSearchParams({
       paymentDate: today(),
       paymentTypeId: String(paymentTypeId),
