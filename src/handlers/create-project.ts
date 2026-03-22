@@ -84,7 +84,21 @@ export async function handleCreateProject(
         body.customer = { id: ctxCustomerId };
       } else {
         const customer = await findCustomerByName(client, customerName);
-        if (customer) body.customer = { id: customer.id };
+        if (customer) {
+          body.customer = { id: customer.id };
+          ctx.registerCustomer(customerName, customer.id);
+        } else {
+          const custBody: Record<string, unknown> = {
+            name: customerName,
+            isCustomer: true,
+          };
+          const orgNumber = String(entity.organizationNumber ?? entity.orgNumber ?? "");
+          if (orgNumber) custBody.organizationNumber = orgNumber;
+          const created = await client.post<{ id: number }>("/customer", custBody);
+          console.log(`[Handler] Created customer: ${customerName} id=${created.value.id}`);
+          body.customer = { id: created.value.id };
+          ctx.registerCustomer(customerName, created.value.id);
+        }
       }
     } else if (entity.customerId) {
       body.customer = { id: Number(entity.customerId) };

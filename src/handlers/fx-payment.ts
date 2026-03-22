@@ -1,7 +1,13 @@
 import type { TripletexClient } from "../lib/tripletex-client.js";
 import type { ParsedTask } from "../types/index.js";
 import type { SequenceContext } from "../lib/sequence-context.js";
-import { today, findCustomerByName } from "../lib/tripletex-helpers.js";
+import {
+  today,
+  daysFromNow,
+  findCustomerByName,
+  findOrCreateProduct,
+  ensureBankAccountConfigured,
+} from "../lib/tripletex-helpers.js";
 
 interface LedgerAccount {
   id: number;
@@ -34,15 +40,8 @@ export function resetFxPaymentCache(): void {
 /**
  * Foreign currency payment handler.
  *
- * Handles: Invoice sent in EUR at OLD_RATE. Customer paid at NEW_RATE.
- * Posts exchange difference (agio/disagio).
- *
- * Flow:
- *   1. Find customer
- *   2. Find unpaid invoices → register payment (NOK = EUR × paymentRate)
- *   3. Post exchange difference voucher:
- *      - If paymentRate < invoiceRate: disagio (loss) on account 8160
- *      - If paymentRate > invoiceRate: agio (gain) on account 8060
+ * Flow: create customer → create invoice (order→line→invoice) → register
+ * payment at new rate → post exchange difference voucher (agio/disagio).
  */
 export async function handleFxPayment(
   client: TripletexClient,
@@ -57,19 +56,19 @@ export async function handleFxPayment(
   const currency = String(entity.currency ?? entity.foreignCurrency ?? "EUR");
   const invoiceRate = Number(entity.invoiceRate ?? entity.exchangeRate ?? 0);
   const paymentRate = Number(entity.paymentRate ?? 0);
+  const productName = String(entity.productName ?? entity.description ?? `${currency} tjeneste`);
 
   const invoiceNok = eurAmount * invoiceRate;
   const paymentNok = eurAmount * paymentRate;
-  const diff = paymentNok - invoiceNok; // negative = loss (disagio), positive = gain (agio)
+  const diff = paymentNok - invoiceNok;
 
   console.log(`[Handler] FX: ${eurAmount} ${currency}, invoice rate ${invoiceRate}, payment rate ${paymentRate}`);
   console.log(`[Handler] FX: invoice NOK=${invoiceNok}, payment NOK=${paymentNok}, diff=${diff}`);
 
-  // 1. Find customer
+  // 1. Create customer
   let customerId: number | undefined;
-  if (customerName) {
-    customerId = ctx.getCustomerId(customerName);
-  }
+  if (customerName) customerId = ctx.getCustomerId(customerName);
+
   if (!customerId && customerName) {
     const found = await findCustomerByName(client, customerName);
     if (found) {
@@ -77,6 +76,7 @@ export async function handleFxPayment(
       ctx.registerCustomer(customerName, found.id);
     }
   }
+
   if (!customerId) {
     const body: Record<string, unknown> = {
       name: customerName || "FX kunde",
@@ -89,47 +89,56 @@ export async function handleFxPayment(
     if (customerName) ctx.registerCustomer(customerName, customerId);
   }
 
-  // 2. Try to find and pay unpaid invoice
-  let invoicePaid = false;
-  try {
-    const invoices = await client.list<{
-      id: number;
-      invoiceNumber: number;
-      amountOutstanding: number;
-      amountOutstandingTotal: number;
-    }>("/invoice", {
-      customerId: String(customerId),
-      invoiceDateFrom: "2025-01-01",
-      invoiceDateTo: "2026-12-31",
-      from: "0",
-      count: "10",
-    });
+  // 2. Create invoice for the EUR amount at invoice rate
+  await ensureBankAccountConfigured(client);
 
-    const unpaid = invoices.values.find(inv => inv.amountOutstanding > 0 || inv.amountOutstandingTotal > 0);
-    if (unpaid) {
-      console.log(`[Handler] Found unpaid invoice: #${unpaid.invoiceNumber} (outstanding: ${unpaid.amountOutstandingTotal})`);
+  const product = await findOrCreateProduct(client, productName, invoiceNok);
 
-      const paymentTypes = await client.list<{ id: number; description: string }>("/invoice/paymentType", {
-        from: "0",
-        count: "10",
-      });
-      const payTypeId = paymentTypes.values[0]?.id;
+  const orderResult = await client.post<{ id: number }>("/order", {
+    customer: { id: customerId },
+    orderDate: today(),
+    deliveryDate: today(),
+  });
+  const orderId = orderResult.value.id;
+  console.log(`[Handler] Created order: id=${orderId}`);
 
-      if (payTypeId) {
-        const paidAmount = paymentNok > 0 ? paymentNok : Math.round(unpaid.amountOutstandingTotal * (paymentRate || 1));
-        await client.put(
-          `/invoice/${unpaid.id}/:payment?paymentDate=${today()}&paymentTypeId=${payTypeId}&paidAmount=${paidAmount}`,
-          {},
-        );
-        console.log(`[Handler] Registered FX payment: ${paidAmount} NOK`);
-        invoicePaid = true;
-      }
-    }
-  } catch (err) {
-    console.warn(`[Handler] Could not find/pay invoice: ${err instanceof Error ? err.message : err}`);
+  await client.post("/order/orderline", {
+    order: { id: orderId },
+    product: { id: product.id },
+    count: 1,
+    unitPriceExcludingVatCurrency: invoiceNok,
+  });
+
+  const invoiceResult = await client.post<{ id: number; amount: number; amountCurrency: number }>(
+    "/invoice",
+    {
+      invoiceDate: today(),
+      invoiceDueDate: daysFromNow(14),
+      orders: [{ id: orderId }],
+    },
+  );
+  const invoiceId = invoiceResult.value.id;
+  const invoiceAmount = invoiceResult.value.amount ?? invoiceResult.value.amountCurrency ?? invoiceNok;
+  console.log(`[Handler] Created invoice: id=${invoiceId}, amount=${invoiceAmount}`);
+  ctx.registerInvoice(customerName, invoiceId);
+
+  // 3. Register payment at the new exchange rate
+  const paymentTypes = await client.list<{ id: number; description: string }>(
+    "/invoice/paymentType",
+    { from: "0", count: "10" },
+  );
+  const payTypeId = paymentTypes.values[0]?.id;
+
+  if (payTypeId) {
+    const paidAmount = paymentNok > 0 ? paymentNok : invoiceAmount;
+    await client.put(
+      `/invoice/${invoiceId}/:payment?paymentDate=${today()}&paymentTypeId=${payTypeId}&paidAmount=${paidAmount}`,
+      {},
+    );
+    console.log(`[Handler] Registered FX payment: ${paidAmount} NOK on invoice ${invoiceId}`);
   }
 
-  // 3. Post exchange difference voucher
+  // 4. Post exchange difference voucher
   if (Math.abs(diff) > 0.01) {
     const isLoss = diff < 0;
     const absDiff = Math.abs(Math.round(diff));
@@ -140,12 +149,12 @@ export async function handleFxPayment(
 
     const postings = isLoss
       ? [
-          { row: 1, account: { id: fxAccount.id }, date: today(), amountGross: absDiff, amountGrossCurrency: absDiff, description: "Valutatap (disagio)" },
-          { row: 2, account: { id: bankAccount.id }, date: today(), amountGross: -absDiff, amountGrossCurrency: -absDiff, description: "Disagio" },
+          { row: 1, account: { id: fxAccount.id }, date: today(), amountGross: absDiff, amountGrossCurrency: absDiff, description: `Valutatap (disagio) ${eurAmount} ${currency}` },
+          { row: 2, account: { id: bankAccount.id }, date: today(), amountGross: -absDiff, amountGrossCurrency: -absDiff, description: `Disagio ${currency}` },
         ]
       : [
-          { row: 1, account: { id: bankAccount.id }, date: today(), amountGross: absDiff, amountGrossCurrency: absDiff, description: "Agio" },
-          { row: 2, account: { id: fxAccount.id }, date: today(), amountGross: -absDiff, amountGrossCurrency: -absDiff, description: "Valutagevinst (agio)" },
+          { row: 1, account: { id: bankAccount.id }, date: today(), amountGross: absDiff, amountGrossCurrency: absDiff, description: `Agio ${currency}` },
+          { row: 2, account: { id: fxAccount.id }, date: today(), amountGross: -absDiff, amountGrossCurrency: -absDiff, description: `Valutagevinst (agio) ${eurAmount} ${currency}` },
         ];
 
     const result = await client.post<{ id: number }>("/ledger/voucher", {
@@ -154,19 +163,5 @@ export async function handleFxPayment(
       postings,
     });
     console.log(`[Handler] Created FX voucher: id=${result.value.id} (${isLoss ? "disagio" : "agio"}: ${absDiff} NOK)`);
-  } else if (!invoicePaid) {
-    // Fallback: no diff and no payment — create a generic FX voucher
-    const bankAccount = await findAccount(client, 1920);
-    const fxAccount = await findAccount(client, 8160);
-    const amount = paymentNok > 0 ? paymentNok : 1000;
-    const result = await client.post<{ id: number }>("/ledger/voucher", {
-      date: today(),
-      description: `Valutabetaling ${eurAmount} ${currency}`,
-      postings: [
-        { row: 1, account: { id: bankAccount.id }, date: today(), amountGross: amount, amountGrossCurrency: amount, description: `${currency} betaling` },
-        { row: 2, account: { id: fxAccount.id }, date: today(), amountGross: -amount, amountGrossCurrency: -amount, description: `${currency} betaling` },
-      ],
-    });
-    console.log(`[Handler] Created fallback FX voucher: id=${result.value.id}`);
   }
 }

@@ -265,13 +265,16 @@ Extract ALL details about depreciation, prepaid expenses, and tax provision.`,
 
   monthly_closing: `Extract:
 - month (e.g. "2026-03" for March 2026)
-- accrualReversals: array of { amount (number), fromAccount (4-digit account like 1710), toAccount (4-digit account like 6300), description }
-- depreciationEntries: array of { amount (number), assetAccount (4-digit, e.g. 1200), depreciationAccount (4-digit, e.g. 6010) }
-- salaryProvision: { amount (number), debitAccount (4-digit, e.g. 5000), creditAccount (4-digit, e.g. 2900) }
+- accrualReversals: array of { amount (number in NOK), fromAccount (4-digit account number), toAccount (4-digit account number), description }
+- depreciationEntries: array of { amount (monthly depreciation in NOK), assetAccount (4-digit LEDGER account for the asset, e.g. 1200), depreciationAccount (4-digit expense account, e.g. 6010) }
+- salaryProvision: { amount (number in NOK), debitAccount (4-digit, e.g. 5000), creditAccount (4-digit, e.g. 2900) }
 
-CRITICAL: Account numbers are ALWAYS 4-digit Norwegian standard chart of accounts numbers (1000-9999). 
-Do NOT confuse monetary amounts (like 11150 NOK) with account numbers.
-Common accounts: 1200 (assets), 1710 (prepaid), 2900 (provisions), 5000 (salary), 6010 (depreciation), 6300 (rent/expenses).
+CRITICAL RULES:
+1. ALL account numbers MUST be exactly 4 digits (1000-9999). Never use monetary amounts as account numbers.
+2. For depreciation: if the prompt says "anskaffelseskost 147250 kr", that 147250 is the ACQUISITION COST (a money amount), NOT an account. The assetAccount should be the balance sheet account (1200 for machinery, 1210 for furniture, etc.). Calculate monthly depreciation = acquisitionCost / years / 12.
+3. If the prompt says "til kostkonto" or "expense account" without a number, use 6300 as default expense account.
+4. If salary provision has no explicit amount, estimate a reasonable monthly salary (e.g. 50000 NOK).
+5. Common accounts: 1200/1210 (assets), 1700/1710 (prepaid), 2900 (provisions), 5000 (salary), 6010/6020 (depreciation), 6300 (general expenses).
 
 Extract ALL closing entries mentioned in the prompt.`,
 
