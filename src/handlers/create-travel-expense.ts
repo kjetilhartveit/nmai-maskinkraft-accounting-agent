@@ -147,9 +147,21 @@ export async function handleCreateTravelExpense(
   // Add cost lines for expenses
   const costItems: { amount: number; description: string }[] = [];
 
+  // Check entity.costs array first (from entity extraction)
+  const costsArray = Array.isArray(entity.costs) ? entity.costs : [];
+  for (const c of costsArray as Record<string, unknown>[]) {
+    const amt = Number(c.amount ?? c.cost ?? 0);
+    if (amt > 0) {
+      costItems.push({
+        amount: amt,
+        description: String(c.description ?? c.name ?? ""),
+      });
+    }
+  }
+
+  // Then check additional entities
   for (const e of task.entities.slice(1)) {
     let amt = Number(e.amount ?? e.cost ?? 0);
-    // Compute per-diem total if days+rate provided but no pre-computed amount
     if (amt <= 0 && e.days && e.dailyRate) {
       amt = Number(e.days) * Number(e.dailyRate);
     }
@@ -161,16 +173,16 @@ export async function handleCreateTravelExpense(
     }
   }
 
-  // Fallback: single cost from first entity
+  // Fallback: per-diem calculation or single cost from first entity
   if (costItems.length === 0) {
-    let amount = Number(entity.amount ?? entity.cost ?? 0);
-    if (amount <= 0 && entity.days && entity.dailyRate) {
-      amount = Number(entity.days) * Number(entity.dailyRate);
+    let amount = Number(entity.amount ?? entity.cost ?? entity.totalAmount ?? 0);
+    if (amount <= 0 && entity.days && (entity.perDiemRate ?? entity.dailyRate)) {
+      amount = Number(entity.days) * Number(entity.perDiemRate ?? entity.dailyRate);
     }
     if (amount > 0) {
       costItems.push({
         amount,
-        description: String(entity.description ?? ""),
+        description: String(entity.description ?? entity.title ?? entity.tripTitle ?? "Reise"),
       });
     }
   }
