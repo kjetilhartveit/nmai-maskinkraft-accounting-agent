@@ -42,6 +42,14 @@ app.get("/health", (c) => {
 
 app.route("/", solveRouter);
 
+// Also handle POST / directly (competition platform may POST to the endpoint URL root)
+app.post("/", async (c) => {
+  const url = new URL(c.req.url);
+  url.pathname = "/solve";
+  const newReq = new Request(url.toString(), c.req.raw);
+  return app.fetch(newReq);
+});
+
 console.log(`Starting server on port ${config.port}...`);
 
 serve({

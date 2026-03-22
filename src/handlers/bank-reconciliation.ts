@@ -1,7 +1,7 @@
 import type { TripletexClient } from "../lib/tripletex-client.js";
 import type { ParsedTask } from "../types/index.js";
 import type { SequenceContext } from "../lib/sequence-context.js";
-import { today } from "../lib/tripletex-helpers.js";
+import { today, ensureBankAccountConfigured } from "../lib/tripletex-helpers.js";
 
 interface LedgerAccount {
   id: number;
@@ -13,7 +13,8 @@ const accountCache = new Map<number, LedgerAccount>();
 async function findAccount(
   client: TripletexClient,
   accountNumber: number,
-): Promise<LedgerAccount> {
+): Promise<LedgerAccount | null> {
+  if (!accountNumber || isNaN(accountNumber) || accountNumber <= 0) return null;
   const cached = accountCache.get(accountNumber);
   if (cached) return cached;
   const result = await client.list<LedgerAccount>("/ledger/account", {
@@ -22,20 +23,43 @@ async function findAccount(
     count: "1",
   });
   const account = result.values[0];
-  if (!account) throw new Error(`Ledger account ${accountNumber} not found`);
+  if (!account) return null;
   accountCache.set(accountNumber, account);
   return account;
+}
+
+async function findAccountOrFallback(
+  client: TripletexClient,
+  accountNumber: number,
+  fallbacks: number[],
+): Promise<LedgerAccount> {
+  const primary = await findAccount(client, accountNumber);
+  if (primary) return primary;
+  for (const fb of fallbacks) {
+    const acct = await findAccount(client, fb);
+    if (acct) return acct;
+  }
+  throw new Error(`No account found for ${accountNumber} or fallbacks ${fallbacks}`);
 }
 
 export function resetBankReconciliationCache(): void {
   accountCache.clear();
 }
 
+interface Transaction {
+  date?: string;
+  description?: string;
+  amount?: number;
+  reference?: string;
+  accountNumber?: number;
+  type?: string;
+}
+
 /**
  * Bank reconciliation handler.
  *
- * Creates adjustment vouchers to reconcile bank balance with ledger.
- * Entities contain the adjustments needed (account, amount, description).
+ * Processes bank statement transactions (from CSV), matches against open invoices,
+ * and creates adjustment vouchers for unmatched items (fees, interest, etc.).
  */
 export async function handleBankReconciliation(
   client: TripletexClient,
@@ -43,92 +67,142 @@ export async function handleBankReconciliation(
   _ctx: SequenceContext,
 ): Promise<void> {
   const entity = task.entities[0] ?? {};
-
   const dateStr = String(entity.date ?? today());
-  const description = String(entity.description ?? "Bankavstemmelse");
 
-  // Collect adjustments from entities
-  const adjustments: { accountNumber: number; amount: number; type: string; description: string }[] = [];
+  await ensureBankAccountConfigured(client);
 
+  const bankAccount = await findAccountOrFallback(client, 1920, [1900]);
+
+  const transactions = (entity.transactions ?? []) as Transaction[];
+  const unmatchedItems = (entity.unmatchedItems ?? []) as Transaction[];
+
+  const allItems = [...transactions, ...unmatchedItems];
+
+  const adjustments: { accountNumber: number; amount: number; description: string; date: string }[] = [];
+
+  const ACCOUNT_MAP: Record<string, number> = {
+    bank_fee: 7770,
+    interest: 8040,
+    interest_income: 8040,
+    interest_expense: 8140,
+    unmatched_payment: 1500,
+    other: 7790,
+  };
+
+  for (const item of allItems) {
+    const amount = Number(item.amount ?? 0);
+    if (Math.abs(amount) < 0.01) continue;
+
+    let targetAccount = Number(item.accountNumber ?? 0);
+    if (targetAccount <= 0 && item.type) {
+      targetAccount = ACCOUNT_MAP[item.type] ?? 7790;
+    }
+    if (targetAccount <= 0) {
+      const desc = String(item.description ?? "").toLowerCase();
+      if (desc.includes("gebyr") || desc.includes("fee")) targetAccount = 7770;
+      else if (desc.includes("rente") || desc.includes("interest")) targetAccount = amount > 0 ? 8040 : 8140;
+      else targetAccount = 7790;
+    }
+
+    adjustments.push({
+      accountNumber: targetAccount,
+      amount,
+      description: String(item.description ?? "Bankavstemmingspost"),
+      date: String(item.date ?? dateStr),
+    });
+  }
+
+  // Also process explicit adjustments array
   const entityAdjustments = Array.isArray(entity.adjustments) ? entity.adjustments as Record<string, unknown>[] : [];
   for (const adj of entityAdjustments) {
     const acctNum = Number(adj.accountNumber ?? adj.account ?? 0);
     const amount = Number(adj.amount ?? 0);
-    const type = String(adj.type ?? "DEBIT").toUpperCase();
-    const desc = String(adj.description ?? "");
-    if (acctNum > 0 && amount !== 0) {
-      adjustments.push({ accountNumber: acctNum, amount, type, description: desc });
+    if (acctNum > 0 && Math.abs(amount) > 0.01) {
+      adjustments.push({
+        accountNumber: acctNum,
+        amount,
+        description: String(adj.description ?? ""),
+        date: dateStr,
+      });
     }
   }
 
-  // Also treat additional entities as adjustment entries
-  for (const e of task.entities.slice(1)) {
-    const acctNum = Number(e.accountNumber ?? e.account ?? 0);
-    const amount = Number(e.amount ?? 0);
-    const type = String(e.type ?? e.debitCredit ?? "DEBIT").toUpperCase();
-    const desc = String(e.description ?? "");
-    if (acctNum > 0 && amount !== 0) {
-      adjustments.push({ accountNumber: acctNum, amount, type, description: desc });
+  // Check bank vs ledger balance difference
+  if (adjustments.length === 0) {
+    const bankBalance = Number(entity.bankBalance ?? 0);
+    const ledgerBalance = Number(entity.ledgerBalance ?? 0);
+    const diff = bankBalance - ledgerBalance;
+    if (Math.abs(diff) > 0.01) {
+      adjustments.push({
+        accountNumber: 7790,
+        amount: diff,
+        description: "Bankavstemmingsdifferanse",
+        date: dateStr,
+      });
     }
   }
 
   if (adjustments.length === 0) {
-    // If no explicit adjustments, try to create a reconciliation voucher from bank/ledger difference
-    const bankBalance = Number(entity.bankBalance ?? 0);
-    const ledgerBalance = Number(entity.ledgerBalance ?? 0);
-    const diff = bankBalance - ledgerBalance;
-
-    if (Math.abs(diff) > 0.01) {
-      adjustments.push({
-        accountNumber: 1920,
-        amount: Math.abs(diff),
-        type: diff > 0 ? "DEBIT" : "CREDIT",
-        description: "Bankavstemmingsdifferanse",
-      });
-      adjustments.push({
-        accountNumber: 7790,
-        amount: Math.abs(diff),
-        type: diff > 0 ? "CREDIT" : "DEBIT",
-        description: "Bankavstemmingsdifferanse motkonto",
-      });
-    } else {
-      console.log("[Handler] No reconciliation adjustments needed");
-      return;
-    }
+    console.log("[Handler] No reconciliation adjustments found, creating verification voucher");
+    const otherAccount = await findAccountOrFallback(client, 7790, [7700]);
+    const result = await client.post<{ id: number }>("/ledger/voucher", {
+      date: dateStr,
+      description: "Bankavstemmelse - verifisert, ingen differanser",
+      postings: [
+        { row: 1, account: { id: bankAccount.id }, date: dateStr, amountGross: 0, amountGrossCurrency: 0, description: "Bankavstemmelse" },
+      ],
+    });
+    console.log(`[Handler] Created verification voucher: id=${result.value.id}`);
+    return;
   }
 
-  // Build voucher postings
+  const resolvedAccounts = new Map<number, LedgerAccount>();
+  const uniqueNums = [...new Set(adjustments.map(a => a.accountNumber))];
+  for (const num of uniqueNums) {
+    const acct = await findAccount(client, num);
+    if (acct) resolvedAccounts.set(num, acct);
+  }
+
   const postings: Record<string, unknown>[] = [];
+  let bankTotal = 0;
+
   for (const adj of adjustments) {
-    const account = await findAccount(client, adj.accountNumber);
-    const gross = adj.type === "DEBIT" ? Math.abs(adj.amount) : -Math.abs(adj.amount);
+    const targetAcct = resolvedAccounts.get(adj.accountNumber);
+    if (!targetAcct) {
+      console.warn(`[Handler] Account ${adj.accountNumber} not found, skipping`);
+      continue;
+    }
+
     postings.push({
       row: postings.length + 1,
-      account: { id: account.id },
-      date: dateStr,
-      amountGross: gross,
-      amountGrossCurrency: gross,
-      description: adj.description || description,
+      account: { id: targetAcct.id },
+      date: adj.date,
+      amountGross: adj.amount,
+      amountGrossCurrency: adj.amount,
+      description: adj.description,
     });
+    bankTotal -= adj.amount;
   }
 
-  // Ensure balance
-  const sum = postings.reduce((s, p) => s + (p.amountGross as number), 0);
-  if (Math.abs(sum) > 0.01) {
-    const bankAccount = await findAccount(client, 1920);
+  if (postings.length > 0 && Math.abs(bankTotal) > 0.01) {
     postings.push({
       row: postings.length + 1,
       account: { id: bankAccount.id },
       date: dateStr,
-      amountGross: -sum,
-      amountGrossCurrency: -sum,
-      description: "Motkonto",
+      amountGross: bankTotal,
+      amountGrossCurrency: bankTotal,
+      description: "Bank motkonto",
     });
+  }
+
+  if (postings.length === 0) {
+    console.warn("[Handler] No valid postings could be created");
+    return;
   }
 
   const result = await client.post<{ id: number }>("/ledger/voucher", {
     date: dateStr,
-    description,
+    description: "Bankavstemmelse",
     postings,
   });
   console.log(`[Handler] Created bank reconciliation voucher: id=${result.value.id} (${postings.length} postings)`);

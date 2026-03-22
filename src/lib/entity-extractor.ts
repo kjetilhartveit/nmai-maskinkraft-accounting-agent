@@ -225,11 +225,17 @@ Most data comes from the PDF. Extract any hints from the prompt text.`,
 
 The handler will parse the PDF for amounts, account, VAT.`,
 
-  bank_reconciliation: `Extract:
-- periodStart, periodEnd (YYYY-MM-DD, if specified)
+  bank_reconciliation: `Extract from the prompt AND any attached CSV/bank statement:
+- periodStart, periodEnd (YYYY-MM-DD)
 - bankAccountNumber (if specified)
+- transactions: array of { date (YYYY-MM-DD), description, amount (positive=credit/inflow, negative=debit/outflow), reference }
+- unmatchedItems: array of { date, description, amount, accountNumber (suggested ledger account), type ("bank_fee"|"interest"|"unmatched_payment"|"other") }
+- bankBalance (closing balance from the statement if given)
+- ledgerBalance (expected ledger balance if given)
 
-The CSV file contains the bank statement data. The handler will match transactions.`,
+Parse ALL rows from the CSV/bank statement. Each row is a transaction.
+Common patterns: bank fees → account 7770, interest income → account 8040, interest expense → account 8140.
+For payments that match invoices, include the invoice reference.`,
 
   ledger_audit: `Extract:
 - date (YYYY-MM-DD for corrections)
@@ -326,14 +332,24 @@ Respond with JSON: { "entities": [...], "language": "...", "requiresPrerequisite
       .join(", ")}`;
       
     for (const file of files) {
-      if (file.filename.toLowerCase().endsWith(".pdf") && file.content_base64) {
-        try {
-          const b = Buffer.from(file.content_base64, "base64");
-          const parser = new PDFParse(new Uint8Array(b));
-          const pdfData = await parser.getText();
-          userMessage += `\n\n--- Content of ${file.filename} ---\n${pdfData.text}\n--- End of ${file.filename} ---`;
-        } catch (err) {
-          console.error(`[EntityExtractor] Failed to parse PDF ${file.filename}:`, err);
+      if (file.content_base64) {
+        const lowerName = file.filename.toLowerCase();
+        if (lowerName.endsWith(".pdf")) {
+          try {
+            const b = Buffer.from(file.content_base64, "base64");
+            const parser = new PDFParse(new Uint8Array(b));
+            const pdfData = await parser.getText();
+            userMessage += `\n\n--- Content of ${file.filename} ---\n${pdfData.text}\n--- End of ${file.filename} ---`;
+          } catch (err) {
+            console.error(`[EntityExtractor] Failed to parse PDF ${file.filename}:`, err);
+          }
+        } else if (lowerName.endsWith(".csv") || lowerName.endsWith(".txt")) {
+          try {
+            const text = Buffer.from(file.content_base64, "base64").toString("utf-8");
+            userMessage += `\n\n--- Content of ${file.filename} ---\n${text}\n--- End of ${file.filename} ---`;
+          } catch (err) {
+            console.error(`[EntityExtractor] Failed to decode ${file.filename}:`, err);
+          }
         }
       }
     }

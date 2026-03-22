@@ -10,13 +10,17 @@ interface LedgerAccount {
 
 const accountCache = new Map<number, LedgerAccount>();
 
-async function findAccount(
+const ACCOUNT_FALLBACKS: Record<number, number[]> = {
+  6030: [6020, 6010, 6000],
+  1209: [1200],
+  1229: [1230, 1200],
+};
+
+async function findAccountRaw(
   client: TripletexClient,
   accountNumber: number,
-): Promise<LedgerAccount> {
-  if (!accountNumber || isNaN(accountNumber) || accountNumber <= 0) {
-    throw new Error(`Invalid account number: ${accountNumber}`);
-  }
+): Promise<LedgerAccount | null> {
+  if (!accountNumber || isNaN(accountNumber) || accountNumber <= 0) return null;
   const cached = accountCache.get(accountNumber);
   if (cached) return cached;
   const result = await client.list<LedgerAccount>("/ledger/account", {
@@ -25,9 +29,30 @@ async function findAccount(
     count: "1",
   });
   const account = result.values[0];
-  if (!account) throw new Error(`Ledger account ${accountNumber} not found`);
-  accountCache.set(accountNumber, account);
-  return account;
+  if (account) accountCache.set(accountNumber, account);
+  return account ?? null;
+}
+
+async function findAccount(
+  client: TripletexClient,
+  accountNumber: number,
+): Promise<LedgerAccount> {
+  const primary = await findAccountRaw(client, accountNumber);
+  if (primary) return primary;
+
+  const fallbacks = ACCOUNT_FALLBACKS[accountNumber];
+  if (fallbacks) {
+    for (const fb of fallbacks) {
+      const acct = await findAccountRaw(client, fb);
+      if (acct) {
+        console.log(`[Handler] Account ${accountNumber} not found, using fallback ${fb}`);
+        accountCache.set(accountNumber, acct);
+        return acct;
+      }
+    }
+  }
+
+  throw new Error(`Ledger account ${accountNumber} not found (no fallbacks available)`);
 }
 
 export function resetYearEndClosingCache(): void {
