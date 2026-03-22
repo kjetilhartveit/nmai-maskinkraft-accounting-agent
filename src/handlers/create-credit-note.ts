@@ -3,6 +3,7 @@ import type { ParsedTask } from "../types/index.js";
 import type { SequenceContext } from "../lib/sequence-context.js";
 import {
   today,
+  daysFromNow,
   findCustomerByName,
   findOrCreateProduct,
   ensureBankAccountConfigured,
@@ -122,7 +123,7 @@ export async function handleCreateCreditNote(
 
     const inv = await client.post<Invoice>("/invoice", {
       invoiceDate: today(),
-      invoiceDueDate: today(),
+      invoiceDueDate: daysFromNow(14),
       orders: [{ id: order.value.id }],
     });
 
@@ -133,7 +134,7 @@ export async function handleCreateCreditNote(
   // Create the credit note
   const creditDate = String(entity.date ?? today());
   const comment = String(entity.comment ?? entity.reason ?? "");
-  const qs = new URLSearchParams({ date: creditDate });
+  const qs = new URLSearchParams({ date: creditDate, sendToCustomer: "false" });
   if (comment) qs.set("comment", comment);
 
   try {

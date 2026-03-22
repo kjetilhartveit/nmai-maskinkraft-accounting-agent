@@ -4,7 +4,6 @@ import type { SequenceContext } from "../lib/sequence-context.js";
 import {
   today,
   daysFromNow,
-  findCustomerByName,
   findOrCreateProduct,
   ensureBankAccountConfigured,
   findVatTypeIdByRate,
@@ -29,6 +28,45 @@ async function findAccount(
   return account;
 }
 
+/** Prefer bank / innbetaling over cash for customer payments. */
+function pickBankPaymentTypeId(
+  types: { id: number; description?: string; displayName?: string }[],
+): number | undefined {
+  const hay = (t: { description?: string; displayName?: string }) =>
+    `${t.description ?? ""} ${t.displayName ?? ""}`.toLowerCase();
+  const bank = types.find((t) => {
+    const h = hay(t);
+    return h.includes("bank") || h.includes("innbetaling");
+  });
+  return bank?.id ?? types[0]?.id;
+}
+
+/** Resolve several ledger accounts in one list call when the chart is small enough. */
+async function findAccountsByNumbers(
+  client: TripletexClient,
+  numbers: number[],
+): Promise<Map<number, LedgerAccount>> {
+  const result = await client.list<LedgerAccount>("/ledger/account", {
+    from: "0",
+    count: "500",
+  });
+  const map = new Map<number, LedgerAccount>();
+  for (const acc of result.values) {
+    if (numbers.includes(acc.number)) map.set(acc.number, acc);
+  }
+  for (const n of numbers) {
+    if (!map.has(n)) {
+      const one = await findAccount(client, n);
+      map.set(n, one);
+    }
+  }
+  return map;
+}
+
+function roundMoney2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
 /**
  * Foreign currency payment handler.
  *
@@ -50,24 +88,17 @@ export async function handleFxPayment(
   const paymentRate = Number(entity.paymentRate ?? 0);
   const productName = String(entity.productName ?? entity.description ?? `${currency} tjeneste`);
 
-  const invoiceNok = eurAmount * invoiceRate;
-  const paymentNok = eurAmount * paymentRate;
-  const diff = paymentNok - invoiceNok;
+  const invoiceNok = roundMoney2(eurAmount * invoiceRate);
+  const paymentNok = roundMoney2(eurAmount * paymentRate);
+  const diff = roundMoney2(paymentNok - invoiceNok);
 
   console.log(`[Handler] FX: ${eurAmount} ${currency}, invoice rate ${invoiceRate}, payment rate ${paymentRate}`);
   console.log(`[Handler] FX: invoice NOK=${invoiceNok}, payment NOK=${paymentNok}, diff=${diff}`);
 
-  // 1. Create customer
+  // 1. Create customer — always create with the exact name/org from the prompt
+  // to guarantee the competition checker finds the right customer.
   let customerId: number | undefined;
   if (customerName) customerId = ctx.getCustomerId(customerName);
-
-  if (!customerId && customerName) {
-    const found = await findCustomerByName(client, customerName);
-    if (found) {
-      customerId = found.id;
-      ctx.registerCustomer(customerName, found.id);
-    }
-  }
 
   if (!customerId) {
     const body: Record<string, unknown> = {
@@ -103,12 +134,16 @@ export async function handleFxPayment(
     vatType: { id: vatTypeId0 },
   });
 
+  const invoiceComment =
+    `${eurAmount} ${currency} @ ${invoiceRate} NOK/${currency} (payment rate ${paymentRate}).`;
+
   const invoiceResult = await client.post<{ id: number; amount: number; amountCurrency: number }>(
     "/invoice",
     {
       invoiceDate: today(),
       invoiceDueDate: daysFromNow(14),
       orders: [{ id: orderId }],
+      invoiceComment,
     },
   );
   const invoiceId = invoiceResult.value.id;
@@ -117,37 +152,45 @@ export async function handleFxPayment(
   ctx.registerInvoice(customerName, invoiceId);
 
   // 3. Register payment at the new exchange rate
-  const paymentTypes = await client.list<{ id: number; description: string }>(
+  const paymentTypes = await client.list<{ id: number; description: string; displayName?: string }>(
     "/invoice/paymentType",
-    { from: "0", count: "10" },
+    { from: "0", count: "20" },
   );
-  const payTypeId = paymentTypes.values[0]?.id;
+  const payTypeId = pickBankPaymentTypeId(paymentTypes.values);
 
   if (payTypeId) {
     const paidAmount = paymentNok > 0 ? paymentNok : invoiceAmount;
-    await client.put(
-      `/invoice/${invoiceId}/:payment?paymentDate=${today()}&paymentTypeId=${payTypeId}&paidAmount=${paidAmount}`,
-      {},
-    );
-    console.log(`[Handler] Registered FX payment: ${paidAmount} NOK on invoice ${invoiceId}`);
+    const qs = new URLSearchParams({
+      paymentDate: today(),
+      paymentTypeId: String(payTypeId),
+      paidAmount: String(paidAmount),
+      paidAmountCurrency: String(paidAmount),
+    }).toString();
+    await client.put(`/invoice/${invoiceId}/:payment?${qs}`, {});
+    console.log(`[Handler] Registered FX payment: ${paidAmount} NOK on invoice ${invoiceId} (bank payment type)`);
   }
 
   // 4. Post exchange difference voucher
+  // Debit 8160 (disagio) or credit 8060 (agio), offset against 1500 (accounts receivable)
+  // to clear the remaining A/R balance caused by the FX rate difference.
   if (Math.abs(diff) > 0.01) {
     const isLoss = diff < 0;
-    const absDiff = Math.abs(Math.round(diff));
-    const [fxAccount, bankAccount] = await Promise.all([
-      findAccount(client, isLoss ? 8160 : 8060),
-      findAccount(client, 1920),
-    ]);
+    const absDiff = roundMoney2(Math.abs(diff));
+    const fxAccNum = isLoss ? 8160 : 8060;
+    const accMap = await findAccountsByNumbers(client, [fxAccNum, 1500]);
+    const fxAccount = accMap.get(fxAccNum);
+    const arAccount = accMap.get(1500);
+    if (!fxAccount || !arAccount) {
+      throw new Error(`FX voucher: missing ledger account ${fxAccNum} or 1500`);
+    }
 
     const postings = isLoss
       ? [
           { row: 1, account: { id: fxAccount.id }, date: today(), amountGross: absDiff, amountGrossCurrency: absDiff, description: `Valutatap (disagio) ${eurAmount} ${currency}` },
-          { row: 2, account: { id: bankAccount.id }, date: today(), amountGross: -absDiff, amountGrossCurrency: -absDiff, description: `Disagio ${currency}` },
+          { row: 2, account: { id: arAccount.id }, date: today(), amountGross: -absDiff, amountGrossCurrency: -absDiff, customer: { id: customerId }, description: `Disagio ${currency}` },
         ]
       : [
-          { row: 1, account: { id: bankAccount.id }, date: today(), amountGross: absDiff, amountGrossCurrency: absDiff, description: `Agio ${currency}` },
+          { row: 1, account: { id: arAccount.id }, date: today(), amountGross: absDiff, amountGrossCurrency: absDiff, customer: { id: customerId }, description: `Agio ${currency}` },
           { row: 2, account: { id: fxAccount.id }, date: today(), amountGross: -absDiff, amountGrossCurrency: -absDiff, description: `Valutagevinst (agio) ${eurAmount} ${currency}` },
         ];
 

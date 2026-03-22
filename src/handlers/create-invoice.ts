@@ -28,6 +28,12 @@ interface ProductLine {
   vatRate?: number;
 }
 
+function parseVatRate(val: unknown): number | undefined {
+  if (val === undefined || val === null) return undefined;
+  const num = parseFloat(String(val).replace("%", "").trim());
+  return isNaN(num) ? undefined : num;
+}
+
 async function findOrderByCustomerName(
   client: TripletexClient,
   customerName: string,
@@ -71,7 +77,7 @@ function extractProductLines(task: ParsedTask): ProductLine[] {
       productNumber: (line.productNumber ?? line.number) as string | number | undefined,
       unitPrice: Number(line.unitPrice ?? line.amount ?? line.price ?? line.priceExcludingVat ?? 0),
       quantity: Number(line.quantity ?? line.count ?? 1),
-      vatRate: line.vatRate !== undefined ? Number(line.vatRate) : undefined,
+      vatRate: parseVatRate(line.vatRate),
     }));
   }
 
@@ -87,7 +93,7 @@ function extractProductLines(task: ParsedTask): ProductLine[] {
         productNumber: (e.productNumber ?? e.number) as string | number | undefined,
         unitPrice: Number(e.unitPrice ?? e.amount ?? e.price ?? 0),
         quantity: Number(e.quantity ?? e.count ?? 1),
-        vatRate: e.vatRate !== undefined ? Number(e.vatRate) : undefined,
+        vatRate: parseVatRate(e.vatRate),
       }));
     }
   }
@@ -103,7 +109,7 @@ function extractProductLines(task: ParsedTask): ProductLine[] {
       productName,
       unitPrice: amount,
       quantity: 1,
-      vatRate: first.vatRate !== undefined ? Number(first.vatRate) : undefined,
+      vatRate: parseVatRate(first.vatRate),
     }];
   }
 
@@ -127,42 +133,7 @@ async function createOrderForInvoice(
   const orderId = orderResult.value.id;
   console.log(`[Handler] Created order for invoice: id=${orderId}`);
 
-  // Resolve all product IDs
-  const resolvedLines: { productId: number; line: ProductLine }[] = [];
-  for (const line of productLines) {
-    const cachedId = ctx?.getProductId(line.productName) ??
-      (line.productNumber ? ctx?.getProductId(String(line.productNumber)) : undefined);
-    let productId: number;
-    if (cachedId) {
-      console.log(`[Handler] Using product from context: ${line.productName} → id=${cachedId}`);
-      productId = cachedId;
-    } else {
-      // Try product number lookup first
-      if (line.productNumber) {
-        const existing = await findProductByNumber(client, String(line.productNumber));
-        if (existing) {
-          console.log(`[Handler] Found product by number ${line.productNumber}: id=${existing.id}`);
-          productId = existing.id;
-          ctx?.registerProduct(line.productName, existing.id);
-          ctx?.registerProduct(String(line.productNumber), existing.id);
-          resolvedLines.push({ productId, line });
-          continue;
-        }
-      }
-
-      const product = await findOrCreateProduct(
-        client,
-        line.productName,
-        line.unitPrice,
-      );
-      productId = product.id;
-      ctx?.registerProduct(line.productName, productId);
-      if (line.productNumber) ctx?.registerProduct(String(line.productNumber), productId);
-    }
-    resolvedLines.push({ productId, line });
-  }
-
-  // Resolve VAT type IDs for lines with non-default rates
+  // Resolve VAT type IDs upfront (shared cache across all lines)
   const vatTypeCache = new Map<number, number>();
   async function getVatTypeId(ratePct: number): Promise<number> {
     if (vatTypeCache.has(ratePct)) return vatTypeCache.get(ratePct)!;
@@ -171,16 +142,68 @@ async function createOrderForInvoice(
     return id;
   }
 
+  function resolveRatePct(line: ProductLine): number | undefined {
+    if (line.vatRate === undefined) return undefined;
+    return line.vatRate <= 1 && line.vatRate > 0
+      ? Math.round(line.vatRate * 100)
+      : Math.round(line.vatRate);
+  }
+
+  // Resolve all product IDs. Products are created WITH the correct vatType
+  // so order lines can inherit it (avoids 422 "Ugyldig mva-kode" errors).
+  const resolvedLines: { productId: number; line: ProductLine; fromNumber: boolean }[] = [];
+  for (const line of productLines) {
+    const cachedId = ctx?.getProductId(line.productName) ??
+      (line.productNumber ? ctx?.getProductId(String(line.productNumber)) : undefined);
+
+    const ratePct = resolveRatePct(line);
+    const vatTypeId = ratePct !== undefined ? await getVatTypeId(ratePct) : undefined;
+
+    let productId: number;
+    if (cachedId) {
+      console.log(`[Handler] Using product from context: ${line.productName} → id=${cachedId}`);
+      productId = cachedId;
+      resolvedLines.push({ productId, line, fromNumber: false });
+      continue;
+    }
+
+    if (line.productNumber) {
+      const existing = await findProductByNumber(client, String(line.productNumber));
+      if (existing) {
+        console.log(`[Handler] Found product by number ${line.productNumber}: id=${existing.id}`);
+        productId = existing.id;
+        ctx?.registerProduct(line.productName, existing.id);
+        ctx?.registerProduct(String(line.productNumber), existing.id);
+        resolvedLines.push({ productId, line, fromNumber: true });
+        continue;
+      }
+    }
+
+    const product = await findOrCreateProduct(
+      client,
+      line.productName,
+      line.unitPrice,
+      vatTypeId,
+    );
+    productId = product.id;
+    ctx?.registerProduct(line.productName, productId);
+    if (line.productNumber) ctx?.registerProduct(String(line.productNumber), productId);
+    resolvedLines.push({ productId, line, fromNumber: false });
+  }
+
+  // Build order line bodies. Only set explicit vatType for products found by
+  // number (sandbox pre-existing products). For products we created, the
+  // product carries the correct vatType and order lines inherit it.
   const orderLineBodies: Record<string, unknown>[] = [];
-  for (const { productId, line } of resolvedLines) {
+  for (const { productId, line, fromNumber } of resolvedLines) {
     const body: Record<string, unknown> = {
       order: { id: orderId },
       product: { id: productId },
       count: line.quantity,
       unitPriceExcludingVatCurrency: line.unitPrice,
     };
-    if (line.vatRate !== undefined) {
-      const ratePct = line.vatRate <= 1 && line.vatRate > 0 ? Math.round(line.vatRate * 100) : Math.round(line.vatRate);
+    if (fromNumber && line.vatRate !== undefined) {
+      const ratePct = resolveRatePct(line)!;
       const vatTypeId = await getVatTypeId(ratePct);
       body.vatType = { id: vatTypeId };
       console.log(`[Handler] Order line ${line.productName}: VAT ${ratePct}% → vatType id=${vatTypeId}`);

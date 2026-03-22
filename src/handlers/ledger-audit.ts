@@ -54,37 +54,62 @@ export async function handleLedgerAudit(
   const entity = task.entities[0] ?? {};
   const dateStr = String(entity.date ?? today());
 
-  // Collect corrections from entity extraction first (avoids heavy voucher queries)
-  const corrections: { accountNumber: number; wrongAmount: number; correctAmount: number; description: string }[] = [];
+  // Collect corrections from entity extraction (avoids heavy voucher queries)
+  const correctionLines: { accountNumber: number; amount: number; description: string }[] = [];
 
   const entityCorrections = Array.isArray(entity.corrections) ? entity.corrections as Record<string, unknown>[] : [];
   for (const corr of entityCorrections) {
     const acctNum = Number(corr.accountNumber ?? corr.account ?? 0);
-    if (acctNum > 0 && !isNaN(acctNum)) {
-      corrections.push({
-        accountNumber: acctNum,
-        wrongAmount: Number(corr.wrongAmount ?? 0),
-        correctAmount: Number(corr.correctAmount ?? 0),
-        description: String(corr.description ?? ""),
-      });
+    if (acctNum <= 0 || isNaN(acctNum)) continue;
+
+    // New format: signed `amount` field (positive=debit, negative=credit)
+    if (corr.amount !== undefined && corr.amount !== null) {
+      const amt = Number(corr.amount);
+      if (Math.abs(amt) >= 0.01) {
+        correctionLines.push({
+          accountNumber: acctNum,
+          amount: amt,
+          description: String(corr.description ?? ""),
+        });
+      }
+    } else {
+      // Legacy format: wrongAmount/correctAmount → compute diff
+      const wrong = Number(corr.wrongAmount ?? 0);
+      const correct = Number(corr.correctAmount ?? 0);
+      const diff = correct - wrong;
+      if (Math.abs(diff) >= 0.01) {
+        correctionLines.push({
+          accountNumber: acctNum,
+          amount: diff,
+          description: String(corr.description ?? ""),
+        });
+      }
     }
   }
 
   for (const e of task.entities.slice(1)) {
     const acctNum = Number(e.accountNumber ?? e.account ?? 0);
-    if (acctNum > 0 && !isNaN(acctNum)) {
-      corrections.push({
-        accountNumber: acctNum,
-        wrongAmount: Number(e.wrongAmount ?? e.originalAmount ?? 0),
-        correctAmount: Number(e.correctAmount ?? e.newAmount ?? e.amount ?? 0),
-        description: String(e.description ?? ""),
-      });
+    if (acctNum <= 0 || isNaN(acctNum)) continue;
+    if (e.amount !== undefined && e.amount !== null) {
+      const amt = Number(e.amount);
+      if (Math.abs(amt) >= 0.01) {
+        correctionLines.push({ accountNumber: acctNum, amount: amt, description: String(e.description ?? "") });
+      }
+    } else {
+      const wrong = Number(e.wrongAmount ?? e.originalAmount ?? 0);
+      const correct = Number(e.correctAmount ?? e.newAmount ?? 0);
+      const diff = correct - wrong;
+      if (Math.abs(diff) >= 0.01) {
+        correctionLines.push({ accountNumber: acctNum, amount: diff, description: String(e.description ?? "") });
+      }
     }
   }
 
-  // If entity extraction gave us corrections, use them (skip heavy voucher queries)
-  if (corrections.length > 0) {
-    const uniqueAccounts = [...new Set([...corrections.map(c => c.accountNumber), 1920])];
+  // Strip LLM-generated balancing entries to 1920 — handler adds its own
+  const filteredLines = correctionLines.filter(c => c.accountNumber !== 1920);
+
+  if (filteredLines.length > 0) {
+    const uniqueAccounts = [...new Set([...filteredLines.map(c => c.accountNumber), 1920])];
     const resolvedMap = new Map<number, LedgerAccount>();
     const lookupResults = await Promise.allSettled(
       uniqueAccounts.map(async (num) => {
@@ -97,18 +122,16 @@ export async function handleLedgerAudit(
     }
 
     const postings: Record<string, unknown>[] = [];
-    for (const corr of corrections) {
-      const diff = corr.correctAmount - corr.wrongAmount;
-      if (Math.abs(diff) < 0.01) continue;
-      const account = resolvedMap.get(corr.accountNumber);
+    for (const line of filteredLines) {
+      const account = resolvedMap.get(line.accountNumber);
       if (!account) continue;
       postings.push({
         row: postings.length + 1,
         account: { id: account.id },
         date: dateStr,
-        amountGross: diff,
-        amountGrossCurrency: diff,
-        description: corr.description || `Korreksjon konto ${corr.accountNumber}`,
+        amountGross: line.amount,
+        amountGrossCurrency: line.amount,
+        description: line.description || `Korreksjon konto ${line.accountNumber}`,
       });
     }
 

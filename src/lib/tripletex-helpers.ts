@@ -285,6 +285,9 @@ export async function findOrCreateProduct(
     department: { id: departmentId },
     productUnit: { id: unitId },
   };
+  if (vatTypeId != null) {
+    body.vatType = { id: vatTypeId };
+  }
 
   try {
     const created = await client.post<Product>("/product", body);

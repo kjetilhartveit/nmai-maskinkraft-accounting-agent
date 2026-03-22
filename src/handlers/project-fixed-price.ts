@@ -87,6 +87,7 @@ export async function handleProjectFixedPrice(
   };
   if (customerId) projectBody.customer = { id: customerId };
   if (fixedPrice > 0) {
+    projectBody.isFixedPrice = true;
     projectBody.fixedprice = fixedPrice;
   }
 
@@ -122,21 +123,16 @@ export async function handleProjectFixedPrice(
 
     const invoiceAmount = Math.round(fixedPrice * (invoicePercentage / 100));
 
-    // Create order-based invoice (direct project→invoice is not supported)
-    const { findOrCreateProduct } = await import("../lib/tripletex-helpers.js");
-    const product = await findOrCreateProduct(client, projectName || "Prosjekttjeneste", invoiceAmount);
-
     const order = await client.post<{ id: number }>("/order", {
       customer: { id: customerId },
+      project: { id: projectId },
       orderDate: today(),
       deliveryDate: today(),
-    });
-
-    await client.post("/order/orderline", {
-      order: { id: order.value.id },
-      product: { id: product.id },
-      count: 1,
-      unitPriceExcludingVatCurrency: invoiceAmount,
+      orderLines: [{
+        description: projectName || "Prosjekttjeneste",
+        count: 1,
+        unitPriceExcludingVatCurrency: invoiceAmount,
+      }],
     });
 
     const inv = await client.post<{ id: number }>("/invoice", {

@@ -87,28 +87,45 @@ export async function handleLedgerAnalysis(
     }
   }
 
+  // Also add accounts that only appear in Feb (new expenses)
+  if (increases.length < 3) {
+    for (const acct of allAccounts) {
+      if (!increases.some(i => i.accountNumber === acct)) {
+        const name = febTotals.get(acct)?.name ?? janTotals.get(acct)?.name ?? `Konto ${acct}`;
+        const total = febTotals.get(acct)?.total ?? janTotals.get(acct)?.total ?? 0;
+        increases.push({ accountNumber: acct, name, increase: total });
+      }
+    }
+  }
+
   increases.sort((a, b) => b.increase - a.increase);
   const top3 = increases.slice(0, 3);
   console.log(`[Handler] Top 3 expense increases: ${top3.map(a => `${a.accountNumber} (${a.name}): +${a.increase}`).join(", ")}`);
 
-  const accountsToProcess = top3.length > 0 ? top3 : (
-    (Array.isArray(entity.accounts) ? entity.accounts : []) as Array<{ accountNumber: number; name?: string }>
-  ).map(a => ({ accountNumber: Number(a.accountNumber), name: a.name ?? `Konto ${a.accountNumber}`, increase: 0 }));
-
-  if (accountsToProcess.length === 0) {
-    for (let i = 1; i <= 3; i++) {
-      const project = await client.post<{ id: number }>("/project", {
-        name: `Kostnadsanalyse ${i}`,
-        projectManager: { id: pmId },
-        department: { id: departmentId },
-        startDate: today(),
-        isInternal: true,
-      });
-      const uniqueLabel = `Kostnadsanalyse ${i} (prosjekt ${project.value.id})`;
-      console.log(`[Handler] Created generic analysis project ${i}: id=${project.value.id}`);
-      await createProjectActivity(client, uniqueLabel, 90000 + i);
+  // Merge extracted accounts if we still have fewer than 3 from postings
+  const accountsToProcess = [...top3];
+  if (accountsToProcess.length < 3 && Array.isArray(entity.accounts)) {
+    for (const a of entity.accounts as Array<{ accountNumber: number; name?: string }>) {
+      if (accountsToProcess.length >= 3) break;
+      if (!accountsToProcess.some(x => x.accountNumber === Number(a.accountNumber))) {
+        accountsToProcess.push({
+          accountNumber: Number(a.accountNumber),
+          name: a.name ?? `Konto ${a.accountNumber}`,
+          increase: 0,
+        });
+      }
     }
-    return;
+  }
+
+  // Pad to 3 with generic names if the ledger simply has fewer than 3 expense accounts
+  const GENERIC_NAMES = ["Kostnadsanalyse 1", "Kostnadsanalyse 2", "Kostnadsanalyse 3"];
+  while (accountsToProcess.length < 3) {
+    const idx = accountsToProcess.length;
+    accountsToProcess.push({
+      accountNumber: 90000 + idx + 1,
+      name: GENERIC_NAMES[idx],
+      increase: 0,
+    });
   }
 
   let activitySeq = 1;
@@ -135,35 +152,28 @@ async function createProjectActivity(
   name: string,
   activityNumber: number,
 ): Promise<number> {
-  const existing = await client.list<Activity>("/activity", { from: "0", count: "2000" });
-  const match = existing.values.find(a => a.name?.toLowerCase().trim() === name.toLowerCase().trim());
-  if (match) {
-    console.log(`[Helper] Found existing activity: "${name}" id=${match.id}`);
-    return match.id;
-  }
-
+  const ts = Date.now() % 100000;
+  const uniqueName = `${name} (${ts})`.slice(0, 255);
+  const uniqueNum = (activityNumber % 80000) + Math.floor(ts % 10000);
   try {
     const result = await client.post<Activity>("/activity", {
-      name: name.slice(0, 255),
-      number: activityNumber,
+      name: uniqueName,
+      number: uniqueNum,
       activityType: "PROJECT_GENERAL_ACTIVITY",
       isProjectActivity: true,
     });
-    console.log(`[Helper] Created activity: "${name}" number=${activityNumber} id=${result.value.id}`);
+    console.log(`[Helper] Created activity: "${uniqueName}" number=${uniqueNum} id=${result.value.id}`);
     return result.value.id;
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    if (msg.includes("422") || msg.includes("i bruk") || msg.includes("in use")) {
-      const refreshed = await client.list<Activity>("/activity", { from: "0", count: "2000" });
-      const retry = refreshed.values.find(a => a.name?.toLowerCase().trim() === name.toLowerCase().trim());
-      if (retry) return retry.id;
-    }
-    const suffix = ` #${activityNumber}`;
-    const short = name.slice(0, Math.max(1, 255 - suffix.length));
-    const fallbackResult = await client.post<Activity>("/activity", {
-      name: `${short}${suffix}`.slice(0, 255),
+  } catch {
+    const fallbackNum = uniqueNum + Math.floor(Math.random() * 1000);
+    const fallbackName = `${name} (${ts}-${fallbackNum})`.slice(0, 255);
+    const result = await client.post<Activity>("/activity", {
+      name: fallbackName,
+      number: fallbackNum,
       activityType: "PROJECT_GENERAL_ACTIVITY",
+      isProjectActivity: true,
     });
-    return fallbackResult.value.id;
+    console.log(`[Helper] Created activity (retry): "${fallbackName}" number=${fallbackNum} id=${result.value.id}`);
+    return result.value.id;
   }
 }

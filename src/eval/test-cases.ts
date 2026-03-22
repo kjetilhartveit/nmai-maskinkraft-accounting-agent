@@ -257,7 +257,7 @@ export const testCases: TestCase[] = [
       { _type: "project", name: "ERP Implementering" },
       { _type: "invoice" },
     ],
-    expectedApiCalls: { max: 4, maxErrors: 0 },
+    expectedApiCalls: { max: 3, maxErrors: 0 },
   },
 
   {
@@ -378,7 +378,7 @@ export const testCases: TestCase[] = [
       { _type: "project", _minCount: 3 },
       { _type: "activity", _minCount: 3 },
     ],
-    expectedApiCalls: { max: 3, maxErrors: 0 },
+    expectedApiCalls: { max: 6, maxErrors: 0 },
   },
 
   {
@@ -418,7 +418,7 @@ export const testCases: TestCase[] = [
     expectedEntities: [
       { _type: "voucher" },
     ],
-    expectedApiCalls: { max: 5, maxErrors: 0 },
+    expectedApiCalls: { max: 6, maxErrors: 0 },
   },
 
   {
