@@ -1,0 +1,23 @@
+src/handlers/create-payroll.ts
+  a767f3c6d1b2d06a 122-172,176
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.17",
+  "base_commit_sha": "45fa11b4da122fba5c89b9a0cbd1547625c10baf",
+  "prompts": {
+    "a767f3c6d1b2d06a": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "a4414119-fd27-4ec0-86b1-2e44c89c53e3",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Kjetil Hårtveit <kjetil_runescape@hotmail.com>",
+      "messages": [],
+      "total_additions": 183,
+      "total_deletions": 157,
+      "accepted_lines": 183,
+      "overriden_lines": 0
+    }
+  }
+}
