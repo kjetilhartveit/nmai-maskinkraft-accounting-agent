@@ -117,6 +117,17 @@ All 30 task types have dedicated handlers in `src/handlers/`. See [`src/handlers
 
 Handlers share state via `SequenceContext` which tracks IDs for customers, employees, departments, products, orders, and invoices created in earlier tasks. This eliminates redundant GET lookups in multi-task sequences (e.g., create customer → send invoice → register payment).
 
+## API call efficiency scoring
+
+**Important**: Only **write operations** (POST, PUT, DELETE) count towards efficiency scoring. GET calls are free and unlimited — use as many as needed for lookups, searches, and data retrieval.
+
+This means:
+- Handlers should feel free to do multiple GET calls to find accounts, customers, employees, etc.
+- The `max` bound in `expectedApiCalls` refers to write calls only
+- Eval reports show "write" column (not "api") for the count that matters
+
+When optimizing handlers, focus on reducing redundant POST/PUT/DELETE calls, not GET calls.
+
 ## Evaluation system
 
 There are exactly **30 test cases** — one per task type — defined in `src/eval/test-cases.ts`. Each case runs the full solver pipeline (classify → extract → execute) against the Tripletex sandbox.
