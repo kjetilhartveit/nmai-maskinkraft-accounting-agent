@@ -230,12 +230,16 @@ ALWAYS determine the correct expense account from the item type - never leave ac
 - phoneNumber (if mentioned)
 - phoneNumberMobile (if mentioned)
 - dateOfBirth (YYYY-MM-DD format)
+- identityNumber (Norwegian personal ID / fødselsnummer, 11 digits, if mentioned)
 - startDate (YYYY-MM-DD format, employment start date)
 - salary (annual salary as number, e.g. 560000)
 - position / title (job title)
+- occupationCode (STYRK code if mentioned, numeric code)
 - departmentName (department)
 - employmentPercentage (e.g. 100)
-- identityNumber (Norwegian personal ID number, 11 digits, if mentioned)
+- address (street address)
+- postalCode (postal/zip code)
+- city (city name)
 
 Extract ALL fields that appear in the text. The PDF content is inlined above.`,
 
@@ -243,14 +247,19 @@ Extract ALL fields that appear in the text. The PDF content is inlined above.`,
 - firstName (required)
 - lastName (required)
 - email (if mentioned)
+- phoneNumber (if mentioned)
+- phoneNumberMobile (mobile number if mentioned)
 - dateOfBirth (YYYY-MM-DD format)
-- identityNumber (Norwegian personal ID, 11 digits)
+- identityNumber (Norwegian personal ID / fødselsnummer, 11 digits)
 - startDate (YYYY-MM-DD format)
 - salary (annual salary as number)
 - employmentPercentage (e.g. 100)
 - departmentName (department)
-- occupationCode (STYRK code if mentioned)
-- position / title (job title)
+- occupationCode (STYRK code if mentioned, numeric code like "2511")
+- position / title (job title text)
+- address (street address)
+- postalCode (postal/zip code)
+- city (city name)
 
 Extract ALL fields that appear in the text. The PDF content is inlined above.`,
 
