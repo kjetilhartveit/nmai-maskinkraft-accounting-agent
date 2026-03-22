@@ -1,0 +1,23 @@
+src/handlers/create-order.ts
+  a767f3c6d1b2d06a 188,190-194
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.17",
+  "base_commit_sha": "2e12b572a82564d99c02a67a336d48fefa517a2f",
+  "prompts": {
+    "a767f3c6d1b2d06a": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "a4414119-fd27-4ec0-86b1-2e44c89c53e3",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Kjetil Hårtveit <kjetil_runescape@hotmail.com>",
+      "messages": [],
+      "total_additions": 203,
+      "total_deletions": 202,
+      "accepted_lines": 203,
+      "overriden_lines": 0
+    }
+  }
+}
