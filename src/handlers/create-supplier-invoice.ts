@@ -56,11 +56,12 @@ export async function handleCreateSupplierInvoice(
   const entity = task.entities[0] ?? {};
 
   const supplierName = String(entity.supplierName ?? entity.supplier ?? "");
-  const totalAmount = Number(entity.amount ?? entity.totalAmount ?? 0);
+  const netAmountRaw = Number(entity.netAmount ?? 0);
+  const vatAmountRaw = Number(entity.vatAmount ?? 0);
+  const totalAmount = Number(entity.totalAmount ?? entity.amount ?? 0);
   const expenseAccountNumber = Number(entity.accountNumber ?? entity.account ?? 7300);
-  const vatRate = Number(entity.vatRate ?? 25);
-  const includesVat = entity.amountIncludesVat === true || entity.includesVat === true
-    || String(entity.amountIncludesVat ?? "").toLowerCase() === "true";
+  const vatRateStr = String(entity.vatRate ?? "25");
+  const vatRate = Number(vatRateStr.replace(/[%\s]/g, ""));
   const invoiceNumber = String(entity.invoiceNumber ?? "");
   const description = String(entity.description ?? "");
 
@@ -107,15 +108,19 @@ export async function handleCreateSupplierInvoice(
     if (supplierName) ctx.registerSupplier(supplierName, supplierId);
   }
 
-  // 2. Calculate VAT amounts
+  // 2. Calculate VAT amounts — prefer explicit net/vat from entity
   let net: number;
   let vat: number;
-  if (includesVat && vatRate > 0) {
+  if (netAmountRaw > 0 && vatAmountRaw > 0) {
+    net = netAmountRaw;
+    vat = vatAmountRaw;
+  } else if (netAmountRaw > 0) {
+    net = netAmountRaw;
+    vat = vatRate > 0 ? Math.round(net * (vatRate / 100)) : 0;
+  } else if (totalAmount > 0 && vatRate > 0) {
+    // totalAmount is typically the gross (including VAT) from invoices
     net = Math.round(totalAmount / (1 + vatRate / 100));
     vat = totalAmount - net;
-  } else if (vatRate > 0) {
-    net = totalAmount;
-    vat = Math.round(totalAmount * (vatRate / 100));
   } else {
     net = totalAmount;
     vat = 0;
