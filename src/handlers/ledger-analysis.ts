@@ -26,18 +26,21 @@ export async function handleLedgerAnalysis(
   if (!pmId) throw new Error("No employee found to use as project manager");
   const departmentId = await getDefaultDepartmentId(client);
 
+  const postingFields = "id,date,account(id,number,name),amount,amountGross";
   const [janPostings, febPostings] = await Promise.all([
     client.list<Posting>("/ledger/posting", {
       dateFrom: "2026-01-01",
       dateTo: "2026-01-31",
       from: "0",
       count: "10000",
+      fields: postingFields,
     }),
     client.list<Posting>("/ledger/posting", {
       dateFrom: "2026-02-01",
       dateTo: "2026-02-28",
       from: "0",
       count: "10000",
+      fields: postingFields,
     }),
   ]);
 

@@ -282,6 +282,8 @@ export async function handleYearEndClosing(
 
   // Fallback if nothing was created
   if (depreciationGroups.length === 0 && prepaidPostings.length === 0) {
+    await resolveAccount(client, 6010, resolvedMap);
+    await resolveAccount(client, 1200, resolvedMap);
     await createVoucher(`Årsavslutning ${fiscalYear}`, [{
       debitAcctNum: 6010,
       creditAcctNum: 1200,

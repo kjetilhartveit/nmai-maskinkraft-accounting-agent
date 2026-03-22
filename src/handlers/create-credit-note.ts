@@ -57,8 +57,16 @@ export async function handleCreateCreditNote(
   }
 
   if (!customerId) {
-    console.warn("[Handler] No customer found for credit note");
-    return;
+    console.log("[Handler] Customer not found, creating: " + customerName);
+    const orgNumber = String(entity.organizationNumber ?? entity.orgNumber ?? "");
+    const body: Record<string, unknown> = {
+      name: customerName || "Ukjent kunde",
+      isCustomer: true,
+    };
+    if (orgNumber) body.organizationNumber = orgNumber;
+    const created = await client.post<{ id: number }>("/customer", body);
+    customerId = created.value.id;
+    if (customerName) ctx.registerCustomer(customerName, customerId);
   }
 
   // Find an existing invoice for this customer to credit
@@ -71,7 +79,7 @@ export async function handleCreateCreditNote(
 
   if (!invoiceId) {
     const invoices = await client.list<Invoice>("/invoice", {
-      customerName,
+      customerId: String(customerId),
       invoiceDateFrom: "2020-01-01",
       invoiceDateTo: "2030-12-31",
       from: "0",

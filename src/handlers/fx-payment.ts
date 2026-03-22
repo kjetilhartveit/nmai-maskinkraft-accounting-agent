@@ -7,6 +7,7 @@ import {
   findCustomerByName,
   findOrCreateProduct,
   ensureBankAccountConfigured,
+  findVatTypeIdByRate,
 } from "../lib/tripletex-helpers.js";
 
 interface LedgerAccount {
@@ -93,11 +94,13 @@ export async function handleFxPayment(
   const orderId = orderResult.value.id;
   console.log(`[Handler] Created order: id=${orderId}`);
 
+  const vatTypeId0 = await findVatTypeIdByRate(client, 0);
   await client.post("/order/orderline", {
     order: { id: orderId },
     product: { id: product.id },
     count: 1,
     unitPriceExcludingVatCurrency: invoiceNok,
+    vatType: { id: vatTypeId0 },
   });
 
   const invoiceResult = await client.post<{ id: number; amount: number; amountCurrency: number }>(

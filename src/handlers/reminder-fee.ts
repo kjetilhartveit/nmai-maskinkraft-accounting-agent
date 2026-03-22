@@ -48,7 +48,7 @@ export async function handleReminderFee(
 
   const customerName = String(entity.customerName ?? entity.customer ?? "").replace(/^null$/i, "");
   const orgNumber = String(entity.organizationNumber ?? entity.orgNumber ?? "");
-  const reminderFeeAmount = parseNum(entity.reminderFeeAmount ?? entity.feeAmount ?? entity.amount, 70);
+  const reminderFeeAmount = parseNum(entity.reminderFeeAmount ?? entity.feeAmount ?? entity.amount, 50);
   const partialPaymentAmount = parseNum(entity.partialPaymentAmount ?? entity.paymentAmount, 0);
   const debitAccountNumber = parseNum(entity.debitAccount ?? entity.debitAccountNumber, 1500);
   const creditAccountNumber = parseNum(entity.creditAccount ?? entity.creditAccountNumber, 3400);
