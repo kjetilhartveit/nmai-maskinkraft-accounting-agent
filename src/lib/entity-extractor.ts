@@ -301,7 +301,7 @@ export async function extractEntities(
   options?: { model?: string }
 ): Promise<ExtractionResult> {
   const start = performance.now();
-  const modelId = "google/gemini-3.1-flash-lite-preview";
+  const modelId = "gemini-3.1-flash-lite-preview";
 
   const taskPrompt = TASK_PROMPTS[taskType];
   const template = PROMPT_TEMPLATES.find((t) => t.taskType === taskType);
