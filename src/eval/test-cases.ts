@@ -4,7 +4,8 @@ import type { TestCase } from "./types.js";
  * 30 canonical test cases — one per task type.
  *
  * Each case uses an English prompt matching the competition template structure.
- * Expected entities reflect what the entity extractor should produce.
+ * expectedEntities describe what should exist in the sandbox after execution.
+ * Each entity has a _type field used for sandbox verification (GET search or API log check).
  * API call bounds are targets: zero errors, tight call counts.
  *
  * For file-based types (PDF/CSV), requiresFile is set. These need file fixtures
@@ -23,11 +24,7 @@ export const testCases: TestCase[] = [
     tier: 1,
     taskType: "create_customer",
     expectedEntities: [
-      {
-        name: "Nordfjord Consulting AS",
-        organizationNumber: "987654321",
-        email: "post@nordfjord.no",
-      },
+      { _type: "customer", name: "Nordfjord Consulting AS" },
     ],
     expectedApiCalls: { max: 1, maxErrors: 0 },
   },
@@ -40,11 +37,7 @@ export const testCases: TestCase[] = [
     tier: 1,
     taskType: "create_employee",
     expectedEntities: [
-      {
-        firstName: "Erik",
-        lastName: "Hansen",
-        email: "erik.hansen@example.com",
-      },
+      { _type: "employee", firstName: "Erik", lastName: "Hansen" },
     ],
     expectedApiCalls: { max: 2, maxErrors: 0 },
   },
@@ -57,9 +50,9 @@ export const testCases: TestCase[] = [
     tier: 1,
     taskType: "create_department",
     expectedEntities: [
-      { name: "Salg" },
-      { name: "Utvikling" },
-      { name: "HR" },
+      { _type: "department", name: "Salg" },
+      { _type: "department", name: "Utvikling" },
+      { _type: "department", name: "HR" },
     ],
     expectedApiCalls: { max: 1, maxErrors: 0 },
   },
@@ -72,11 +65,7 @@ export const testCases: TestCase[] = [
     tier: 1,
     taskType: "create_supplier",
     expectedEntities: [
-      {
-        name: "Kontorservice AS",
-        organizationNumber: "912345678",
-        email: "faktura@kontorservice.no",
-      },
+      { _type: "supplier", name: "Kontorservice AS" },
     ],
     expectedApiCalls: { max: 1, maxErrors: 0 },
   },
@@ -89,12 +78,7 @@ export const testCases: TestCase[] = [
     tier: 1,
     taskType: "create_product",
     expectedEntities: [
-      {
-        name: "Premium Konsulentpakke",
-        number: "1001",
-        unitPrice: 4500,
-        vatRate: 25,
-      },
+      { _type: "product", name: "Premium Konsulentpakke" },
     ],
     expectedApiCalls: { max: 4, maxErrors: 0 },
   },
@@ -111,12 +95,7 @@ export const testCases: TestCase[] = [
     tier: 2,
     taskType: "create_project",
     expectedEntities: [
-      {
-        name: "Nettside Redesign",
-        customerName: "Nordlys AS",
-        organizationNumber: "876543219",
-        projectManagerEmail: "kari.larsen@example.com",
-      },
+      { _type: "project", name: "Nettside Redesign" },
     ],
     expectedApiCalls: { max: 6, maxErrors: 0 },
   },
@@ -129,10 +108,8 @@ export const testCases: TestCase[] = [
     tier: 2,
     taskType: "create_invoice",
     expectedEntities: [
-      {
-        customerName: "Bergen Handel AS",
-        organizationNumber: "811222333",
-      },
+      { _type: "customer", name: "Bergen Handel AS" },
+      { _type: "invoice" },
     ],
     expectedApiCalls: { max: 8, maxErrors: 0 },
     notes: "Three products with different VAT rates: 25%, 15% (food), 0% (exempt).",
@@ -146,11 +123,8 @@ export const testCases: TestCase[] = [
     tier: 2,
     taskType: "send_invoice",
     expectedEntities: [
-      {
-        customerName: "Vestland Tech AS",
-        organizationNumber: "922333444",
-        amount: 25000,
-      },
+      { _type: "customer", name: "Vestland Tech AS" },
+      { _type: "invoice" },
     ],
     expectedApiCalls: { max: 7, maxErrors: 0 },
   },
@@ -163,10 +137,7 @@ export const testCases: TestCase[] = [
     tier: 2,
     taskType: "create_order",
     expectedEntities: [
-      {
-        customerName: "Havbris AS",
-        organizationNumber: "933444555",
-      },
+      { _type: "order" },
     ],
     expectedApiCalls: { max: 5, maxErrors: 0 },
   },
@@ -179,11 +150,7 @@ export const testCases: TestCase[] = [
     tier: 2,
     taskType: "create_payment",
     expectedEntities: [
-      {
-        customerName: "Solberg Industri AS",
-        organizationNumber: "944555666",
-        amount: 18000,
-      },
+      { _type: "payment" },
     ],
     expectedApiCalls: { max: 4, maxErrors: 0 },
   },
@@ -196,12 +163,8 @@ export const testCases: TestCase[] = [
     tier: 2,
     taskType: "create_credit_note",
     expectedEntities: [
-      {
-        customerName: "Fjellet Eiendom AS",
-        organizationNumber: "955666777",
-        amount: 9500,
-        productName: "Vedlikeholdsavtale",
-      },
+      { _type: "customer", name: "Fjellet Eiendom AS" },
+      { _type: "creditNote" },
     ],
     expectedApiCalls: { max: 8, maxErrors: 0 },
   },
@@ -214,13 +177,7 @@ export const testCases: TestCase[] = [
     tier: 2,
     taskType: "create_travel_expense",
     expectedEntities: [
-      {
-        employeeFirstName: "Marte",
-        employeeLastName: "Olsen",
-        employeeEmail: "marte.olsen@example.com",
-        days: 3,
-        perDiemRate: 800,
-      },
+      { _type: "travelExpense" },
     ],
     expectedApiCalls: { max: 4, maxErrors: 0 },
   },
@@ -233,13 +190,7 @@ export const testCases: TestCase[] = [
     tier: 2,
     taskType: "create_payroll",
     expectedEntities: [
-      {
-        employeeFirstName: "Lars",
-        employeeLastName: "Berg",
-        employeeEmail: "lars.berg@example.com",
-        baseSalary: 52000,
-        bonus: 8000,
-      },
+      { _type: "voucher", description: "Lønn" },
     ],
     expectedApiCalls: { max: 6, maxErrors: 0 },
   },
@@ -252,12 +203,8 @@ export const testCases: TestCase[] = [
     tier: 2,
     taskType: "create_supplier_invoice",
     expectedEntities: [
-      {
-        supplierName: "Renhold Pluss AS",
-        organizationNumber: "966777888",
-        amount: 12500,
-        accountNumber: 6300,
-      },
+      { _type: "supplier", name: "Renhold Pluss AS" },
+      { _type: "voucher" },
     ],
     expectedApiCalls: { max: 5, maxErrors: 0 },
   },
@@ -270,12 +217,7 @@ export const testCases: TestCase[] = [
     tier: 2,
     taskType: "create_dimension",
     expectedEntities: [
-      {
-        dimensionName: "Region",
-        accountNumber: 6100,
-        amount: 25000,
-        linkedDimensionValue: "Nord-Norge",
-      },
+      { _type: "voucher" },
     ],
     expectedApiCalls: { max: 5, maxErrors: 0 },
   },
@@ -288,12 +230,7 @@ export const testCases: TestCase[] = [
     tier: 2,
     taskType: "reverse_payment",
     expectedEntities: [
-      {
-        customerName: "Kysten Shipping AS",
-        organizationNumber: "977888999",
-        amount: 15000,
-        productName: "Markedsanalyse",
-      },
+      { _type: "payment" },
     ],
     expectedApiCalls: { max: 4, maxErrors: 0 },
   },
@@ -306,12 +243,8 @@ export const testCases: TestCase[] = [
     tier: 2,
     taskType: "project_fixed_price",
     expectedEntities: [
-      {
-        projectName: "ERP Implementering",
-        customerName: "Innlandet Teknologi AS",
-        fixedPrice: 200000,
-        invoicePercentage: 75,
-      },
+      { _type: "project", name: "ERP Implementering" },
+      { _type: "invoice" },
     ],
     expectedApiCalls: { max: 11, maxErrors: 0 },
   },
@@ -324,16 +257,8 @@ export const testCases: TestCase[] = [
     tier: 2,
     taskType: "create_timesheet",
     expectedEntities: [
-      {
-        employeeFirstName: "Jonas",
-        employeeLastName: "Bakke",
-        employeeEmail: "jonas.bakke@example.com",
-        hours: 40,
-        activityName: "Backend-utvikling",
-        projectName: "App Modernisering",
-        customerName: "Teknogruppen AS",
-        hourlyRate: 1200,
-      },
+      { _type: "activity" },
+      { _type: "timesheetEntry" },
     ],
     expectedApiCalls: { max: 6, maxErrors: 0 },
   },
@@ -350,12 +275,9 @@ export const testCases: TestCase[] = [
     tier: 3,
     taskType: "receipt_expense",
     expectedEntities: [
-      {
-        itemDescription: "office supplies",
-        departmentName: "Administrasjon",
-      },
+      { _type: "voucher" },
     ],
-    expectedApiCalls: { max: 6, maxErrors: 0 },
+    expectedApiCalls: { max: 5, maxErrors: 0 },
     requiresFile: true,
     fileType: "pdf",
   },
@@ -367,8 +289,10 @@ export const testCases: TestCase[] = [
     language: "en",
     tier: 3,
     taskType: "employee_onboarding_pdf",
-    expectedEntities: [],
-    expectedApiCalls: { max: 8, maxErrors: 0 },
+    expectedEntities: [
+      { _type: "employee" },
+    ],
+    expectedApiCalls: { max: 2, maxErrors: 0 },
     requiresFile: true,
     fileType: "pdf",
   },
@@ -380,7 +304,9 @@ export const testCases: TestCase[] = [
     language: "en",
     tier: 3,
     taskType: "employee_contract_pdf",
-    expectedEntities: [],
+    expectedEntities: [
+      { _type: "employee" },
+    ],
     expectedApiCalls: { max: 8, maxErrors: 0 },
     requiresFile: true,
     fileType: "pdf",
@@ -393,8 +319,10 @@ export const testCases: TestCase[] = [
     language: "en",
     tier: 3,
     taskType: "supplier_invoice_pdf",
-    expectedEntities: [],
-    expectedApiCalls: { max: 6, maxErrors: 0 },
+    expectedEntities: [
+      { _type: "voucher" },
+    ],
+    expectedApiCalls: { max: 4, maxErrors: 0 },
     requiresFile: true,
     fileType: "pdf",
   },
@@ -406,7 +334,9 @@ export const testCases: TestCase[] = [
     language: "en",
     tier: 3,
     taskType: "bank_reconciliation",
-    expectedEntities: [],
+    expectedEntities: [
+      { _type: "voucher" },
+    ],
     expectedApiCalls: { max: 15, maxErrors: 0 },
     requiresFile: true,
     fileType: "csv",
@@ -419,7 +349,9 @@ export const testCases: TestCase[] = [
     language: "en",
     tier: 3,
     taskType: "ledger_audit",
-    expectedEntities: [],
+    expectedEntities: [
+      { _type: "voucher" },
+    ],
     expectedApiCalls: { max: 5, maxErrors: 0 },
   },
 
@@ -430,7 +362,10 @@ export const testCases: TestCase[] = [
     language: "en",
     tier: 3,
     taskType: "ledger_analysis",
-    expectedEntities: [],
+    expectedEntities: [
+      { _type: "project", _minCount: 3 },
+      { _type: "activity", _minCount: 3 },
+    ],
     expectedApiCalls: { max: 10, maxErrors: 0 },
   },
 
@@ -442,10 +377,7 @@ export const testCases: TestCase[] = [
     tier: 3,
     taskType: "year_end_closing",
     expectedEntities: [
-      {
-        fiscalYear: 2025,
-        taxRate: 22,
-      },
+      { _type: "voucher", description: "Årsavslutning" },
     ],
     expectedApiCalls: { max: 11, maxErrors: 0 },
   },
@@ -457,7 +389,9 @@ export const testCases: TestCase[] = [
     language: "en",
     tier: 3,
     taskType: "monthly_closing",
-    expectedEntities: [],
+    expectedEntities: [
+      { _type: "voucher", description: "Månedsavslutning" },
+    ],
     expectedApiCalls: { max: 6, maxErrors: 0 },
     notes: "Accrual: 15000 (1710→6300). Depreciation: 5000 (6010/1209). Salary provision: 180000 (5000/2900).",
   },
@@ -470,14 +404,7 @@ export const testCases: TestCase[] = [
     tier: 3,
     taskType: "fx_payment",
     expectedEntities: [
-      {
-        customerName: "Eurotech GmbH",
-        organizationNumber: "811333555",
-        invoiceAmountForeign: 10000,
-        currency: "EUR",
-        invoiceRate: 11.5,
-        paymentRate: 11.2,
-      },
+      { _type: "voucher" },
     ],
     expectedApiCalls: { max: 5, maxErrors: 0 },
   },
@@ -490,12 +417,8 @@ export const testCases: TestCase[] = [
     tier: 3,
     taskType: "project_lifecycle",
     expectedEntities: [
-      {
-        projectName: "Digital Transformasjon",
-        customerName: "Skynet Consulting AS",
-        organizationNumber: "822444666",
-        budgetAmount: 500000,
-      },
+      { _type: "project", name: "Digital Transformasjon" },
+      { _type: "invoice" },
     ],
     expectedApiCalls: { max: 17, maxErrors: 0 },
   },
@@ -508,12 +431,8 @@ export const testCases: TestCase[] = [
     tier: 3,
     taskType: "reminder_fee",
     expectedEntities: [
-      {
-        reminderFeeAmount: 50,
-        partialPaymentAmount: 5000,
-        debitAccount: 1500,
-        creditAccount: 3400,
-      },
+      { _type: "voucher" },
+      { _type: "invoice" },
     ],
     expectedApiCalls: { max: 12, maxErrors: 0 },
   },

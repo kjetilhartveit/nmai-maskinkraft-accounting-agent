@@ -8,7 +8,6 @@ function fmtBool(b: boolean): string {
   return b ? "yes" : "no";
 }
 
-/** Print one row per test case and a footer summary. */
 export function printEvalTable(
   results: EvalResult[],
   summary: EvalSummary,
@@ -17,14 +16,12 @@ export function printEvalTable(
   const colId = 36;
   const colOk = 8;
   const colParse = 8;
+  const colVerify = 8;
   const colApi = 6;
   const colErr = 4;
   const colMs = 6;
 
-  const header = `${pad("case", colId)} ${pad("pass", colOk)} ${pad(
-    "parse",
-    colParse
-  )} ${pad("api", colApi)} ${pad("4xx+", colErr)} ${pad("ms", colMs)} tasks`;
+  const header = `${pad("case", colId)} ${pad("pass", colOk)} ${pad("type", colParse)} ${pad("verify", colVerify)} ${pad("api", colApi)} ${pad("4xx+", colErr)} ${pad("ms", colMs)} tasks`;
   console.log(header);
   console.log("-".repeat(header.length + 20));
 
@@ -32,10 +29,15 @@ export function printEvalTable(
     const taskTypes =
       r.parsedSequence?.tasks.map((t) => t.taskType).join("→") ?? "?";
     const passColor = r.success ? "\x1b[32m" : "\x1b[31m";
+    const verifyColor = r.sandboxVerified ? "" : "\x1b[31m";
+    const verifyReset = r.sandboxVerified ? "" : "\x1b[0m";
     const line = `${pad(r.testCaseId, colId)} ${passColor}${pad(
       fmtBool(r.success),
       colOk
-    )}\x1b[0m ${pad(fmtBool(r.parseMatch), colParse)} ${pad(
+    )}\x1b[0m ${pad(fmtBool(r.parseMatch), colParse)} ${verifyColor}${pad(
+      fmtBool(r.sandboxVerified),
+      colVerify
+    )}${verifyReset} ${pad(
       String(r.apiCalls.count),
       colApi
     )} ${pad(String(r.apiCalls.errors), colErr)} ${pad(
@@ -45,6 +47,9 @@ export function printEvalTable(
     console.log(line);
     if (r.error && !r.success) {
       console.log(`  └─ ${r.error}`);
+    }
+    if (!r.sandboxVerified && r.sandboxFailures.length > 0) {
+      console.log(`  └─ \x1b[33msandbox: ${r.sandboxFailures.join(", ")}\x1b[0m`);
     }
 
     if (verbose || (!r.success && r.apiCallDetails.length > 0)) {

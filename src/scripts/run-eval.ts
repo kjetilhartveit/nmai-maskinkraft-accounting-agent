@@ -24,6 +24,7 @@ function parseArgs(argv: string[]): {
   updateBaselines?: boolean;
   skipFileTasks?: boolean;
   verbose?: boolean;
+  setMax?: string[];
 } {
   const out: ReturnType<typeof parseArgs> = {};
   for (let i = 0; i < argv.length; i++) {
@@ -54,6 +55,9 @@ function parseArgs(argv: string[]): {
       out.skipFileTasks = true;
     } else if (a === "--verbose" || a === "-v") {
       out.verbose = true;
+    } else if (a === "--set-max" && argv[i + 1]) {
+      if (!out.setMax) out.setMax = [];
+      out.setMax.push(argv[++i]);
     }
   }
   return out;
@@ -79,9 +83,51 @@ function applyBaselineUpdates(improvements: { testCaseId: string; newMax: number
   console.log(`\nWrote updated baselines to ${TEST_CASES_FILE}`);
 }
 
+function applySetMax(entries: string[]): void {
+  let content = readFileSync(TEST_CASES_FILE, "utf-8");
+  let changed = 0;
+
+  for (const entry of entries) {
+    const eqIdx = entry.indexOf("=");
+    if (eqIdx === -1) {
+      console.error(`Invalid --set-max format: "${entry}" (expected taskType=number)`);
+      continue;
+    }
+    const taskType = entry.slice(0, eqIdx);
+    const maxVal = parseInt(entry.slice(eqIdx + 1), 10);
+    if (isNaN(maxVal) || maxVal < 0) {
+      console.error(`Invalid max value for ${taskType}: ${entry.slice(eqIdx + 1)}`);
+      continue;
+    }
+
+    const pattern = new RegExp(
+      `(taskType:\\s*"${taskType}"[\\s\\S]*?expectedApiCalls:\\s*\\{[^}]*max:\\s*)\\d+`,
+    );
+    const match = content.match(pattern);
+    if (match) {
+      content = content.replace(pattern, `$1${maxVal}`);
+      console.log(`  ${taskType}: max → ${maxVal}`);
+      changed++;
+    } else {
+      console.warn(`  Could not find expectedApiCalls.max for task type "${taskType}"`);
+    }
+  }
+
+  if (changed > 0) {
+    writeFileSync(TEST_CASES_FILE, content);
+    console.log(`\nUpdated ${changed} baseline(s) in ${TEST_CASES_FILE}`);
+  }
+}
+
 async function main() {
   const argv = process.argv.slice(2).filter((x) => x !== "--");
   const args = parseArgs(argv);
+
+  if (args.setMax && args.setMax.length > 0) {
+    console.log("Setting baselines:");
+    applySetMax(args.setMax);
+    return;
+  }
 
   const evalConfig: EvalConfig = {
     model: args.model ?? config.google.model,
@@ -161,10 +207,14 @@ async function main() {
     onResult: (r, idx, total) => {
       const icon = r.success ? "\x1b[32m PASS \x1b[0m" : "\x1b[31m FAIL \x1b[0m";
       const api = `${r.apiCalls.count} calls${r.apiCalls.errors > 0 ? ` (${r.apiCalls.errors} err)` : ""}`;
+      const verify = r.sandboxVerified ? "" : " \x1b[33m[verify failed]\x1b[0m";
       const time = `${(r.elapsedMs / 1000).toFixed(1)}s`;
-      console.log(`[${idx}/${total}] ${icon} ${r.testCaseId}  ${api}  ${time}`);
+      console.log(`[${idx}/${total}] ${icon} ${r.testCaseId}  ${api}  ${time}${verify}`);
       if (r.error && !r.success) {
         console.log(`         └─ ${r.error.slice(0, 120)}`);
+      }
+      if (!r.sandboxVerified && r.sandboxFailures.length > 0) {
+        console.log(`         └─ sandbox: ${r.sandboxFailures.join(", ")}`);
       }
     },
   });

@@ -1,5 +1,16 @@
 import type { ApiCallLog, ParsedTaskSequence, TaskType } from "../types/index.js";
 
+export type EntityType =
+  | "customer" | "employee" | "department" | "supplier" | "product"
+  | "project" | "voucher" | "invoice" | "activity" | "travelExpense"
+  | "payment" | "creditNote" | "order" | "timesheetEntry" | "dimension";
+
+export interface ExpectedEntity {
+  _type: EntityType;
+  _minCount?: number;
+  [key: string]: unknown;
+}
+
 export interface TestCase {
   id: string;
   prompt: string;
@@ -7,9 +18,8 @@ export interface TestCase {
   tier: 1 | 2 | 3;
   taskType: TaskType;
   taskTypeAlternatives?: TaskType[];
-  expectedEntities: Record<string, unknown>[];
+  expectedEntities: ExpectedEntity[];
   expectedApiCalls: { max: number; maxErrors: number };
-  /** Whether this test case requires an attached file to execute */
   requiresFile?: boolean;
   fileType?: "pdf" | "csv";
   expectedTaskSequence?: { taskType: TaskType; entities: Record<string, unknown>[] }[];
@@ -32,6 +42,8 @@ export interface EvalResult {
   success: boolean;
   serverReportedSuccess: boolean;
   parseMatch: boolean;
+  sandboxVerified: boolean;
+  sandboxFailures: string[];
   error?: string;
 }
 

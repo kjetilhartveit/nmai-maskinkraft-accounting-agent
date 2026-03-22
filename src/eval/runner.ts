@@ -4,13 +4,10 @@ import * as path from "path";
 import type { ApiCallLog, ParsedTaskSequence } from "../types/index.js";
 import type { SolveEvalResponseBody } from "../routes/solve.js";
 import { config } from "../lib/config.js";
+import { TripletexClient } from "../lib/tripletex-client.js";
 import type { EvalConfig, EvalResult, EvalSummary, TestCase } from "./types.js";
-import {
-  apiBoundsSatisfied,
-  sequenceEntitiesMatch,
-  languageMatches,
-  taskTypeMatches,
-} from "./match.js";
+import { apiBoundsSatisfied, taskTypeMatches } from "./match.js";
+import { verifySandboxEntities } from "./sandbox-verify.js";
 
 const DEFAULT_SERVER = process.env.SERVER_URL || "http://localhost:3000";
 
@@ -34,6 +31,27 @@ function isEvalBody(x: unknown): x is SolveEvalResponseBody {
     o.apiCallStats !== undefined &&
     typeof o.elapsedMs === "number"
   );
+}
+
+function makeFailResult(
+  tc: TestCase,
+  evalConfig: EvalConfig,
+  elapsedMs: number,
+  error: string,
+): EvalResult {
+  return {
+    testCaseId: tc.id,
+    config: evalConfig,
+    apiCalls: { count: 0, errors: 0 },
+    apiCallDetails: [],
+    elapsedMs,
+    success: false,
+    serverReportedSuccess: false,
+    parseMatch: false,
+    sandboxVerified: false,
+    sandboxFailures: [],
+    error,
+  };
 }
 
 export async function runEvalCase(
@@ -66,11 +84,7 @@ export async function runEvalCase(
     const filepath = path.join(process.cwd(), "data", "pdf", filename);
     if (fs.existsSync(filepath)) {
       const content = fs.readFileSync(filepath).toString("base64");
-      files.push({
-        filename,
-        content_base64: content,
-        mime_type: "application/pdf"
-      });
+      files.push({ filename, content_base64: content, mime_type: "application/pdf" });
     } else {
       console.warn(`[Eval] Missing required file fixture for ${tc.id} at ${filepath}`);
     }
@@ -82,27 +96,13 @@ export async function runEvalCase(
       method: "POST",
       headers,
       signal: controller.signal,
-      body: JSON.stringify({
-        prompt: tc.prompt,
-        files,
-        tripletex_credentials: creds,
-      }),
+      body: JSON.stringify({ prompt: tc.prompt, files, tripletex_credentials: creds }),
     });
   } catch (err) {
     clearTimeout(timeout);
     const elapsed = Math.round(performance.now() - start);
     const msg = err instanceof Error ? err.message : String(err);
-    return {
-      testCaseId: tc.id,
-      config: evalConfig,
-      apiCalls: { count: 0, errors: 0 },
-      apiCallDetails: [],
-      elapsedMs: elapsed,
-      success: false,
-      serverReportedSuccess: false,
-      parseMatch: false,
-      error: `Fetch failed (timeout/network): ${msg}`,
-    };
+    return makeFailResult(tc, evalConfig, elapsed, `Fetch failed (timeout/network): ${msg}`);
   } finally {
     clearTimeout(timeout);
   }
@@ -114,31 +114,11 @@ export async function runEvalCase(
   try {
     json = JSON.parse(responseText);
   } catch {
-    return {
-      testCaseId: tc.id,
-      config: evalConfig,
-      apiCalls: { count: 0, errors: 0 },
-      apiCallDetails: [],
-      elapsedMs: elapsedRoundtrip,
-      success: false,
-      serverReportedSuccess: false,
-      parseMatch: false,
-      error: `Server returned non-JSON (${res.status}): ${responseText.slice(0, 200)}`,
-    };
+    return makeFailResult(tc, evalConfig, elapsedRoundtrip, `Server returned non-JSON (${res.status}): ${responseText.slice(0, 200)}`);
   }
 
   if (!isEvalBody(json)) {
-    return {
-      testCaseId: tc.id,
-      config: evalConfig,
-      apiCalls: { count: 0, errors: 0 },
-      apiCallDetails: [],
-      elapsedMs: elapsedRoundtrip,
-      success: false,
-      serverReportedSuccess: false,
-      parseMatch: false,
-      error: `Unexpected response (${res.status}): ${JSON.stringify(json)}`,
-    };
+    return makeFailResult(tc, evalConfig, elapsedRoundtrip, `Unexpected response (${res.status}): ${JSON.stringify(json)}`);
   }
 
   const parsedSequence = json.parsedSequence as ParsedTaskSequence | undefined;
@@ -146,26 +126,33 @@ export async function runEvalCase(
   const errors = json.apiCallStats.errors;
   const details = (json.apiCallStats.details ?? []) as ApiCallLog[];
 
-  const taskTypeOk = taskTypeMatches(tc, parsedSequence);
-  const langOk = languageMatches(tc, parsedSequence);
-  const entitiesOk = sequenceEntitiesMatch(tc, parsedSequence);
-  const parseMatch = taskTypeOk && langOk && entitiesOk;
-
+  const parseMatch = taskTypeMatches(tc, parsedSequence);
   const boundsOk = apiBoundsSatisfied(tc, total, errors);
-  const success = parseMatch && boundsOk && res.ok;
 
-  if (!success && parseMatch && boundsOk) {
-    console.warn(`[Eval] ${tc.id}: parse OK, bounds OK, but res.ok=${res.ok} (status=${res.status})`);
-  }
-  if (!success && !parseMatch) {
-    const parts = [];
-    if (!taskTypeOk) {
-      const actualTypes = parsedSequence?.tasks.map(t => t.taskType).join("→") ?? "none";
-      parts.push(`taskType(expected=${tc.taskType}, got=${actualTypes})`);
+  // Sandbox verification: check that expected entities were created
+  let sandboxVerified = true;
+  let sandboxFailures: string[] = [];
+  if (tc.expectedEntities.length > 0 && res.ok) {
+    try {
+      const verifyClient = new TripletexClient(creds.base_url, creds.session_token);
+      const verification = await verifySandboxEntities(verifyClient, tc.expectedEntities, details);
+      sandboxVerified = verification.verified;
+      sandboxFailures = verification.failures;
+    } catch (err) {
+      console.warn(`[Eval] ${tc.id}: sandbox verification error: ${err instanceof Error ? err.message : err}`);
+      sandboxVerified = false;
+      sandboxFailures = ["verification query failed"];
     }
-    if (!langOk) parts.push(`language(expected=${tc.language}, got=${parsedSequence?.language})`);
-    if (!entitiesOk) parts.push("entities");
-    console.warn(`[Eval] ${tc.id}: parse failed: ${parts.join(", ")}`);
+  }
+
+  const success = parseMatch && boundsOk && sandboxVerified && res.ok;
+
+  if (!success && !parseMatch) {
+    const actualTypes = parsedSequence?.tasks.map(t => t.taskType).join("→") ?? "none";
+    console.warn(`[Eval] ${tc.id}: taskType mismatch (expected=${tc.taskType}, got=${actualTypes})`);
+  }
+  if (!success && !sandboxVerified) {
+    console.warn(`[Eval] ${tc.id}: sandbox verification failed: ${sandboxFailures.join(", ")}`);
   }
 
   const errorCalls = details.filter(d => d.isError);
@@ -185,6 +172,8 @@ export async function runEvalCase(
     success,
     serverReportedSuccess: json.success,
     parseMatch,
+    sandboxVerified,
+    sandboxFailures,
     error: json.error,
   };
 }
