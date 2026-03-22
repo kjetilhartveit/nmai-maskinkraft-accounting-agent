@@ -98,7 +98,7 @@ export async function handleEmployeeOnboardingPdf(
       const employmentBody: Record<string, unknown> = {
         employee: { id: employeeId },
         startDate,
-        percentOfFullTimeEquivalent: employmentPercentage,
+        
       };
 
       const empResult = await client.post<{ id: number }>("/employee/employment", employmentBody);
