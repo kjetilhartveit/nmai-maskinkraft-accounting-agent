@@ -4,6 +4,7 @@ import type { SequenceContext } from "../lib/sequence-context.js";
 import {
   findEmployeeByName,
   findEmployeeByEmail,
+  loadEmployees,
   daysFromNow,
   getDefaultDepartmentId,
   getProjectManagerEmployeeId,
@@ -52,8 +53,8 @@ export async function handleCreateTimesheet(
       if (emp) employeeId = emp.id;
     }
     if (!employeeId) {
-      const fallback = await client.list<{ id: number }>("/employee", { from: "0", count: "1" });
-      if (fallback.values.length > 0) employeeId = fallback.values[0].id;
+      const allEmps = await loadEmployees(client);
+      if (allEmps.length > 0) employeeId = allEmps[0].id;
       else throw new Error("No employee found for timesheet entry");
     }
   }

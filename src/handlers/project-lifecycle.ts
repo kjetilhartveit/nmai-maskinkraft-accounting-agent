@@ -9,9 +9,9 @@ import {
   getProjectManagerEmployeeId,
   today,
   daysFromNow,
-  ensureBankAccountConfigured,
+  ensureBankAccountFromBulkAccounts,
   findOrCreateProduct,
-  getMultipleAccountsByNumber,
+  loadAllAccounts,
 } from "../lib/tripletex-helpers.js";
 import { grantProjectManagerEntitlement } from "./create-employee.js";
 
@@ -180,10 +180,10 @@ export async function handleProjectLifecycle(
     }
   }
 
-  // 6. Register supplier cost as voucher (single bulk account lookup)
+  // 6. Register supplier cost as voucher (uses bulk account cache)
+  const accts = await loadAllAccounts(client);
   if (supplierCost && supplierCost.amount > 0) {
     try {
-      const accts = await getMultipleAccountsByNumber(client, [6300, 1920]);
       const expenseAcct = accts.get(6300);
       const bankAcct = accts.get(1920);
       if (!expenseAcct || !bankAcct) throw new Error("Required accounts not found");
@@ -201,8 +201,8 @@ export async function handleProjectLifecycle(
     }
   }
 
-  // 7. Invoice the project
-  await ensureBankAccountConfigured(client);
+  // 7. Invoice the project (use bulk accounts for bank config — saves 1 API call)
+  await ensureBankAccountFromBulkAccounts(client, accts);
   const invoiceAmount = budget > 0
     ? Math.round(budget * (invoicePercentage / 100))
     : (totalHoursRevenue > 0 ? Math.round(totalHoursRevenue * (invoicePercentage / 100)) : 0);

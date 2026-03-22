@@ -1,7 +1,7 @@
 import type { TripletexClient } from "../lib/tripletex-client.js";
 import type { ParsedTask } from "../types/index.js";
 import type { SequenceContext } from "../lib/sequence-context.js";
-import { findEmployeeByName, findEmployeeByEmail, today } from "../lib/tripletex-helpers.js";
+import { findEmployeeByName, findEmployeeByEmail, loadEmployees, today } from "../lib/tripletex-helpers.js";
 
 interface PaymentType {
   id: number;
@@ -118,9 +118,9 @@ export async function handleCreateTravelExpense(
 
   if (!employeeId) {
     console.warn("[Handler] No employee found for travel expense by name, using fallback");
-    const fallbackEmployees = await client.list<{ id: number }>("/employee", { from: "0", count: "1" });
-    if (fallbackEmployees.values.length > 0) {
-      employeeId = fallbackEmployees.values[0].id;
+    const allEmployees = await loadEmployees(client);
+    if (allEmployees.length > 0) {
+      employeeId = allEmployees[0].id;
     } else {
       console.warn("[Handler] No fallback employee available");
       return;

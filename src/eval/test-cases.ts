@@ -118,7 +118,7 @@ export const testCases: TestCase[] = [
         projectManagerEmail: "kari.larsen@example.com",
       },
     ],
-    expectedApiCalls: { max: 6, maxErrors: 0 },
+    expectedApiCalls: { max: 4, maxErrors: 0 },
   },
 
   {
@@ -222,7 +222,7 @@ export const testCases: TestCase[] = [
         perDiemRate: 800,
       },
     ],
-    expectedApiCalls: { max: 4, maxErrors: 0 },
+    expectedApiCalls: { max: 2, maxErrors: 0 },
   },
 
   {
@@ -241,7 +241,7 @@ export const testCases: TestCase[] = [
         bonus: 8000,
       },
     ],
-    expectedApiCalls: { max: 4, maxErrors: 0 },
+    expectedApiCalls: { max: 3, maxErrors: 0 },
   },
 
   {
@@ -313,7 +313,7 @@ export const testCases: TestCase[] = [
         invoicePercentage: 75,
       },
     ],
-    expectedApiCalls: { max: 11, maxErrors: 0 },
+    expectedApiCalls: { max: 9, maxErrors: 0 },
   },
 
   {
@@ -335,7 +335,7 @@ export const testCases: TestCase[] = [
         hourlyRate: 1200,
       },
     ],
-    expectedApiCalls: { max: 6, maxErrors: 0 },
+    expectedApiCalls: { max: 4, maxErrors: 0 },
   },
 
   // ═══════════════════════════════════════════════════════════════════
@@ -479,7 +479,7 @@ export const testCases: TestCase[] = [
         paymentRate: 11.2,
       },
     ],
-    expectedApiCalls: { max: 4, maxErrors: 0 },
+    expectedApiCalls: { max: 3, maxErrors: 0 },
   },
 
   {
@@ -497,7 +497,7 @@ export const testCases: TestCase[] = [
         budgetAmount: 500000,
       },
     ],
-    expectedApiCalls: { max: 16, maxErrors: 0 },
+    expectedApiCalls: { max: 13, maxErrors: 0 },
   },
 
   {
@@ -515,6 +515,6 @@ export const testCases: TestCase[] = [
         creditAccount: 3400,
       },
     ],
-    expectedApiCalls: { max: 10, maxErrors: 0 },
+    expectedApiCalls: { max: 9, maxErrors: 0 },
   },
 ];

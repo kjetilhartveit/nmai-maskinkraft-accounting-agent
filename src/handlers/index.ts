@@ -41,41 +41,41 @@ export type TaskHandler = (
  * No "unknown" fallback — every prompt type has a handler.
  */
 const handlers: Record<TaskType, TaskHandler> = {
-  // Tier 1 — Simple CRUD (1-3 API calls)
-  create_customer: handleCreateCustomer,           // 1-2 calls: POST /customer
-  create_employee: handleCreateEmployee,           // 2-3 calls: dept lookup + POST /employee
+  // Tier 1 — Simple CRUD (1-4 API calls)
+  create_customer: handleCreateCustomer,           // 1 call: POST /customer
+  create_employee: handleCreateEmployee,           // 2 calls: dept lookup + POST /employee
   create_department: handleCreateDepartment,       // 1 call: batch POST /department/list
   create_supplier: handleCreateSupplier,           // 1 call: POST /supplier
-  create_product: handleCreateProduct,             // 3-5 calls: dept + VAT + unit + POST
+  create_product: handleCreateProduct,             // 4 calls: dept + VAT + unit + product lookup
 
-  // Tier 2 — Multi-step (3-10 API calls)
-  create_project: handleCreateProject,             // 3-8 calls: PM entitlements + POST /project
-  create_invoice: handleCreateInvoice,             // 5-7 calls: bank config + order + invoice
-  send_invoice: handleSendInvoice,                 // 5-7 calls: bank config + order + invoice + send
-  create_order: handleCreateOrder,                 // 3-8 calls: customer + products + order + lines
-  create_payment: handleCreatePayment,             // 3-5 calls: find invoice + payment type + PUT
-  create_credit_note: handleCreateCreditNote,      // 6-8 calls: find/create invoice + credit
-  create_travel_expense: handleCreateTravelExpense, // 4-7 calls: employee + POST + costs
-  create_payroll: handleCreatePayroll,             // 5-7 calls: employee + accounts + voucher
-  create_supplier_invoice: handleCreateSupplierInvoice, // 4-5 calls: accounts + voucher
-  create_dimension: handleCreateDimension,         // 5-8 calls: dimension + values + voucher
-  reverse_payment: handleReversePayment,           // 4-6 calls: find invoice + reverse payment
-  project_fixed_price: handleProjectFixedPrice,    // 5-8 calls: project + fixed price + invoice %
-  create_timesheet: handleCreateTimesheet,         // 4-6 calls: employee + project + activity + timesheet
+  // Tier 2 — Multi-step (2-9 API calls)
+  create_project: handleCreateProject,             // 4 calls: employee cache + dept + customer + POST
+  create_invoice: handleCreateInvoice,             // 8 calls: bank config + order + products + invoice
+  send_invoice: handleSendInvoice,                 // 7 calls: bank config + order + product + invoice + send
+  create_order: handleCreateOrder,                 // 5 calls: customer + order + products + lines
+  create_payment: handleCreatePayment,             // 4 calls: accounts + invoice + paymentType + PUT
+  create_credit_note: handleCreateCreditNote,      // 8 calls: customer + accounts + invoice + credit
+  create_travel_expense: handleCreateTravelExpense, // 2 calls: employee cache + POST
+  create_payroll: handleCreatePayroll,             // 3 calls: employee cache + accounts + voucher
+  create_supplier_invoice: handleCreateSupplierInvoice, // 3 calls: supplier + accounts + voucher
+  create_dimension: handleCreateDimension,         // 4 calls: dimensions + accounts + voucher
+  reverse_payment: handleReversePayment,           // 4 calls: customer + invoice + paymentType + PUT
+  project_fixed_price: handleProjectFixedPrice,    // 9 calls: customer + project + accounts + invoice
+  create_timesheet: handleCreateTimesheet,         // 4 calls: employee cache + project + activity + entry
 
-  // Tier 3 — Complex / file-based (3-15 API calls)
+  // Tier 3 — Complex / file-based (2-13 API calls)
   receipt_expense: handleReceiptExpense,            // 3-5 calls: read receipt + voucher
   employee_onboarding_pdf: handleEmployeeOnboardingPdf, // 3-5 calls: parse PDF + create employee
   employee_contract_pdf: handleEmployeeOnboardingPdf,   // same handler, different entity extraction
   supplier_invoice_pdf: handleCreateSupplierInvoice,    // same handler, entities from PDF
   bank_reconciliation: handleBankReconciliation,   // 5-10 calls: bank txns + ledger matching
-  ledger_audit: handleLedgerAudit,                 // 5-10 calls: find errors + correcting vouchers
-  ledger_analysis: handleLedgerAnalysis,           // 5-10 calls: analyze ledger + create projects
-  year_end_closing: handleYearEndClosing,          // 5-10 calls: depreciation + accruals + closing
-  monthly_closing: handleMonthlyClosing,           // 3-6 calls: monthly accruals + depreciation
-  fx_payment: handleFxPayment,                     // 4-6 calls: FX conversion + voucher
-  project_lifecycle: handleProjectLifecycle,       // 8-15 calls: project + hours + invoice
-  reminder_fee: handleReminderFee,                 // 4-6 calls: find overdue + reminder fee
+  ledger_audit: handleLedgerAudit,                 // 4 calls: voucher search + accounts + voucher
+  ledger_analysis: handleLedgerAnalysis,           // 10 calls: employees + dept + vouchers + projects
+  year_end_closing: handleYearEndClosing,          // 2 calls: accounts + voucher
+  monthly_closing: handleMonthlyClosing,           // 2 calls: accounts + voucher
+  fx_payment: handleFxPayment,                     // 3 calls: invoice + accounts + FX voucher
+  project_lifecycle: handleProjectLifecycle,       // 13 calls: project + hours + supplier + invoice
+  reminder_fee: handleReminderFee,                 // 9 calls: invoices + accounts + voucher + invoice + send
 };
 
 export async function executeTask(

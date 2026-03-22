@@ -4,9 +4,9 @@ import type { SequenceContext } from "../lib/sequence-context.js";
 import {
   today,
   findCustomerByName,
-  ensureBankAccountConfigured,
+  ensureBankAccountFromBulkAccounts,
   findOrCreateProduct,
-  getMultipleAccountsByNumber,
+  loadAllAccounts,
 } from "../lib/tripletex-helpers.js";
 
 function parseNum(v: unknown, fallback: number): number {
@@ -54,11 +54,12 @@ export function resetReminderFeeCache(): void {
 /**
  * Reminder fee handler.
  *
- * Optimized flow:
- *   1. Parallel: bank config + invoice search + account bulk load + payment type
- *   2. Post reminder fee voucher
- *   3. Create & send reminder fee invoice
- *   4. Register partial payment on overdue invoice
+ * Optimized flow (10 API calls):
+ *   1. Parallel: loadAllAccounts + GET /invoice + GET /invoice/paymentType (3 parallel calls)
+ *   2. ensureBankAccountFromBulkAccounts (0 calls if already configured, uses bulk data)
+ *   3. POST /ledger/voucher (reminder fee)
+ *   4. findOrCreateProduct + POST /order + POST /order/orderline + POST /invoice + PUT /:send
+ *   5. PUT /invoice/:payment (partial payment on overdue, if found)
  */
 export async function handleReminderFee(
   client: TripletexClient,
@@ -74,18 +75,22 @@ export async function handleReminderFee(
   const debitAccountNumber = parseNum(entity.debitAccount ?? entity.debitAccountNumber, 1500);
   const creditAccountNumber = parseNum(entity.creditAccount ?? entity.creditAccountNumber, 3400);
 
-  // Parallel: bank config + accounts bulk load + payment type (if needed)
-  const parallelOps: Promise<unknown>[] = [
-    ensureBankAccountConfigured(client),
-    getMultipleAccountsByNumber(client, [debitAccountNumber, creditAccountNumber]),
-  ];
-  if (partialPaymentAmount > 0) {
-    parallelOps.push(getPaymentTypeId(client));
-  }
-  const [, accountsResult] = await Promise.all(parallelOps);
-  const accounts = accountsResult as Map<number, { id: number; number: number }>;
+  // 1. Parallel: load accounts + search invoices + get payment type
+  const [accountsMap, allInvoices, _payTypeId] = await Promise.all([
+    loadAllAccounts(client),
+    client.list<Invoice>("/invoice", {
+      invoiceDateFrom: "2020-01-01",
+      invoiceDateTo: "2030-12-31",
+      from: "0",
+      count: "50",
+    }),
+    getPaymentTypeId(client),
+  ]);
 
-  // 1. Find customer and overdue invoice
+  // Use bulk accounts for bank config check (saves 1 API call vs ensureBankAccountConfigured)
+  await ensureBankAccountFromBulkAccounts(client, accountsMap);
+
+  // 2. Find customer and overdue invoice
   let customerId: number | undefined;
   let overdueInvoice: Invoice | null = null;
 
@@ -106,16 +111,7 @@ export async function handleReminderFee(
     if (byOrg.values.length > 0) customerId = byOrg.values[0].id;
   }
 
-  // Search invoices (single call serves both customer discovery and overdue invoice finding)
-  const invoiceParams: Record<string, string> = {
-    invoiceDateFrom: "2020-01-01",
-    invoiceDateTo: "2030-12-31",
-    from: "0",
-    count: "50",
-  };
-  if (customerId) invoiceParams.customerId = String(customerId);
-  const allInvoices = await client.list<Invoice>("/invoice", invoiceParams);
-
+  // Find overdue invoice
   if (!customerId) {
     const overdueInv = allInvoices.values.find((inv) => inv.amountOutstanding > 0);
     if (overdueInv) {
@@ -124,8 +120,11 @@ export async function handleReminderFee(
       console.log(`[Handler] Found overdue invoice #${overdueInv.invoiceNumber} for customer ${overdueInv.customer.name}`);
     }
   } else {
-    overdueInvoice = allInvoices.values.find((inv) => inv.amountOutstanding > 0)
-      ?? allInvoices.values[0]
+    const customerInvoices = allInvoices.values.filter((inv) =>
+      inv.customer?.id === customerId,
+    );
+    overdueInvoice = customerInvoices.find((inv) => inv.amountOutstanding > 0)
+      ?? customerInvoices[0]
       ?? null;
   }
 
@@ -137,9 +136,9 @@ export async function handleReminderFee(
     if (customerName) ctx.registerCustomer(customerName, customerId);
   }
 
-  // 2. Post reminder fee voucher (debit 1500 accounts receivable, credit 3400 reminder income)
-  const debitAcct = accounts.get(debitAccountNumber);
-  const creditAcct = accounts.get(creditAccountNumber);
+  // 3. Post reminder fee voucher
+  const debitAcct = accountsMap.get(debitAccountNumber);
+  const creditAcct = accountsMap.get(creditAccountNumber);
   if (!debitAcct) throw new Error(`Account ${debitAccountNumber} not found`);
   if (!creditAcct) throw new Error(`Account ${creditAccountNumber} not found`);
 
@@ -167,7 +166,7 @@ export async function handleReminderFee(
   });
   console.log(`[Handler] Posted reminder fee voucher: ${reminderFeeAmount} NOK (debit ${debitAccountNumber}, credit ${creditAccountNumber})`);
 
-  // 3. Create reminder fee invoice and send it
+  // 4. Create reminder fee invoice and send it
   const product = await findOrCreateProduct(client, "Purregebyr", reminderFeeAmount);
 
   const order = await client.post<{ id: number }>("/order", {
@@ -191,7 +190,6 @@ export async function handleReminderFee(
   });
   console.log(`[Handler] Created reminder fee invoice: id=${inv.value.id}`);
 
-  // Send the reminder fee invoice
   try {
     const qs = new URLSearchParams({ sendType: "EMAIL", overrideEmailAddress: "faktura@example.no" });
     await client.put(`/invoice/${inv.value.id}/:send?${qs.toString()}`, {});
@@ -200,9 +198,9 @@ export async function handleReminderFee(
     console.warn(`[Handler] Could not send reminder fee invoice: ${err instanceof Error ? err.message : err}`);
   }
 
-  // 4. Register partial payment on the overdue invoice
+  // 5. Register partial payment on the overdue invoice
   if (partialPaymentAmount > 0 && overdueInvoice) {
-    const paymentTypeId = await getPaymentTypeId(client);
+    const paymentTypeId = _payTypeId;
     const qs = new URLSearchParams({
       paymentDate: today(),
       paymentTypeId: String(paymentTypeId),

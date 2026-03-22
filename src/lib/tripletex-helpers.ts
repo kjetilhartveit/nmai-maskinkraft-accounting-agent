@@ -9,6 +9,7 @@ interface Employee {
   id: number;
   firstName: string;
   lastName: string;
+  email?: string;
 }
 
 interface Customer {
@@ -251,30 +252,45 @@ export async function getDefaultProductUnitId(
   return cachedProductUnitId;
 }
 
+let cachedEmployees: Employee[] | null = null;
+
+/**
+ * Loads all employees in a single API call and caches them.
+ * Subsequent calls to findEmployeeByName/findEmployeeByEmail use the cache
+ * instead of making additional API calls.
+ */
+export async function loadEmployees(client: TripletexClient): Promise<Employee[]> {
+  if (cachedEmployees) return cachedEmployees;
+  const result = await client.list<Employee>("/employee", {
+    from: "0",
+    count: "50",
+  });
+  cachedEmployees = result.values;
+  return cachedEmployees;
+}
+
 export async function findEmployeeByName(
   client: TripletexClient,
   firstName: string,
   lastName: string,
 ): Promise<Employee | null> {
-  const result = await client.list<Employee>("/employee", {
-    firstName,
-    lastName,
-    from: "0",
-    count: "1",
-  });
-  return result.values[0] ?? null;
+  const employees = await loadEmployees(client);
+  const fLower = firstName.toLowerCase();
+  const lLower = lastName.toLowerCase();
+  return employees.find(e =>
+    e.firstName.toLowerCase() === fLower && e.lastName.toLowerCase() === lLower,
+  ) ?? null;
 }
 
 export async function findEmployeeByEmail(
   client: TripletexClient,
   email: string,
 ): Promise<Employee | null> {
-  const result = await client.list<Employee>("/employee", {
-    email,
-    from: "0",
-    count: "1",
-  });
-  return result.values[0] ?? null;
+  const employees = await loadEmployees(client);
+  const eLower = email.toLowerCase();
+  return employees.find(e =>
+    e.email?.toLowerCase() === eLower,
+  ) ?? null;
 }
 
 export async function findCustomerByName(
@@ -395,6 +411,7 @@ export function resetCaches(): void {
   bankAccountConfigured = false;
   cachedProjectManagerId = null;
   bulkAccountMap = null;
+  cachedEmployees = null;
 }
 
 // === Bulk Account Loader ===
@@ -506,6 +523,46 @@ export async function ensureBankAccountConfigured(
   }
 }
 
+/**
+ * Uses already-loaded bulk accounts to check/configure bank account 1920.
+ * Saves 1 API call vs ensureBankAccountConfigured() when loadAllAccounts
+ * has already been called.
+ */
+export async function ensureBankAccountFromBulkAccounts(
+  client: TripletexClient,
+  accountsMap: Map<number, BulkLedgerAccount>,
+): Promise<void> {
+  if (bankAccountConfigured) return;
+
+  const bankAccount = accountsMap.get(1920);
+  if (!bankAccount) {
+    console.log("[Helper] No bank account 1920 in bulk accounts");
+    bankAccountConfigured = true;
+    return;
+  }
+
+  if (bankAccount.bankAccountNumber && bankAccount.bankAccountNumber.length > 0) {
+    console.log(`[Helper] Bank account already configured: ${bankAccount.bankAccountNumber}`);
+    bankAccountConfigured = true;
+    return;
+  }
+
+  console.log(`[Helper] Configuring bank account ${bankAccount.number} from bulk...`);
+  try {
+    await client.put(`/ledger/account/${bankAccount.id}`, {
+      id: bankAccount.id,
+      number: bankAccount.number,
+      name: bankAccount.name,
+      bankAccountNumber: "15032686130",
+    });
+    console.log("[Helper] Bank account configured successfully");
+    bankAccountConfigured = true;
+  } catch (err) {
+    console.log("[Helper] Failed to configure bank account:", err);
+    bankAccountConfigured = true;
+  }
+}
+
 // === Project Manager ===
 // Projects require an employee with project manager entitlements
 // The first employee in the sandbox typically has these rights
@@ -517,13 +574,9 @@ export async function getProjectManagerEmployeeId(
 ): Promise<number | null> {
   if (cachedProjectManagerId !== null) return cachedProjectManagerId;
 
-  const result = await client.list<Employee>("/employee", {
-    from: "0",
-    count: "1",
-  });
-
-  if (result.values.length > 0) {
-    cachedProjectManagerId = result.values[0].id;
+  const employees = await loadEmployees(client);
+  if (employees.length > 0) {
+    cachedProjectManagerId = employees[0].id;
     console.log(`[Helper] Using project manager employee id=${cachedProjectManagerId}`);
     return cachedProjectManagerId;
   }
