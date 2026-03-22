@@ -45,8 +45,13 @@ export async function handleCreateOrder(
   }
   if (!customerId && entity.customerId) customerId = Number(entity.customerId);
   if (!customerId) {
-    console.warn("[Handler] No customer found for order, cannot proceed");
-    return;
+    const orgNumber = String(entity.organizationNumber ?? entity.orgNumber ?? "");
+    const custBody: Record<string, unknown> = { name: customerName || "Ukjent kunde", isCustomer: true };
+    if (orgNumber) custBody.organizationNumber = orgNumber;
+    const created = await client.post<{ id: number }>("/customer", custBody);
+    customerId = created.value.id;
+    console.log(`[Handler] Created customer for order: ${customerName} id=${customerId}`);
+    if (customerName) ctx.registerCustomer(customerName, customerId);
   }
 
   const orderDate = String(entity.orderDate ?? entity.date ?? today());

@@ -247,15 +247,34 @@ export async function handleCreateInvoice(
       customer = await findCustomerByName(client, customerName);
     }
 
-    if (customer) {
-      if (productLines.length > 0) {
-        order = await createOrderForInvoice(
-          client,
-          customer.id,
-          productLines,
-          ctx,
-        );
-      }
+    if (!customer) {
+      const orgNumber = String(entity.organizationNumber ?? entity.orgNumber ?? "");
+      const custBody: Record<string, unknown> = { name: customerName, isCustomer: true };
+      if (orgNumber) custBody.organizationNumber = orgNumber;
+      const created = await client.post<{ id: number }>("/customer", custBody);
+      customer = { id: created.value.id, name: customerName };
+      console.log(`[Handler] Created customer for invoice: ${customerName} id=${customer.id}`);
+      ctx?.registerCustomer(customerName, customer.id);
+    }
+
+    if (productLines.length > 0) {
+      order = await createOrderForInvoice(client, customer.id, productLines, ctx);
+    } else {
+      const defaultProduct = await findOrCreateProduct(client, String(entity.productName ?? entity.description ?? "Tjeneste"), Number(entity.amount ?? entity.total ?? 1000));
+      ctx?.registerProduct("default", defaultProduct.id);
+      const newOrder = await client.post<Order>("/order", {
+        customer: { id: customer.id },
+        orderDate: today(),
+        deliveryDate: daysFromNow(14),
+      });
+      order = newOrder.value;
+      await client.post("/order/orderline", {
+        order: { id: order.id },
+        product: { id: defaultProduct.id },
+        count: 1,
+        unitPriceExcludingVatCurrency: Number(entity.amount ?? entity.total ?? 1000),
+      });
+      console.log(`[Handler] Created default order with single line for invoice`);
     }
   }
 

@@ -3,20 +3,17 @@ import type { ParsedTask } from "../types/index.js";
 import type { SequenceContext } from "../lib/sequence-context.js";
 import { today, getDefaultDepartmentId, getProjectManagerEmployeeId } from "../lib/tripletex-helpers.js";
 
-interface Voucher {
-  id: number;
-  postings?: VoucherPosting[];
-}
-
-interface VoucherPosting {
+interface Posting {
   account: { id: number; number: number; name: string };
+  amount: number;
   amountGross: number;
+  date: string;
 }
 
 /**
  * Ledger analysis handler.
  *
- * Queries vouchers for two periods, compares expense accounts (4000-7999),
+ * Queries postings for two periods, compares expense accounts (4000-7999),
  * finds the three with the largest cost increase, and creates a project + activity for each.
  */
 export async function handleLedgerAnalysis(
@@ -29,44 +26,43 @@ export async function handleLedgerAnalysis(
   if (!pmId) throw new Error("No employee found to use as project manager");
   const departmentId = await getDefaultDepartmentId(client);
 
-  // Query vouchers for January and February 2026 in parallel
-  const [janVouchers, febVouchers] = await Promise.all([
-    client.list<Voucher>("/ledger/voucher", {
+  const [janPostings, febPostings] = await Promise.all([
+    client.list<Posting>("/ledger/posting", {
       dateFrom: "2026-01-01",
       dateTo: "2026-01-31",
       from: "0",
-      count: "1000",
+      count: "10000",
     }),
-    client.list<Voucher>("/ledger/voucher", {
+    client.list<Posting>("/ledger/posting", {
       dateFrom: "2026-02-01",
       dateTo: "2026-02-28",
       from: "0",
-      count: "1000",
+      count: "10000",
     }),
   ]);
 
-  // Aggregate expense per account (accounts 4000-7999) per period
+  console.log(`[Handler] Postings: Jan=${janPostings.values.length}, Feb=${febPostings.values.length}`);
+
   const janTotals = new Map<number, { total: number; name: string }>();
   const febTotals = new Map<number, { total: number; name: string }>();
 
-  function aggregate(vouchers: Voucher[], map: Map<number, { total: number; name: string }>) {
-    for (const v of vouchers) {
-      if (!v.postings) continue;
-      for (const p of v.postings) {
-        const acctNum = p.account?.number;
-        if (acctNum >= 4000 && acctNum <= 7999 && p.amountGross > 0) {
+  function aggregate(postings: Posting[], map: Map<number, { total: number; name: string }>) {
+    for (const p of postings) {
+      const acctNum = p.account?.number;
+      if (acctNum >= 4000 && acctNum <= 7999) {
+        const amt = p.amount ?? p.amountGross ?? 0;
+        if (amt > 0) {
           const existing = map.get(acctNum) ?? { total: 0, name: p.account.name };
-          existing.total += p.amountGross;
+          existing.total += amt;
           map.set(acctNum, existing);
         }
       }
     }
   }
 
-  aggregate(janVouchers.values, janTotals);
-  aggregate(febVouchers.values, febTotals);
+  aggregate(janPostings.values, janTotals);
+  aggregate(febPostings.values, febTotals);
 
-  // Calculate increases
   const increases: { accountNumber: number; name: string; increase: number }[] = [];
   const allAccounts = new Set([...janTotals.keys(), ...febTotals.keys()]);
   for (const acct of allAccounts) {
@@ -76,6 +72,16 @@ export async function handleLedgerAnalysis(
     if (increase > 0) {
       const name = febTotals.get(acct)?.name ?? janTotals.get(acct)?.name ?? `Konto ${acct}`;
       increases.push({ accountNumber: acct, name, increase });
+    }
+  }
+
+  if (increases.length === 0) {
+    for (const acct of allAccounts) {
+      if (febTotals.has(acct)) {
+        const name = febTotals.get(acct)?.name ?? `Konto ${acct}`;
+        const total = febTotals.get(acct)?.total ?? 0;
+        increases.push({ accountNumber: acct, name, increase: total });
+      }
     }
   }
 
