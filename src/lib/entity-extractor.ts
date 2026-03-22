@@ -17,10 +17,14 @@ import { PROMPT_TEMPLATES } from "./task-classifier.js";
 const ExtractionResponseSchema = z.object({
   entities: z.array(z.record(z.unknown())),
   language: z.string(),
-  requiresPrerequisites: z.array(z.object({
-    taskType: z.string(),
-    reason: z.string(),
-  })).optional(),
+  requiresPrerequisites: z
+    .array(
+      z.object({
+        taskType: z.string(),
+        reason: z.string(),
+      })
+    )
+    .optional(),
 });
 
 // ── Per-type extraction prompts ──────────────────────────────────────
@@ -294,13 +298,13 @@ export async function extractEntities(
   taskType: TaskType,
   prompt: string,
   files: FileAttachment[] = [],
-  options?: { model?: string },
+  options?: { model?: string }
 ): Promise<ExtractionResult> {
   const start = performance.now();
-  const modelId = options?.model ?? config.google.model;
+  const modelId = "google/gemini-3.1-flash-lite-preview";
 
   const taskPrompt = TASK_PROMPTS[taskType];
-  const template = PROMPT_TEMPLATES.find(t => t.taskType === taskType);
+  const template = PROMPT_TEMPLATES.find((t) => t.taskType === taskType);
 
   const systemPrompt = `You extract structured entities from accounting task prompts.
 The task type is: ${taskType}
@@ -318,7 +322,9 @@ Respond with JSON: { "entities": [...], "language": "...", "requiresPrerequisite
 
   let userMessage = `Extract entities from:\n\n${prompt}`;
   if (files.length > 0) {
-    userMessage += `\n\nAttached files: ${files.map(f => f.filename).join(", ")}`;
+    userMessage += `\n\nAttached files: ${files
+      .map((f) => f.filename)
+      .join(", ")}`;
   }
 
   const { object, durationMs } = await geminiGenerateStructured({
@@ -329,10 +335,16 @@ Respond with JSON: { "entities": [...], "language": "...", "requiresPrerequisite
     maxTokens: 2048,
   });
 
-  const prerequisites: { taskType: TaskType; entities: Record<string, unknown>[] }[] = [];
+  const prerequisites: {
+    taskType: TaskType;
+    entities: Record<string, unknown>[];
+  }[] = [];
   if (object.requiresPrerequisites) {
     for (const prereq of object.requiresPrerequisites) {
-      const prereqEntities = extractPrerequisiteEntities(prereq.taskType as TaskType, object.entities);
+      const prereqEntities = extractPrerequisiteEntities(
+        prereq.taskType as TaskType,
+        object.entities
+      );
       if (prereqEntities.length > 0) {
         prerequisites.push({
           taskType: prereq.taskType as TaskType,
@@ -352,38 +364,44 @@ Respond with JSON: { "entities": [...], "language": "...", "requiresPrerequisite
 
 function extractPrerequisiteEntities(
   prereqType: TaskType,
-  mainEntities: Record<string, unknown>[],
+  mainEntities: Record<string, unknown>[]
 ): Record<string, unknown>[] {
   const firstEntity = mainEntities[0] ?? {};
 
   switch (prereqType) {
     case "create_customer":
       if (firstEntity.customerName || firstEntity.organizationNumber) {
-        return [{
-          name: firstEntity.customerName,
-          organizationNumber: firstEntity.organizationNumber,
-          email: firstEntity.customerEmail,
-        }];
+        return [
+          {
+            name: firstEntity.customerName,
+            organizationNumber: firstEntity.organizationNumber,
+            email: firstEntity.customerEmail,
+          },
+        ];
       }
       break;
 
     case "create_supplier":
       if (firstEntity.supplierName || firstEntity.organizationNumber) {
-        return [{
-          name: firstEntity.supplierName,
-          organizationNumber: firstEntity.organizationNumber,
-          email: firstEntity.supplierEmail,
-        }];
+        return [
+          {
+            name: firstEntity.supplierName,
+            organizationNumber: firstEntity.organizationNumber,
+            email: firstEntity.supplierEmail,
+          },
+        ];
       }
       break;
 
     case "create_employee":
       if (firstEntity.employeeFirstName || firstEntity.employeeLastName) {
-        return [{
-          firstName: firstEntity.employeeFirstName,
-          lastName: firstEntity.employeeLastName,
-          email: firstEntity.employeeEmail,
-        }];
+        return [
+          {
+            firstName: firstEntity.employeeFirstName,
+            lastName: firstEntity.employeeLastName,
+            email: firstEntity.employeeEmail,
+          },
+        ];
       }
       break;
   }
@@ -397,7 +415,7 @@ function extractPrerequisiteEntities(
 export function buildTaskSequence(
   taskType: TaskType,
   extractionResult: ExtractionResult,
-  rawPrompt: string,
+  rawPrompt: string
 ): ParsedTask[] {
   const tasks: ParsedTask[] = [];
 
