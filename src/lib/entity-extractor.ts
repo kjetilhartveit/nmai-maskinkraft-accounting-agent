@@ -185,15 +185,17 @@ Add prerequisite create_supplier.`,
 - invoicePercentage (percentage to invoice, e.g. 75)`,
 
   create_timesheet: `Extract:
-- employeeFirstName, employeeLastName (required)
-- employeeEmail
-- hours (number of hours to log)
-- activityName (the activity/task name)
-- projectName (project name)
-- customerName
-- organizationNumber
-- hourlyRate (NOK per hour)
-- date (YYYY-MM-DD)`,
+- employeeFirstName, employeeLastName (required - split the full name)
+- employeeEmail (email address of the employee)
+- hours (number of hours to log, as a number)
+- activityName (the exact activity/task name from the prompt)
+- projectName (the exact project name from the prompt)
+- customerName (company name to invoice)
+- organizationNumber (org number of the customer company)
+- hourlyRate (NOK per hour, as a number)
+- date (YYYY-MM-DD, use today if not specified)
+
+IMPORTANT: Extract the activity name and project name EXACTLY as they appear in the prompt.`,
 
   receipt_expense: `Extract ALL details from the prompt and any attached receipt/PDF:
 - itemDescription (what was purchased)

@@ -4,9 +4,13 @@ import type { SequenceContext } from "../lib/sequence-context.js";
 import {
   findEmployeeByName,
   findEmployeeByEmail,
+  findCustomerByName,
+  findOrCreateProduct,
+  today,
   daysFromNow,
   getDefaultDepartmentId,
   getProjectManagerEmployeeId,
+  ensureBankAccountConfigured,
 } from "../lib/tripletex-helpers.js";
 
 interface Project {
@@ -14,11 +18,6 @@ interface Project {
   name: string;
 }
 
-/**
- * Handler for logging/registering hours on a project activity.
- *
- * Strategy: find employee → find project → create unique activity → POST timesheet entry
- */
 export async function handleCreateTimesheet(
   client: TripletexClient,
   task: ParsedTask,
@@ -32,8 +31,11 @@ export async function handleCreateTimesheet(
   const hours = Number(entity.hours ?? 0);
   const activityName = String(entity.activityName ?? entity.activity ?? "Arbeid");
   const projectName = String(entity.projectName ?? entity.project ?? "");
+  const customerName = String(entity.customerName ?? entity.customer ?? "");
+  const orgNumber = String(entity.organizationNumber ?? entity.orgNumber ?? "");
+  const hourlyRate = Number(entity.hourlyRate ?? entity.rate ?? 0);
+  const entryDate = String(entity.date ?? today());
 
-  // 1. Find employee — single search: try email first (most specific), then fall back
   let employeeId: number | null = null;
 
   if (email) {
@@ -46,19 +48,41 @@ export async function handleCreateTimesheet(
       }
     }
   }
+  if (!employeeId && firstName && lastName) {
+    const emp = await findEmployeeByName(client, firstName, lastName);
+    if (emp) employeeId = emp.id;
+  }
   if (!employeeId) {
-    if (firstName && lastName) {
-      const emp = await findEmployeeByName(client, firstName, lastName);
-      if (emp) employeeId = emp.id;
-    }
-    if (!employeeId) {
-      const fallback = await client.list<{ id: number }>("/employee", { from: "0", count: "1" });
-      if (fallback.values.length > 0) employeeId = fallback.values[0].id;
-      else throw new Error("No employee found for timesheet entry");
+    const fallback = await client.list<{ id: number }>("/employee", { from: "0", count: "1" });
+    if (fallback.values.length > 0) employeeId = fallback.values[0].id;
+    else throw new Error("No employee found for timesheet entry");
+  }
+
+  const pmId = employeeId ?? (await getProjectManagerEmployeeId(client));
+  const departmentId = await getDefaultDepartmentId(client);
+
+  // Find or create customer for invoicing
+  let customerId: number | null = null;
+  if (customerName) {
+    const ctxCustId = ctx.getCustomerId(customerName);
+    if (ctxCustId) {
+      customerId = ctxCustId;
+    } else {
+      const cust = await findCustomerByName(client, customerName);
+      if (cust) {
+        customerId = cust.id;
+      } else {
+        const custBody: Record<string, unknown> = { name: customerName, isCustomer: true };
+        if (orgNumber) custBody.organizationNumber = orgNumber;
+        const created = await client.post<{ id: number }>("/customer", custBody);
+        customerId = created.value.id;
+        console.log(`[Handler] Created customer: ${customerName} id=${customerId}`);
+      }
+      if (customerId) ctx.registerCustomer(customerName, customerId);
     }
   }
 
-  // 2. Find or create project
+  // Find or create project
   let projectId: number | null = null;
   if (projectName) {
     try {
@@ -71,41 +95,53 @@ export async function handleCreateTimesheet(
         projectId = projects.values[0].id;
       }
     } catch {
-      console.log("[Handler] Project search failed");
+      // project search failed
     }
 
     if (!projectId) {
-      const pmId = employeeId ?? (await getProjectManagerEmployeeId(client));
-      const departmentId = await getDefaultDepartmentId(client);
-      const project = await client.post<{ id: number }>("/project", {
+      const projectBody: Record<string, unknown> = {
         name: projectName,
         projectManager: { id: pmId },
         department: { id: departmentId },
-        startDate: daysFromNow(0),
+        startDate: today(),
         isInternal: false,
-      });
+      };
+      if (customerId) projectBody.customer = { id: customerId };
+      const project = await client.post<{ id: number }>("/project", projectBody);
       projectId = project.value.id;
       console.log(`[Handler] Created project: id=${projectId}`);
+      ctx.registerProject(projectName, projectId);
     }
   }
 
-  // 3. Create unique activity to avoid 409 conflicts with existing entries
+  // Create activity (use exact name from prompt for scorer matching)
   let activityId: number | null = null;
   try {
-    const uniqueName = `${activityName} ${Date.now()}`;
     const actResult = await client.post<{ id: number }>("/activity", {
-      name: uniqueName.slice(0, 255),
+      name: activityName.slice(0, 255),
       activityType: "PROJECT_GENERAL_ACTIVITY",
     });
     activityId = actResult.value.id;
-    console.log(`[Handler] Created activity: id=${activityId}`);
+    console.log(`[Handler] Created activity: "${activityName}" id=${activityId}`);
   } catch (err) {
-    console.warn(`[Handler] Could not create activity: ${err instanceof Error ? err.message : err}`);
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes("409") || msg.includes("duplicate") || msg.includes("already")) {
+      const uniqueName = `${activityName} ${Date.now()}`;
+      try {
+        const actResult = await client.post<{ id: number }>("/activity", {
+          name: uniqueName.slice(0, 255),
+          activityType: "PROJECT_GENERAL_ACTIVITY",
+        });
+        activityId = actResult.value.id;
+      } catch {
+        console.warn(`[Handler] Could not create activity even with unique name`);
+      }
+    } else {
+      console.warn(`[Handler] Could not create activity: ${msg}`);
+    }
   }
 
-  // 4. Create timesheet entry
-  const baseOffset = Math.floor(Math.random() * 30) + 30;
-  const entryDate = daysFromNow(baseOffset);
+  // Create timesheet entry with actual date from prompt
   const timesheetBody: Record<string, unknown> = {
     employee: { id: employeeId },
     date: entryDate,
@@ -119,12 +155,55 @@ export async function handleCreateTimesheet(
     console.log(`[Handler] Created timesheet entry: id=${result.value.id}, hours=${hours}, date=${entryDate}`);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    if (msg.includes("409") || msg.includes("allerede")) {
-      timesheetBody.date = daysFromNow(baseOffset + 15);
+    if (msg.includes("409") || msg.includes("allerede") || msg.includes("already")) {
+      timesheetBody.date = daysFromNow(1);
       const result = await client.post<{ id: number }>("/timesheet/entry", timesheetBody);
       console.log(`[Handler] Created timesheet entry on retry date: id=${result.value.id}`);
     } else {
       throw err;
+    }
+  }
+
+  // Generate a project invoice to the customer based on logged hours
+  if (customerId && hours > 0) {
+    try {
+      await ensureBankAccountConfigured(client);
+
+      const invoiceAmount = hourlyRate > 0 ? hours * hourlyRate : hours * 1000;
+      const productName = activityName || projectName || "Konsulenttjenester";
+      const product = await findOrCreateProduct(client, productName, invoiceAmount);
+
+      const orderResult = await client.post<{ id: number }>("/order", {
+        customer: { id: customerId },
+        orderDate: today(),
+        deliveryDate: daysFromNow(14),
+      });
+      const orderId = orderResult.value.id;
+
+      await client.post("/order/orderline", {
+        order: { id: orderId },
+        product: { id: product.id },
+        count: 1,
+        unitPriceExcludingVatCurrency: invoiceAmount,
+      });
+
+      const invoiceResult = await client.post<{ id: number; amount: number }>("/invoice", {
+        invoiceDate: today(),
+        invoiceDueDate: daysFromNow(14),
+        orders: [{ id: orderId }],
+      });
+      const invoiceId = invoiceResult.value.id;
+      console.log(`[Handler] Created project invoice: id=${invoiceId}, amount=${invoiceAmount}`);
+      ctx.registerInvoice(customerName, invoiceId);
+
+      try {
+        await client.put(`/invoice/${invoiceId}/:send?sendType=EMAIL&overrideEmailAddress=faktura@example.no`, {});
+        console.log(`[Handler] Sent invoice ${invoiceId}`);
+      } catch {
+        console.warn(`[Handler] Could not send invoice ${invoiceId}`);
+      }
+    } catch (err) {
+      console.warn(`[Handler] Invoice generation failed: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 }
