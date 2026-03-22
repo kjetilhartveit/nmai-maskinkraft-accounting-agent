@@ -1,0 +1,25 @@
+src/lib/entity-extractor.ts
+  a767f3c6d1b2d06a 188-198
+src/handlers/create-timesheet.ts
+  a767f3c6d1b2d06a 7-9,13,34-37,51-54,56-81,85,98,102,106,108-110,113,117,121,125,127-141,144,158-159,166-208
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.17",
+  "base_commit_sha": "a41a724f4c5e794fc5881c8ae46ee9d4811d1025",
+  "prompts": {
+    "a767f3c6d1b2d06a": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "a4414119-fd27-4ec0-86b1-2e44c89c53e3",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Kjetil Hårtveit <kjetil_runescape@hotmail.com>",
+      "messages": [],
+      "total_additions": 742,
+      "total_deletions": 661,
+      "accepted_lines": 742,
+      "overriden_lines": 0
+    }
+  }
+}
