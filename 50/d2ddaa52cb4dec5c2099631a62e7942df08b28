@@ -1,0 +1,27 @@
+src/handlers/employee-onboarding-pdf.ts
+  a767f3c6d1b2d06a 26-27
+src/lib/entity-extractor.ts
+  a767f3c6d1b2d06a 207-236,272,275-277,279-284,286
+src/handlers/year-end-closing.ts
+  a767f3c6d1b2d06a 68,77-97,101-102,113-115,117-118,122-124,128,131-132,134-141,146,149,151-158,161-165,167-169,172-174,179,183-198,200-210,213-219,222-233,235-262,266-277,280-287
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.17",
+  "base_commit_sha": "50d2ddaa52cb4dec5c2099631a62e7942df08b28",
+  "prompts": {
+    "a767f3c6d1b2d06a": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "a4414119-fd27-4ec0-86b1-2e44c89c53e3",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Kjetil Hårtveit <kjetil_runescape@hotmail.com>",
+      "messages": [],
+      "total_additions": 968,
+      "total_deletions": 889,
+      "accepted_lines": 957,
+      "overriden_lines": 0
+    }
+  }
+}

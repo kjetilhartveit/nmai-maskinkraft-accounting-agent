@@ -1,0 +1,29 @@
+src/lib/entity-extractor.ts
+  a767f3c6d1b2d06a 268-277
+src/handlers/create-project.ts
+  a767f3c6d1b2d06a 87-101
+src/handlers/monthly-closing.ts
+  a767f3c6d1b2d06a 115-116,118-119,128-140,154,156-173
+src/handlers/fx-payment.ts
+  a767f3c6d1b2d06a 4-10,43-44,59,63,68,70-71,79,92-93,95-138,141,152-153,156-157
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.17",
+  "base_commit_sha": "edbc08f22c7bd887f22292e753205bfc1cc8823c",
+  "prompts": {
+    "a767f3c6d1b2d06a": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "a4414119-fd27-4ec0-86b1-2e44c89c53e3",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Kjetil Hårtveit <kjetil_runescape@hotmail.com>",
+      "messages": [],
+      "total_additions": 1066,
+      "total_deletions": 1032,
+      "accepted_lines": 1062,
+      "overriden_lines": 0
+    }
+  }
+}
