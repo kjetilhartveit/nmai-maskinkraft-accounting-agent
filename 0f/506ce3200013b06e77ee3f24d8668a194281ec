@@ -1,0 +1,64 @@
+src/handlers/activate-module.ts
+  6c78714613d3b605 1-16
+src/lib/entity-extractor.ts
+  6c78714613d3b605 74-78
+src/lib/task-classifier.ts
+  6c78714613d3b605 2,41-44,154,156,302-304
+AGENTS.md
+  6c78714613d3b605 11,17,21,27,35,113,132,137,226
+src/handlers/receipt-expense.ts
+  334f12f723b93334 4,151
+src/handlers/create-supplier-invoice.ts
+  334f12f723b93334 4,169
+src/handlers/create-invoice.ts
+  334f12f723b93334 165-189,193
+src/eval/test-cases.ts
+  6c78714613d3b605 4,86-96
+src/handlers/create-employee.ts
+  334f12f723b93334 16,139
+src/handlers/project-lifecycle.ts
+  334f12f723b93334 15,17,130-131,151,156-179,181,255
+src/lib/tripletex-helpers.ts
+  334f12f723b93334 1,396,400-460,469-472,485-488,490
+src/handlers/ledger-analysis.ts
+  334f12f723b93334 4,13-18,57-59,62,101,107,109,114,127-167
+src/handlers/index.ts
+  6c78714613d3b605 9,41,51
+src/handlers/create-order.ts
+  334f12f723b93334 135,140-146
+src/types/index.ts
+  6c78714613d3b605 29,39,70
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.17",
+  "base_commit_sha": "0f506ce3200013b06e77ee3f24d8668a194281ec",
+  "prompts": {
+    "334f12f723b93334": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "9a2a8c19-f3cb-44fc-83ec-2876596d3cbc",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Kjetil Hårtveit <kjetil_runescape@hotmail.com>",
+      "messages": [],
+      "total_additions": 2050,
+      "total_deletions": 1924,
+      "accepted_lines": 2017,
+      "overriden_lines": 0
+    },
+    "6c78714613d3b605": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "e17bd3d1-88a5-4252-b08c-d5a524d83bc4",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Kjetil Hårtveit <kjetil_runescape@hotmail.com>",
+      "messages": [],
+      "total_additions": 1892,
+      "total_deletions": 1849,
+      "accepted_lines": 1877,
+      "overriden_lines": 0
+    }
+  }
+}
