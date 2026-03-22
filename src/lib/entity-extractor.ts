@@ -204,20 +204,36 @@ Add prerequisite create_supplier.`,
 
 The receipt image will provide the actual amounts.`,
 
-  employee_onboarding_pdf: `Extract from the prompt (PDF will provide actual values):
-- departmentName (if mentioned)
-- employmentPercentage (if mentioned)
-- annualSalary (if mentioned)
-- workingHours (if mentioned)
+  employee_onboarding_pdf: `Extract ALL employee details from the prompt and any attached PDF content:
+- firstName (required)
+- lastName (required)
+- email (if mentioned)
+- phoneNumber (if mentioned)
+- phoneNumberMobile (if mentioned)
+- dateOfBirth (YYYY-MM-DD format)
+- startDate (YYYY-MM-DD format, employment start date)
+- salary (annual salary as number, e.g. 560000)
+- position / title (job title)
+- departmentName (department)
+- employmentPercentage (e.g. 100)
+- identityNumber (Norwegian personal ID number, 11 digits, if mentioned)
 
-Most data comes from the PDF. Extract any hints from the prompt text.`,
+Extract ALL fields that appear in the text. The PDF content is inlined above.`,
 
-  employee_contract_pdf: `Extract from the prompt (PDF will provide actual values):
-- All contract details come from the PDF
-- identityNumber, dateOfBirth, department, occupationCode
-- salary, employmentPercentage, startDate
+  employee_contract_pdf: `Extract ALL contract details from the prompt and any attached PDF content:
+- firstName (required)
+- lastName (required)
+- email (if mentioned)
+- dateOfBirth (YYYY-MM-DD format)
+- identityNumber (Norwegian personal ID, 11 digits)
+- startDate (YYYY-MM-DD format)
+- salary (annual salary as number)
+- employmentPercentage (e.g. 100)
+- departmentName (department)
+- occupationCode (STYRK code if mentioned)
+- position / title (job title)
 
-Most data comes from the PDF. Extract any hints from the prompt text.`,
+Extract ALL fields that appear in the text. The PDF content is inlined above.`,
 
   supplier_invoice_pdf: `Extract from the prompt (PDF will provide actual values):
 - supplierName (if mentioned in prompt)
@@ -253,15 +269,21 @@ If specific accounts are not given, the handler will analyze the ledger.`,
 
   year_end_closing: `Extract:
 - fiscalYear (e.g. 2025)
-- assets: array of { name, accountNumber (4-digit like 1200), originalValue (amount in NOK), depreciationRate (percentage like 20), depreciationAccountNumber (4-digit like 6010) }
+- assets: array of { name, accountNumber (4-digit asset account like 1200), originalValue (amount in NOK), depreciationRate (percentage like 20), depreciationAccountNumber (4-digit expense account like 6010), accumulatedDepreciationAccountNumber (4-digit contra-asset like 1209, if mentioned) }
 - prepaidExpenses: array of { accountNumber (4-digit like 1710), amount (NOK), expenseAccountNumber (4-digit like 6300) }
 - taxRate (percentage, e.g. 22)
+- taxDebitAccount (4-digit, e.g. 8300 or 8700 if specified in prompt)
+- taxCreditAccount (4-digit, e.g. 2500 or 2920 if specified in prompt)
+- separateVouchers (boolean: true if the prompt says each depreciation should be a separate voucher)
 
-CRITICAL: Account numbers are ALWAYS 4-digit Norwegian standard chart of accounts (1000-9999).
-Do NOT confuse monetary amounts with account numbers.
-Common accounts: 1200/1210/1230 (assets), 1710 (prepaid), 6010/6020 (depreciation expense), 8300 (tax), 2500 (tax payable).
+CRITICAL RULES:
+1. Account numbers are ALWAYS 4-digit (1000-9999). Never confuse amounts with account numbers.
+2. If the prompt specifies "1209 for accumulated depreciation", set accumulatedDepreciationAccountNumber to 1209 for all assets.
+3. If the prompt specifies tax accounts like "8700/2920", extract those as taxDebitAccount and taxCreditAccount.
+4. If expenseAccountNumber for prepaid is not mentioned, use 6300 as default.
+5. Common accounts: 1200/1210/1240/1250 (asset accounts), 1209 (accumulated depreciation), 1710 (prepaid), 6010/6020 (depreciation expense), 8300/8700 (tax expense), 2500/2920 (tax payable).
 
-Extract ALL details about depreciation, prepaid expenses, and tax provision.`,
+Extract ALL details.`,
 
   monthly_closing: `Extract:
 - month (e.g. "2026-03" for March 2026)

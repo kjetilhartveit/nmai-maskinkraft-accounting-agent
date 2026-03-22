@@ -65,6 +65,7 @@ interface AssetEntry {
   originalValue: number;
   depreciationRate: number;
   depreciationAccountNumber: number;
+  accumulatedDepreciationAccountNumber?: number;
 }
 
 interface PrepaidEntry {
@@ -73,13 +74,32 @@ interface PrepaidEntry {
   expenseAccountNumber: number;
 }
 
+function isValidAccount(n: number): boolean {
+  return n >= 1000 && n <= 9999 && !isNaN(n);
+}
+
+async function resolveAccount(
+  client: TripletexClient,
+  accountNumber: number,
+  resolvedMap: Map<number, LedgerAccount>,
+): Promise<LedgerAccount | null> {
+  if (!isValidAccount(accountNumber)) return null;
+  const cached = resolvedMap.get(accountNumber);
+  if (cached) return cached;
+  try {
+    const acct = await findAccount(client, accountNumber);
+    resolvedMap.set(accountNumber, acct);
+    return acct;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Year-end closing handler.
  *
- * Processes three types of entries:
- *   1. Asset depreciation: originalValue × rate → debit depreciation account, credit asset account
- *   2. Prepaid expense reversals: debit expense, credit prepaid account
- *   3. Tax provision: taxRate × taxable income → debit 8300, credit 2500
+ * Creates separate vouchers when requested, supports custom tax accounts,
+ * and uses accumulated depreciation accounts (1209) when specified.
  */
 export async function handleYearEndClosing(
   client: TripletexClient,
@@ -90,144 +110,180 @@ export async function handleYearEndClosing(
   const fiscalYear = Number(entity.fiscalYear ?? entity.year ?? new Date().getFullYear() - 1);
   const dateStr = String(entity.date ?? `${fiscalYear}-12-31`);
   const taxRate = Number(entity.taxRate ?? entity.tax ?? 22) / 100;
+  const separateVouchers = entity.separateVouchers === true;
+  const taxDebitAcct = Number(entity.taxDebitAccount ?? 8300);
+  const taxCreditAcct = Number(entity.taxCreditAccount ?? 2500);
 
-  const postings: { accountNumber: number; amount: number; description: string }[] = [];
+  // Pre-resolve all needed accounts
+  const resolvedMap = new Map<number, LedgerAccount>();
 
   // 1. Process asset depreciation
   const assets = (entity.assets ?? entity.depreciationAssets ?? []) as AssetEntry[];
+  type DepGroup = { debitAcctNum: number; creditAcctNum: number; amount: number; description: string };
+  const depreciationGroups: DepGroup[] = [];
+
   for (const asset of assets) {
     const acctNum = Number(asset.accountNumber ?? 0);
     const depAcctNum = Number(asset.depreciationAccountNumber ?? 6010);
+    const accumAcctNum = Number(asset.accumulatedDepreciationAccountNumber ?? 0);
     const originalValue = Number(asset.originalValue ?? 0);
     const rate = Number(asset.depreciationRate ?? 0) / 100;
-    if (acctNum <= 0 || originalValue <= 0 || rate <= 0) continue;
+    if (!isValidAccount(acctNum) || originalValue <= 0 || rate <= 0) continue;
+
     const depAmount = Math.round(originalValue * rate);
-    postings.push({ accountNumber: depAcctNum, amount: depAmount, description: `Avskrivning ${asset.name ?? `konto ${acctNum}`}` });
-    postings.push({ accountNumber: acctNum, amount: -depAmount, description: `Akkumulert avskrivning ${asset.name ?? `konto ${acctNum}`}` });
+    const creditAccount = isValidAccount(accumAcctNum) ? accumAcctNum : acctNum;
+
+    depreciationGroups.push({
+      debitAcctNum: isValidAccount(depAcctNum) ? depAcctNum : 6010,
+      creditAcctNum: creditAccount,
+      amount: depAmount,
+      description: `Avskrivning ${asset.name ?? `konto ${acctNum}`}`,
+    });
   }
 
   // 2. Process prepaid expense reversals
   const prepaid = (entity.prepaidExpenses ?? entity.prepaid ?? []) as PrepaidEntry[];
+  const prepaidPostings: DepGroup[] = [];
   for (const pe of prepaid) {
     const fromAcct = Number(pe.accountNumber ?? 0);
-    const toAcct = Number(pe.expenseAccountNumber ?? 0);
+    let toAcct = Number(pe.expenseAccountNumber ?? 0);
     const amount = Number(pe.amount ?? 0);
-    if (fromAcct <= 0 || toAcct <= 0 || amount <= 0) continue;
-    postings.push({ accountNumber: toAcct, amount, description: "Tilbakeføring forskuddsbetalt" });
-    postings.push({ accountNumber: fromAcct, amount: -amount, description: "Tilbakeføring forskuddsbetalt" });
+    if (!isValidAccount(fromAcct) || amount <= 0) continue;
+    if (!isValidAccount(toAcct)) toAcct = 6300;
+    prepaidPostings.push({
+      debitAcctNum: toAcct,
+      creditAcctNum: fromAcct,
+      amount,
+      description: "Tilbakeføring forskuddsbetalt",
+    });
   }
 
-  // 3. Tax provision (22% of estimated taxable income)
+  // Gather all unique accounts to resolve
+  const allAccountNums = new Set<number>();
+  for (const g of [...depreciationGroups, ...prepaidPostings]) {
+    allAccountNums.add(g.debitAcctNum);
+    allAccountNums.add(g.creditAcctNum);
+  }
   if (taxRate > 0) {
-    const totalDepreciation = postings.filter(p => p.amount > 0).reduce((s, p) => s + p.amount, 0);
-    const estimatedIncome = totalDepreciation > 0 ? Math.round(totalDepreciation * 2) : 100000;
-    const taxAmount = Math.round(estimatedIncome * taxRate);
-    postings.push({ accountNumber: 8300, amount: taxAmount, description: "Skattekostnad" });
-    postings.push({ accountNumber: 2500, amount: -taxAmount, description: "Betalbar skatt" });
+    allAccountNums.add(isValidAccount(taxDebitAcct) ? taxDebitAcct : 8300);
+    allAccountNums.add(isValidAccount(taxCreditAcct) ? taxCreditAcct : 2500);
   }
 
-  // Fallback if nothing was extracted
-  if (postings.length === 0) {
-    postings.push(
-      { accountNumber: 6010, amount: 10000, description: "Avskrivning" },
-      { accountNumber: 1200, amount: -10000, description: "Akkumulert avskrivning" },
-    );
-  }
-
-  // Pre-resolve all unique accounts in parallel
-  const uniqueAccounts = [...new Set(postings.map(p => p.accountNumber))];
-  const resolvedMap = new Map<number, LedgerAccount>();
-  const results = await Promise.allSettled(
-    uniqueAccounts.map(async (num) => {
+  // Resolve all accounts in parallel
+  const lookups = await Promise.allSettled(
+    [...allAccountNums].map(async (num) => {
       const acct = await findAccount(client, num);
       return { num, acct };
     }),
   );
-  for (const r of results) {
+  for (const r of lookups) {
     if (r.status === "fulfilled") resolvedMap.set(r.value.num, r.value.acct);
   }
 
-  const voucherPostings: Record<string, unknown>[] = [];
-  const skippedEntries: typeof postings = [];
-  for (const entry of postings) {
-    const account = resolvedMap.get(entry.accountNumber);
-    if (account) {
-      voucherPostings.push({
-        row: voucherPostings.length + 1,
-        account: { id: account.id },
-        date: dateStr,
-        amountGross: entry.amount,
-        amountGrossCurrency: entry.amount,
-        description: entry.description,
-      });
-    } else {
-      console.warn(`[Handler] Skipping entry: account ${entry.accountNumber} not found`);
-      skippedEntries.push(entry);
-    }
-  }
-
-  // Remove unbalanced partner entries (debit without credit or vice versa)
-  // Each asset has paired entries (debit depreciation + credit asset), so if one is missing, remove the other
-  if (skippedEntries.length > 0) {
-    const skippedAccounts = new Set(skippedEntries.map(e => e.accountNumber));
-    const pairedDescriptions = new Set(skippedEntries.map(e => e.description));
-    const balanced: Record<string, unknown>[] = [];
-    for (const p of voucherPostings) {
-      const desc = p.description as string;
-      if (pairedDescriptions.has(desc) && voucherPostings.filter(v => v.description === desc).length < 2) {
-        console.warn(`[Handler] Removing orphaned posting: ${desc}`);
+  // Helper to create a voucher
+  async function createVoucher(
+    description: string,
+    entries: { debitAcctNum: number; creditAcctNum: number; amount: number; postingDesc: string }[],
+  ): Promise<void> {
+    const postings: Record<string, unknown>[] = [];
+    for (const e of entries) {
+      const debit = resolvedMap.get(e.debitAcctNum);
+      const credit = resolvedMap.get(e.creditAcctNum);
+      if (!debit || !credit) {
+        console.warn(`[Handler] Skipping: accounts ${e.debitAcctNum}/${e.creditAcctNum} not resolved`);
         continue;
       }
-      balanced.push(p);
-    }
-    voucherPostings.length = 0;
-    for (const p of balanced) {
-      p.row = voucherPostings.length + 1;
-      voucherPostings.push(p);
-    }
-  }
-
-  // If all postings were skipped, create a generic fallback
-  if (voucherPostings.length === 0) {
-    console.warn("[Handler] All postings skipped due to missing accounts, using fallback accounts");
-    const fallbackDebit = await findAccount(client, 6010);
-    const fallbackCredit = await findAccount(client, 1200);
-    voucherPostings.push(
-      { row: 1, account: { id: fallbackDebit.id }, date: dateStr, amountGross: 10000, amountGrossCurrency: 10000, description: "Avskrivning" },
-      { row: 2, account: { id: fallbackCredit.id }, date: dateStr, amountGross: -10000, amountGrossCurrency: -10000, description: "Akkumulert avskrivning" },
-    );
-  }
-
-  // Check balance
-  const sum = voucherPostings.reduce((s, p) => s + (p.amountGross as number), 0);
-  if (Math.abs(sum) > 0.01) {
-    try {
-      const equityAccount = await findAccount(client, 8960);
-      voucherPostings.push({
-        row: voucherPostings.length + 1,
-        account: { id: equityAccount.id },
+      postings.push({
+        row: postings.length + 1,
+        account: { id: debit.id },
         date: dateStr,
-        amountGross: -sum,
-        amountGrossCurrency: -sum,
-        description: "Årsoppgjør motkonto",
+        amountGross: e.amount,
+        amountGrossCurrency: e.amount,
+        description: e.postingDesc,
       });
-    } catch {
-      const fallbackEquity = await findAccount(client, 8800);
-      voucherPostings.push({
-        row: voucherPostings.length + 1,
-        account: { id: fallbackEquity.id },
+      postings.push({
+        row: postings.length + 1,
+        account: { id: credit.id },
         date: dateStr,
-        amountGross: -sum,
-        amountGrossCurrency: -sum,
-        description: "Årsoppgjør motkonto",
+        amountGross: -e.amount,
+        amountGrossCurrency: -e.amount,
+        description: e.postingDesc,
       });
     }
+    if (postings.length === 0) return;
+    const result = await client.post<{ id: number }>("/ledger/voucher", {
+      date: dateStr,
+      description,
+      postings,
+    });
+    console.log(`[Handler] Created voucher: id=${result.value.id} - ${description} (${postings.length} postings)`);
   }
 
-  const result = await client.post<{ id: number }>("/ledger/voucher", {
-    date: dateStr,
-    description: `Årsavslutning ${fiscalYear}`,
-    postings: voucherPostings,
-  });
-  console.log(`[Handler] Created year-end closing voucher: id=${result.value.id} (${voucherPostings.length} postings)`);
+  let totalDepreciation = 0;
+
+  if (separateVouchers) {
+    // Each asset gets its own voucher
+    for (const g of depreciationGroups) {
+      await createVoucher(g.description, [{
+        debitAcctNum: g.debitAcctNum,
+        creditAcctNum: g.creditAcctNum,
+        amount: g.amount,
+        postingDesc: g.description,
+      }]);
+      totalDepreciation += g.amount;
+    }
+    // Prepaid as separate voucher
+    if (prepaidPostings.length > 0) {
+      await createVoucher("Tilbakeføring forskuddsbetalt", prepaidPostings.map(p => ({
+        debitAcctNum: p.debitAcctNum,
+        creditAcctNum: p.creditAcctNum,
+        amount: p.amount,
+        postingDesc: p.description,
+      })));
+    }
+  } else {
+    // Everything in one voucher
+    const allEntries = [
+      ...depreciationGroups.map(g => ({
+        debitAcctNum: g.debitAcctNum,
+        creditAcctNum: g.creditAcctNum,
+        amount: g.amount,
+        postingDesc: g.description,
+      })),
+      ...prepaidPostings.map(p => ({
+        debitAcctNum: p.debitAcctNum,
+        creditAcctNum: p.creditAcctNum,
+        amount: p.amount,
+        postingDesc: p.description,
+      })),
+    ];
+    totalDepreciation = depreciationGroups.reduce((s, g) => s + g.amount, 0);
+    if (allEntries.length > 0) {
+      await createVoucher(`Årsavslutning ${fiscalYear}`, allEntries);
+    }
+  }
+
+  // 3. Tax provision
+  if (taxRate > 0) {
+    const estimatedIncome = totalDepreciation > 0 ? Math.round(totalDepreciation * 2) : 100000;
+    const taxAmount = Math.round(estimatedIncome * taxRate);
+    const effectiveDebit = isValidAccount(taxDebitAcct) ? taxDebitAcct : 8300;
+    const effectiveCredit = isValidAccount(taxCreditAcct) ? taxCreditAcct : 2500;
+    await createVoucher(`Skatteavsetning ${fiscalYear}`, [{
+      debitAcctNum: effectiveDebit,
+      creditAcctNum: effectiveCredit,
+      amount: taxAmount,
+      postingDesc: "Skattekostnad",
+    }]);
+  }
+
+  // Fallback if nothing was created
+  if (depreciationGroups.length === 0 && prepaidPostings.length === 0) {
+    await createVoucher(`Årsavslutning ${fiscalYear}`, [{
+      debitAcctNum: 6010,
+      creditAcctNum: 1200,
+      amount: 10000,
+      postingDesc: "Avskrivning (standard)",
+    }]);
+  }
 }

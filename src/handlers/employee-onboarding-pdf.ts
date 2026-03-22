@@ -23,7 +23,8 @@ export async function handleEmployeeOnboardingPdf(
   const phoneMobile = String(entity.phoneNumberMobile ?? entity.mobile ?? "");
   const dateOfBirth = String(entity.dateOfBirth ?? "");
   const startDate = String(entity.startDate ?? "");
-  const salary = Number(entity.salary ?? entity.baseSalary ?? 0);
+  const salaryRaw = entity.salary ?? entity.baseSalary ?? entity.annualSalary ?? 0;
+  const salary = Number(String(salaryRaw).replace(/[^\d.]/g, ""));
   const position = String(entity.position ?? entity.title ?? "");
   const departmentName = String(entity.departmentName ?? entity.department ?? "");
   const userType = String(entity.userType ?? (email ? "EXTENDED" : "NO_ACCESS"));
