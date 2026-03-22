@@ -35,7 +35,7 @@ export async function handleReceiptExpense(
 ): Promise<void> {
   const entity = task.entities[0] ?? {};
 
-  const expenseAccountNumber = Number(entity.accountNumber ?? entity.account ?? 7700);
+  const expenseAccountNumber = Number(entity.accountNumber ?? entity.account ?? 6300);
   const departmentName = String(entity.departmentName ?? entity.department ?? "");
   const totalAmount = Number(String(entity.amount ?? entity.totalAmount ?? 0).replace(/[^\d.]/g, ""));
   const vatRateRaw = String(entity.vatRate ?? "25");

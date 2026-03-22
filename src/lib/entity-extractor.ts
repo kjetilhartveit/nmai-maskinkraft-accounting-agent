@@ -211,12 +211,16 @@ IMPORTANT: Extract the activity name and project name EXACTLY as they appear in 
 - amount (total amount INCLUDING VAT, as a number like 6750)
 - vatAmount (VAT amount as number, if shown separately on receipt)
 - vatRate (as number like 25, NOT "25%")
-- accountNumber (4-digit expense account, if specified)
+- accountNumber (4-digit Norwegian expense account based on what was purchased:
+  6300=rent/office costs, 6340=office supplies, 6520=office furniture/equipment,
+  6540=IT equipment, 6800=office costs, 7700=general operating cost.
+  Default 6300 if unclear.)
 - date (receipt date in YYYY-MM-DD format, if shown)
-- supplierName (vendor/supplier name from receipt)
+- supplierName (vendor/supplier name from receipt, e.g. "IKEA", "Clas Ohlson")
 
 IMPORTANT: Extract the total amount and VAT from the attached receipt/PDF content.
-Return amounts as pure numbers without currency symbols or formatting.`,
+Return amounts as pure numbers without currency symbols or formatting.
+ALWAYS determine the correct expense account from the item type - never leave accountNumber null.`,
 
   employee_onboarding_pdf: `Extract ALL employee details from the prompt and any attached PDF content:
 - firstName (required)
