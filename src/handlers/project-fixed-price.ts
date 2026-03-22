@@ -84,7 +84,6 @@ export async function handleProjectFixedPrice(
     department: { id: departmentId },
     startDate: today(),
     isInternal: false,
-    projectCategory: { id: 1 },
   };
   if (customerId) projectBody.customer = { id: customerId };
   if (fixedPrice > 0) {
@@ -115,70 +114,36 @@ export async function handleProjectFixedPrice(
     }
   }
 
-  // 4. Try to set fixed price via project settings (PUT /project/{id}) if initial POST didn't include it
-  if (fixedPrice > 0) {
-    try {
-      const projectData = await client.get<{ id: number; version: number }>(`/project/${projectId}`);
-      await client.put(`/project/${projectId}`, {
-        ...projectData.value,
-        fixedprice: fixedPrice,
-      });
-      console.log(`[Handler] Set fixed price on project: ${fixedPrice}`);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      if (msg.includes("403")) {
-        console.log("[Handler] PUT /project is BETA, fixed price was set on creation");
-      } else {
-        console.warn(`[Handler] Failed to update project fixed price: ${msg}`);
-      }
-    }
-  }
+  // 4. Fixed price was already set in the POST body — skip PUT to avoid hourlyRates validation error
 
   // 5. Invoice the project (if percentage specified)
-  if (fixedPrice > 0 && invoicePercentage > 0) {
+  if (fixedPrice > 0 && invoicePercentage > 0 && customerId) {
     await ensureBankAccountConfigured(client);
 
     const invoiceAmount = Math.round(fixedPrice * (invoicePercentage / 100));
 
-    try {
-      const result = await client.post<{ id: number }>("/invoice", {
-        invoiceDate: today(),
-        invoiceDueDate: today(),
-        project: { id: projectId },
-        customer: customerId ? { id: customerId } : undefined,
-      });
-      console.log(`[Handler] Created project invoice: id=${result.value.id}, amount=${invoiceAmount}`);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      console.warn(`[Handler] Failed to create project invoice: ${msg}`);
+    // Create order-based invoice (direct project→invoice is not supported)
+    const { findOrCreateProduct } = await import("../lib/tripletex-helpers.js");
+    const product = await findOrCreateProduct(client, projectName || "Prosjekttjeneste", invoiceAmount);
 
-      // Try creating an order-based invoice instead
-      try {
-        const { findOrCreateProduct } = await import("../lib/tripletex-helpers.js");
-        const product = await findOrCreateProduct(client, projectName || "Prosjekttjeneste", invoiceAmount);
+    const order = await client.post<{ id: number }>("/order", {
+      customer: { id: customerId },
+      orderDate: today(),
+      deliveryDate: today(),
+    });
 
-        const order = await client.post<{ id: number }>("/order", {
-          customer: customerId ? { id: customerId } : undefined,
-          orderDate: today(),
-          deliveryDate: today(),
-        });
+    await client.post("/order/orderline", {
+      order: { id: order.value.id },
+      product: { id: product.id },
+      count: 1,
+      unitPriceExcludingVatCurrency: invoiceAmount,
+    });
 
-        await client.post("/order/orderline", {
-          order: { id: order.value.id },
-          product: { id: product.id },
-          count: 1,
-          unitPriceExcludingVatCurrency: invoiceAmount,
-        });
-
-        const inv = await client.post<{ id: number }>("/invoice", {
-          invoiceDate: today(),
-          invoiceDueDate: today(),
-          orders: [{ id: order.value.id }],
-        });
-        console.log(`[Handler] Created fallback invoice for project: id=${inv.value.id}`);
-      } catch (fallbackErr) {
-        console.warn(`[Handler] Failed to create fallback invoice: ${fallbackErr}`);
-      }
-    }
+    const inv = await client.post<{ id: number }>("/invoice", {
+      invoiceDate: today(),
+      invoiceDueDate: today(),
+      orders: [{ id: order.value.id }],
+    });
+    console.log(`[Handler] Created project invoice: id=${inv.value.id}, amount=${invoiceAmount}`);
   }
 }

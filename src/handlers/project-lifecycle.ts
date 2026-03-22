@@ -84,7 +84,6 @@ export async function handleProjectLifecycle(
     department: { id: departmentId },
     startDate: today(),
     isInternal: false,
-    projectCategory: { id: 1 },
   };
   if (customerId) projectBody.customer = { id: customerId };
   if (budget > 0) projectBody.fixedprice = budget;
