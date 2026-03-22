@@ -62,6 +62,7 @@ interface AccrualReversal {
 interface DepreciationEntry {
   amount: number;
   assetAccount: number;
+  accumulatedDepreciationAccount?: number;
   depreciationAccount: number;
   description?: string;
 }
@@ -119,28 +120,27 @@ export async function handleMonthlyClosing(
   const depEntries = (entity.depreciationEntries ?? []) as DepreciationEntry[];
   for (const dep of depEntries) {
     let depAcct = Number(dep.depreciationAccount ?? 0);
-    let assetAcct = Number(dep.assetAccount ?? 0);
+    let contraAssetAcct = Number(dep.accumulatedDepreciationAccount ?? dep.assetAccount ?? 0);
     let amount = Number(dep.amount ?? 0);
     if (!isValidAccountNumber(depAcct)) depAcct = 6010;
-    if (!isValidAccountNumber(assetAcct)) {
-      // assetAccount > 9999 is likely the acquisition cost misidentified as an account
-      if (assetAcct > 9999 && amount <= 0) {
-        amount = Math.round((assetAcct / 5 / 12) * 100) / 100;
+    if (!isValidAccountNumber(contraAssetAcct)) {
+      if (contraAssetAcct > 9999 && amount <= 0) {
+        amount = Math.round((contraAssetAcct / 5 / 12) * 100) / 100;
       }
-      assetAcct = 1200;
-      console.log(`[Handler] Fixed assetAccount to default 1200`);
+      contraAssetAcct = 1209;
+      console.log(`[Handler] Using default contra-asset account 1209`);
     }
     if (amount > 0) {
-      entries.push({ debitAccount: depAcct, creditAccount: assetAcct, amount, description: String(dep.description ?? "Månedlig avskrivning") });
+      entries.push({ debitAccount: depAcct, creditAccount: contraAssetAcct, amount, description: String(dep.description ?? "Månedlig avskrivning") });
     }
   }
 
   // Backward compat: single depreciation amount
   const depAmount = Number(entity.depreciationAmount ?? 0);
   if (depAmount > 0 && depEntries.length === 0) {
-    const depAssetAccount = Number(entity.depreciationAssetAccount ?? 1200);
+    const depContraAssetAccount = Number(entity.accumulatedDepreciationAccount ?? entity.depreciationAssetAccount ?? 1209);
     const depExpenseAccount = Number(entity.depreciationExpenseAccount ?? 6010);
-    entries.push({ debitAccount: depExpenseAccount, creditAccount: depAssetAccount, amount: depAmount, description: "Månedlig avskrivning" });
+    entries.push({ debitAccount: depExpenseAccount, creditAccount: depContraAssetAccount, amount: depAmount, description: "Månedlig avskrivning" });
   }
 
   // Process salary provision (entity field: salaryProvision)
@@ -189,7 +189,7 @@ export async function handleMonthlyClosing(
     console.warn("[Handler] No structured entries found, using defaults");
     entries.push(
       { debitAccount: 6300, creditAccount: 1710, amount: 15000, description: "Periodisering tilbakeføring" },
-      { debitAccount: 6010, creditAccount: 1200, amount: 5000, description: "Månedlig avskrivning" },
+      { debitAccount: 6010, creditAccount: 1209, amount: 5000, description: "Månedlig avskrivning" },
       { debitAccount: 5000, creditAccount: 2900, amount: 180000, description: "Lønnsavsetning" },
     );
   }

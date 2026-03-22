@@ -239,13 +239,15 @@ ALWAYS determine the correct expense account from the item type - never leave ac
 - startDate (YYYY-MM-DD format, employment start date)
 - salary (annual salary as number, e.g. 560000)
 - position / title (job title)
-- occupationCode (STYRK code if mentioned, numeric code)
+- occupationCode (STYRK code if mentioned, numeric code like "2512")
 - departmentName (department)
 - employmentPercentage (e.g. 100)
+- workingHoursPerWeek (weekly working hours as number, e.g. 37.5; if "standard" is mentioned, use 37.5)
 - address (street address)
 - postalCode (postal/zip code)
 - city (city name)
 
+IMPORTANT: If the prompt mentions "standard working hours" or "standard arbeidstid", set workingHoursPerWeek to 37.5.
 Extract ALL fields that appear in the text. The PDF content is inlined above.`,
 
   employee_contract_pdf: `Extract ALL contract details from the prompt and any attached PDF content:
@@ -346,15 +348,16 @@ Extract ALL details.`,
   monthly_closing: `Extract:
 - month (e.g. "2026-03" for March 2026)
 - accrualReversals: array of { amount (number in NOK), fromAccount (4-digit account number), toAccount (4-digit account number), description }
-- depreciationEntries: array of { amount (monthly depreciation in NOK), assetAccount (4-digit LEDGER account for the asset, e.g. 1200), depreciationAccount (4-digit expense account, e.g. 6010) }
+- depreciationEntries: array of { amount (monthly depreciation in NOK), accumulatedDepreciationAccount (4-digit contra-asset account, e.g. 1209), depreciationAccount (4-digit expense account, e.g. 6010) }
 - salaryProvision: { amount (number in NOK), debitAccount (4-digit, e.g. 5000), creditAccount (4-digit, e.g. 2900) }
 
 CRITICAL RULES:
 1. ALL account numbers MUST be exactly 4 digits (1000-9999). Never use monetary amounts as account numbers.
-2. For depreciation: if the prompt says "anskaffelseskost 147250 kr", that 147250 is the ACQUISITION COST (a money amount), NOT an account. The assetAccount should be the balance sheet account (1200 for machinery, 1210 for furniture, etc.). Calculate monthly depreciation = acquisitionCost / years / 12.
-3. If the prompt says "til kostkonto" or "expense account" without a number, use 6300 as default expense account.
-4. If salary provision has no explicit amount, estimate a reasonable monthly salary (e.g. 50000 NOK).
-5. Common accounts: 1200/1210 (assets), 1700/1710 (prepaid), 2900 (provisions), 5000 (salary), 6010/6020 (depreciation), 6300 (general expenses).
+2. For depreciation: if the prompt says "anskaffelseskost 147250 kr", that 147250 is the ACQUISITION COST (a money amount), NOT an account. Calculate monthly depreciation = acquisitionCost / years / 12. Round to 2 decimal places.
+3. The accumulatedDepreciationAccount is the CONTRA-ASSET account (NOT the asset account itself). Default: 1209 for machinery (contra to 1200), 1219 for furniture (contra to 1210). This is the credit side of the depreciation entry.
+4. If the prompt says "til kostkonto" or "expense account" without a number, use 6300 as default expense account.
+5. If salary provision has no explicit amount, estimate a reasonable monthly salary (e.g. 50000 NOK).
+6. Common accounts: 1200/1210 (assets), 1209/1219 (accumulated depreciation), 1700/1710 (prepaid), 2900 (accrued salary), 5000 (salary expense), 6010/6020 (depreciation expense), 6300 (general expenses).
 
 Extract ALL closing entries mentioned in the prompt.`,
 

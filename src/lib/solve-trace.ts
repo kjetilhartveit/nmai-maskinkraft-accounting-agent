@@ -227,6 +227,8 @@ export class SolveTrace {
     this.logTerminal(
       `[Trace] ${status} in ${totalMs}ms | API: ${apiCallStats.total} calls, ${apiCallStats.errors} errors`,
     );
+    this.logTerminal("");
+    this.logTerminal("");
   }
 
   /**

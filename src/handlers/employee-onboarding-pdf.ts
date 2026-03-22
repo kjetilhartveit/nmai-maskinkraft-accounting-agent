@@ -30,7 +30,7 @@ export async function handleEmployeeOnboardingPdf(
   const departmentName = String(entity.departmentName ?? entity.department ?? "");
   const userType = String(entity.userType ?? (email ? "EXTENDED" : "NO_ACCESS"));
   const employmentPercentage = Number(entity.employmentPercentage ?? entity.percentage ?? 100);
-  const workingHoursPerWeek = Number(entity.workingHours ?? entity.hoursPerWeek ?? 0);
+  const workingHoursPerWeek = Number(entity.workingHoursPerWeek ?? entity.workingHours ?? entity.hoursPerWeek ?? 37.5);
   const address = String(entity.address ?? entity.streetAddress ?? "");
   const postalCode = String(entity.postalCode ?? entity.zipCode ?? "");
   const city = String(entity.city ?? "");
@@ -120,24 +120,41 @@ export async function handleEmployeeOnboardingPdf(
       const empResult = await client.post<{ id: number }>("/employee/employment", employmentBody);
       console.log(`[Handler] Created employment id=${empResult.value.id} starting ${startDate}`);
 
-      // Set employment details: salary, percentage, position, occupation code
-      if (salary > 0 || employmentPercentage !== 100 || position) {
-        try {
-          const detailsBody: Record<string, unknown> = {
-            employment: { id: empResult.value.id },
-            date: startDate,
-          };
-          if (salary > 0) detailsBody.annualSalary = salary;
-          if (employmentPercentage) detailsBody.percentageOfFullTimeEquivalent = employmentPercentage;
-          if (occupationCode) {
-            detailsBody.occupationCode = { code: occupationCode };
-          } else if (position) {
-            detailsBody.occupationCode = { nameNO: position };
+      // Set employment details: salary, percentage, working hours, employment type
+      try {
+        const detailsBody: Record<string, unknown> = {
+          employment: { id: empResult.value.id },
+          date: startDate,
+          employmentType: "ORDINARY",
+          employmentForm: "PERMANENT",
+          remunerationType: "MONTHLY_WAGE",
+          workingHoursScheme: "NOT_SHIFT",
+          shiftDurationHours: workingHoursPerWeek / 5,
+        };
+        if (salary > 0) detailsBody.annualSalary = salary;
+        if (employmentPercentage) detailsBody.percentageOfFullTimeEquivalent = employmentPercentage;
+        if (occupationCode) {
+          detailsBody.occupationCode = { code: occupationCode };
+        }
+        await client.post("/employee/employment/details", detailsBody);
+        console.log(`[Handler] Created employment details: salary=${salary}, pct=${employmentPercentage}, hours=${workingHoursPerWeek}h/wk, position=${position}`);
+      } catch (detailsErr) {
+        const detailsMsg = detailsErr instanceof Error ? detailsErr.message : String(detailsErr);
+        console.warn(`[Handler] Could not set employment details: ${detailsMsg}`);
+        // Retry without enum fields if they caused a validation error
+        if (detailsMsg.includes("422")) {
+          try {
+            const retryBody: Record<string, unknown> = {
+              employment: { id: empResult.value.id },
+              date: startDate,
+            };
+            if (salary > 0) retryBody.annualSalary = salary;
+            if (employmentPercentage) retryBody.percentageOfFullTimeEquivalent = employmentPercentage;
+            await client.post("/employee/employment/details", retryBody);
+            console.log(`[Handler] Created employment details (retry without enums): salary=${salary}`);
+          } catch {
+            console.warn(`[Handler] Employment details retry also failed`);
           }
-          await client.post("/employee/employment/details", detailsBody);
-          console.log(`[Handler] Created employment details: salary=${salary}, pct=${employmentPercentage}, position=${position}`);
-        } catch {
-          console.warn(`[Handler] Could not set employment details`);
         }
       }
     } catch (err) {
