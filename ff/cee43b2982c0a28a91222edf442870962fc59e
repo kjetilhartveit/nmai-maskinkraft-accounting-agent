@@ -1,0 +1,25 @@
+src/handlers/create-supplier-invoice.ts
+  a767f3c6d1b2d06a 130-131,135,137,143-150,156-157,159,161,163,165-170
+src/handlers/receipt-expense.ts
+  a767f3c6d1b2d06a 114-115,119,121-126,132-133,136,141
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.17",
+  "base_commit_sha": "ffcee43b2982c0a28a91222edf442870962fc59e",
+  "prompts": {
+    "a767f3c6d1b2d06a": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "a4414119-fd27-4ec0-86b1-2e44c89c53e3",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Kjetil Hårtveit <kjetil_runescape@hotmail.com>",
+      "messages": [],
+      "total_additions": 361,
+      "total_deletions": 372,
+      "accepted_lines": 361,
+      "overriden_lines": 0
+    }
+  }
+}
