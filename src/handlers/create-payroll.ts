@@ -106,15 +106,15 @@ async function createPayrollVoucher(
   firstName: string,
   lastName: string,
 ): Promise<void> {
-  const [salaryAccount, taxAccount, bankAccount] = await Promise.all([
+  const [salaryAccount, taxExpenseAccount, taxPayableAccount, bankAccount] = await Promise.all([
     findAccount(client, 5000),
+    findAccount(client, 5400),
     findAccount(client, 2780),
     findAccount(client, 1920),
   ]);
 
   const totalSalary = baseSalary + bonus;
   const employerTax = Math.round(totalSalary * 0.141);
-  const totalCredit = totalSalary + employerTax;
 
   const voucherDate = today();
   const empName = firstName && lastName ? `${firstName} ${lastName}` : "ansatt";
@@ -122,7 +122,6 @@ async function createPayrollVoucher(
   const postings: Record<string, unknown>[] = [];
   let row = 1;
 
-  // Base salary posting with employee reference
   if (baseSalary > 0) {
     postings.push({
       row: row++,
@@ -135,7 +134,6 @@ async function createPayrollVoucher(
     });
   }
 
-  // Bonus as separate posting (if applicable)
   if (bonus > 0) {
     postings.push({
       row: row++,
@@ -148,10 +146,10 @@ async function createPayrollVoucher(
     });
   }
 
-  // Employer tax posting
+  // Employer tax expense (debit 5400)
   postings.push({
     row: row++,
-    account: { id: taxAccount.id },
+    account: { id: taxExpenseAccount.id },
     date: voucherDate,
     amountGross: employerTax,
     amountGrossCurrency: employerTax,
@@ -159,13 +157,24 @@ async function createPayrollVoucher(
     employee: { id: employeeId },
   });
 
-  // Bank credit posting
+  // Employer tax payable (credit 2780)
+  postings.push({
+    row: row++,
+    account: { id: taxPayableAccount.id },
+    date: voucherDate,
+    amountGross: -employerTax,
+    amountGrossCurrency: -employerTax,
+    description: `Skyldig AGA ${empName}`,
+    employee: { id: employeeId },
+  });
+
+  // Bank credit for gross salary (net pay to employee)
   postings.push({
     row: row++,
     account: { id: bankAccount.id },
     date: voucherDate,
-    amountGross: -totalCredit,
-    amountGrossCurrency: -totalCredit,
+    amountGross: -totalSalary,
+    amountGrossCurrency: -totalSalary,
     description: `Utbetaling lønn ${empName}`,
     employee: { id: employeeId },
   });
@@ -178,6 +187,6 @@ async function createPayrollVoucher(
 
   const result = await client.post<{ id: number }>("/ledger/voucher", body);
   console.log(
-    `[Handler] Created payroll voucher: id=${result.value.id} (salary=${totalSalary}, tax=${employerTax}, total=${totalCredit})`,
+    `[Handler] Created payroll voucher: id=${result.value.id} (salary=${totalSalary}, employerTax=${employerTax}, bankPay=${totalSalary})`,
   );
 }
