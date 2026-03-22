@@ -1,0 +1,23 @@
+src/handlers/employee-onboarding-pdf.ts
+  a767f3c6d1b2d06a 104-119
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.17",
+  "base_commit_sha": "15242ae98ce9f32c55e011022a2df853bb267383",
+  "prompts": {
+    "a767f3c6d1b2d06a": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "a4414119-fd27-4ec0-86b1-2e44c89c53e3",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Kjetil Hårtveit <kjetil_runescape@hotmail.com>",
+      "messages": [],
+      "total_additions": 170,
+      "total_deletions": 159,
+      "accepted_lines": 170,
+      "overriden_lines": 0
+    }
+  }
+}
