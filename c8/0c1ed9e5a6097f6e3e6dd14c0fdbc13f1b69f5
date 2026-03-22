@@ -1,0 +1,33 @@
+src/lib/entity-extractor.ts
+  a767f3c6d1b2d06a 228-229,231-234,236-238,335-352
+src/handlers/bank-reconciliation.ts
+  a767f3c6d1b2d06a 4,16-17,26,31-44,49-57,61-62,72-77,79-115,120-126,130,138-140,145-165,167-168,170-175,178-182,184,187,192-194,198-202,205
+src/handlers/year-end-closing.ts
+  a767f3c6d1b2d06a 13-19,22-23,32-55
+src/routes/solve.ts
+  a767f3c6d1b2d06a 20,77
+src/handlers/monthly-closing.ts
+  a767f3c6d1b2d06a 13-19,22-23,32-55
+src/index.ts
+  a767f3c6d1b2d06a 45-52
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.17",
+  "base_commit_sha": "c80c1ed9e5a6097f6e3e6dd14c0fdbc13f1b69f5",
+  "prompts": {
+    "a767f3c6d1b2d06a": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "a4414119-fd27-4ec0-86b1-2e44c89c53e3",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Kjetil Hårtveit <kjetil_runescape@hotmail.com>",
+      "messages": [],
+      "total_additions": 1497,
+      "total_deletions": 1347,
+      "accepted_lines": 1494,
+      "overriden_lines": 0
+    }
+  }
+}
