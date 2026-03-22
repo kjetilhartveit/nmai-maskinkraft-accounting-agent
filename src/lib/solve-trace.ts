@@ -7,6 +7,7 @@
 
 import { mkdirSync, writeFileSync, appendFileSync } from "fs";
 import { join } from "path";
+import type { ApiCallLog } from "../types/index.js";
 
 const LOGS_DIR = join(import.meta.dirname, "../../logs");
 
@@ -25,6 +26,7 @@ export class SolveTrace {
   readonly dir: string;
   private steps: TraceStep[] = [];
   private startTime: number;
+  private apiCallsRaw: ApiCallLog[] = [];
 
   constructor(id: string) {
     this.id = id;
@@ -147,7 +149,7 @@ export class SolveTrace {
   }
 
   /**
-   * Log an API call
+   * Log an API call (summary to execution.log)
    */
   logApiCall(
     method: string,
@@ -165,6 +167,14 @@ export class SolveTrace {
     if (status >= 400) {
       this.logTerminal(`[Trace] API ${method} ${endpoint} → ${status} ERROR`);
     }
+  }
+
+  /**
+   * Store raw API call logs (with full request/response bodies)
+   */
+  logRawApiCalls(calls: ApiCallLog[]): void {
+    this.apiCallsRaw = calls;
+    this.writeFile("04-api-calls-raw.json", calls);
   }
 
   /**

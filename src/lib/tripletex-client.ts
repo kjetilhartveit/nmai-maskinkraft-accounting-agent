@@ -62,11 +62,20 @@ export class TripletexClient {
       const durationMs = Math.round(performance.now() - start);
       const isError = status >= 400;
 
-      this.callLog.push({ method, endpoint, status, durationMs, isError });
+      const logEntry: ApiCallLog = {
+        method,
+        endpoint,
+        status,
+        durationMs,
+        isError,
+        requestBody: options.body,
+      };
 
       if (isError) {
         const errorBody = await res.text();
-        this.callLog[this.callLog.length - 1].errorBody = errorBody;
+        logEntry.errorBody = errorBody;
+        logEntry.responseBody = errorBody;
+        this.callLog.push(logEntry);
         console.error(
           `[Tripletex] ${method} ${endpoint} → ${status} (${durationMs}ms)\n${errorBody}`,
         );
@@ -78,9 +87,14 @@ export class TripletexClient {
       );
 
       if (status === 204 || res.headers.get("content-length") === "0") {
+        this.callLog.push(logEntry);
         return undefined as T;
       }
-      return (await res.json()) as T;
+
+      const responseBody = (await res.json()) as T;
+      logEntry.responseBody = responseBody;
+      this.callLog.push(logEntry);
+      return responseBody;
     } catch (error) {
       if (error instanceof TripletexApiError) throw error;
 
@@ -91,6 +105,7 @@ export class TripletexClient {
         status: 0,
         durationMs,
         isError: true,
+        requestBody: options.body,
       });
       throw error;
     }

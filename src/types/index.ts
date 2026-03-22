@@ -108,4 +108,6 @@ export interface ApiCallLog {
   durationMs: number;
   isError: boolean;
   errorBody?: string;
+  requestBody?: unknown;
+  responseBody?: unknown;
 }

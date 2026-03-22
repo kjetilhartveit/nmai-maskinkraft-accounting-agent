@@ -37,7 +37,7 @@ function detectSource(evalMode: boolean, baseUrl: string): "competition" | "eval
 solveRouter.post("/solve", async (c) => {
   const start = performance.now();
   const evalMode = c.req.header("X-Eval-Mode") === "true";
-  const solveId = `solve-${Date.now()}`;
+  const solveId = evalMode ? `eval-${Date.now()}` : `solve-${Date.now()}`;
   const trace = createSolveTrace(solveId);
 
   let client: TripletexClient | undefined;
@@ -169,6 +169,8 @@ solveRouter.post("/solve", async (c) => {
     for (const call of client.calls) {
       trace.logApiCall(call.method, call.endpoint, call.status, call.durationMs, call.errorBody);
     }
+    // Store raw API call logs with full request/response bodies
+    trace.logRawApiCalls([...client.calls]);
 
     const elapsed = Math.round(performance.now() - start);
     const stats = client.stats;
@@ -216,6 +218,11 @@ solveRouter.post("/solve", async (c) => {
 
     const stats = client?.stats ?? { total: 0, errors: 0, writeCalls: 0, writeErrors: 0, totalDuration: 0 };
     const source = detectSource(evalMode, baseUrl);
+
+    // Store raw API call logs even on error
+    if (client) {
+      trace.logRawApiCalls([...client.calls]);
+    }
 
     trace.logResult(false, { total: stats.total, errors: stats.errors }, message);
 
