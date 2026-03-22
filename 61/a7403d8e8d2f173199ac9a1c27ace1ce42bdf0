@@ -1,0 +1,52 @@
+src/lib/entity-extractor.ts
+  09867231b4400c03 13,327-339
+  7675db6e173fb52d 373-374
+src/lib/llm.ts
+  09867231b4400c03 5,101,137,144-153,156
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.17",
+  "base_commit_sha": "61a7403d8e8d2f173199ac9a1c27ace1ce42bdf0",
+  "prompts": {
+    "09867231b4400c03": {
+      "agent_id": {
+        "tool": "gemini",
+        "id": "b5f9845c-35f9-4ff2-8936-4d9119750711",
+        "model": "gemini-3.1-pro-preview-customtools"
+      },
+      "human_author": "Kjetil Hårtveit <kjetil_runescape@hotmail.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 38,
+      "overriden_lines": 0
+    },
+    "280295ef5900caff": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2e5b838b-9320-4743-8f1b-5e8b852a2c19",
+        "model": "claude-opus-4-5-20251101"
+      },
+      "human_author": "Kjetil Hårtveit <kjetil_runescape@hotmail.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 4,
+      "overriden_lines": 0
+    },
+    "7675db6e173fb52d": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "e970b64d-3253-4cc6-8745-dd82f517b0ec",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Kjetil Hårtveit <kjetil_runescape@hotmail.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 922,
+      "overriden_lines": 0
+    }
+  }
+}
