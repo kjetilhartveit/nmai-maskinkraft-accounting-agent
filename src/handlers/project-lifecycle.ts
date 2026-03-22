@@ -11,6 +11,7 @@ import {
   daysFromNow,
   ensureBankAccountConfigured,
   findOrCreateProduct,
+  getMultipleAccountsByNumber,
 } from "../lib/tripletex-helpers.js";
 import { grantProjectManagerEntitlement } from "./create-employee.js";
 
@@ -148,8 +149,8 @@ export async function handleProjectLifecycle(
     }
     if (!empId) empId = pmId;
 
-    const baseOffset = Math.floor(Math.random() * 30) + 30;
-    const entryDate = daysFromNow(baseOffset + i);
+    const baseOffset = 60 + (i * 7) + Math.floor(Date.now() / 100000) % 30;
+    const entryDate = daysFromNow(baseOffset);
     const timesheetBody: Record<string, unknown> = {
       employee: { id: empId },
       project: { id: projectId },
@@ -179,13 +180,13 @@ export async function handleProjectLifecycle(
     }
   }
 
-  // 6. Register supplier cost as voucher
+  // 6. Register supplier cost as voucher (single bulk account lookup)
   if (supplierCost && supplierCost.amount > 0) {
     try {
-      const [expenseAcct, bankAcct] = await Promise.all([
-        findAccountByNumber(client, 6300),
-        findAccountByNumber(client, 1920),
-      ]);
+      const accts = await getMultipleAccountsByNumber(client, [6300, 1920]);
+      const expenseAcct = accts.get(6300);
+      const bankAcct = accts.get(1920);
+      if (!expenseAcct || !bankAcct) throw new Error("Required accounts not found");
       await client.post("/ledger/voucher", {
         date: today(),
         description: supplierCost.description || `Leverandørkostnad: ${supplierCost.supplierName}`,
@@ -235,16 +236,3 @@ export async function handleProjectLifecycle(
   }
 }
 
-async function findAccountByNumber(
-  client: TripletexClient,
-  accountNumber: number,
-): Promise<{ id: number; number: number }> {
-  const result = await client.list<{ id: number; number: number }>("/ledger/account", {
-    number: String(accountNumber),
-    from: "0",
-    count: "1",
-  });
-  const account = result.values[0];
-  if (!account) throw new Error(`Ledger account ${accountNumber} not found`);
-  return account;
-}

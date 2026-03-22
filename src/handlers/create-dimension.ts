@@ -1,12 +1,7 @@
 import type { TripletexClient } from "../lib/tripletex-client.js";
 import type { ParsedTask } from "../types/index.js";
 import type { SequenceContext } from "../lib/sequence-context.js";
-import { today } from "../lib/tripletex-helpers.js";
-
-interface LedgerAccount {
-  id: number;
-  number: number;
-}
+import { today, getMultipleAccountsByNumber } from "../lib/tripletex-helpers.js";
 
 interface DimensionName {
   id: number;
@@ -14,27 +9,8 @@ interface DimensionName {
   dimensionName: string;
 }
 
-const accountCache = new Map<number, LedgerAccount>();
-
-async function findAccount(
-  client: TripletexClient,
-  accountNumber: number,
-): Promise<LedgerAccount> {
-  const cached = accountCache.get(accountNumber);
-  if (cached) return cached;
-  const result = await client.list<LedgerAccount>("/ledger/account", {
-    number: String(accountNumber),
-    from: "0",
-    count: "1",
-  });
-  const account = result.values[0];
-  if (!account) throw new Error(`Ledger account ${accountNumber} not found`);
-  accountCache.set(accountNumber, account);
-  return account;
-}
-
 export function resetDimensionCache(): void {
-  accountCache.clear();
+  // Bulk account cache is now shared in tripletex-helpers
 }
 
 /**
@@ -141,10 +117,11 @@ export async function handleCreateDimension(
     console.log(`[Handler] Linking voucher to dimension value "${linkedValueName}" (id=${linkedValueId})`);
   }
 
-  const [expenseAccount, bankAccount] = await Promise.all([
-    findAccount(client, accountNumber),
-    findAccount(client, 1920),
-  ]);
+  const accounts = await getMultipleAccountsByNumber(client, [accountNumber, 1920]);
+  const expenseAccount = accounts.get(accountNumber);
+  const bankAccount = accounts.get(1920);
+  if (!expenseAccount) throw new Error(`Account ${accountNumber} not found`);
+  if (!bankAccount) throw new Error("Account 1920 not found");
 
   const voucherDate = today();
 

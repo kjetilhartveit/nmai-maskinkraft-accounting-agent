@@ -1,48 +1,49 @@
 import type { TripletexClient } from "../lib/tripletex-client.js";
 import type { ParsedTask } from "../types/index.js";
 import type { SequenceContext } from "../lib/sequence-context.js";
-import { today, findCustomerByName } from "../lib/tripletex-helpers.js";
+import { today, loadAllAccounts } from "../lib/tripletex-helpers.js";
 
-interface LedgerAccount {
+interface Invoice {
   id: number;
-  number: number;
+  invoiceNumber: number;
+  amountOutstanding: number;
+  amountOutstandingTotal: number;
 }
 
-const accountCache = new Map<number, LedgerAccount>();
+interface PaymentType {
+  id: number;
+  description: string;
+}
 
-async function findAccount(
-  client: TripletexClient,
-  accountNumber: number,
-): Promise<LedgerAccount> {
-  const cached = accountCache.get(accountNumber);
-  if (cached) return cached;
-  const result = await client.list<LedgerAccount>("/ledger/account", {
-    number: String(accountNumber),
+let cachedPaymentTypeId: number | null = null;
+
+async function getPaymentTypeId(client: TripletexClient): Promise<number> {
+  if (cachedPaymentTypeId) return cachedPaymentTypeId;
+  const result = await client.list<PaymentType>("/invoice/paymentType", {
     from: "0",
-    count: "1",
+    count: "10",
   });
-  const account = result.values[0];
-  if (!account) throw new Error(`Ledger account ${accountNumber} not found`);
-  accountCache.set(accountNumber, account);
-  return account;
+  if (result.values.length > 0) {
+    cachedPaymentTypeId = result.values[0].id;
+    return cachedPaymentTypeId;
+  }
+  throw new Error("No payment types available");
 }
 
 export function resetFxPaymentCache(): void {
-  accountCache.clear();
+  cachedPaymentTypeId = null;
 }
 
 /**
  * Foreign currency payment handler.
  *
- * Handles: Invoice sent in EUR at OLD_RATE. Customer paid at NEW_RATE.
+ * Handles: Invoice sent in foreign currency at OLD_RATE. Customer paid at NEW_RATE.
  * Posts exchange difference (agio/disagio).
  *
- * Flow:
- *   1. Find customer
- *   2. Find unpaid invoices → register payment (NOK = EUR × paymentRate)
- *   3. Post exchange difference voucher:
- *      - If paymentRate < invoiceRate: disagio (loss) on account 8160
- *      - If paymentRate > invoiceRate: agio (gain) on account 8060
+ * Optimized flow (5 API calls):
+ *   1. Parallel: find invoices (by customer name) + payment types + all accounts
+ *   2. Register payment
+ *   3. Post exchange difference voucher
  */
 export async function handleFxPayment(
   client: TripletexClient,
@@ -60,83 +61,48 @@ export async function handleFxPayment(
 
   const invoiceNok = eurAmount * invoiceRate;
   const paymentNok = eurAmount * paymentRate;
-  const diff = paymentNok - invoiceNok; // negative = loss (disagio), positive = gain (agio)
+  const diff = paymentNok - invoiceNok;
 
   console.log(`[Handler] FX: ${eurAmount} ${currency}, invoice rate ${invoiceRate}, payment rate ${paymentRate}`);
   console.log(`[Handler] FX: invoice NOK=${invoiceNok}, payment NOK=${paymentNok}, diff=${diff}`);
 
-  // 1. Find customer
-  let customerId: number | undefined;
-  if (customerName) {
-    customerId = ctx.getCustomerId(customerName);
-  }
-  if (!customerId && customerName) {
-    const found = await findCustomerByName(client, customerName);
-    if (found) {
-      customerId = found.id;
-      ctx.registerCustomer(customerName, found.id);
-    }
-  }
-  if (!customerId) {
-    const body: Record<string, unknown> = {
-      name: customerName || "FX kunde",
-      isCustomer: true,
-    };
-    if (orgNumber) body.organizationNumber = orgNumber;
-    const created = await client.post<{ id: number }>("/customer", body);
-    customerId = created.value.id;
-    console.log(`[Handler] Created customer: id=${customerId}`);
-    if (customerName) ctx.registerCustomer(customerName, customerId);
-  }
-
-  // 2. Try to find and pay unpaid invoice
-  let invoicePaid = false;
-  try {
-    const invoices = await client.list<{
-      id: number;
-      invoiceNumber: number;
-      amountOutstanding: number;
-      amountOutstandingTotal: number;
-    }>("/invoice", {
-      customerId: String(customerId),
+  // 1. Parallel: find invoices by customer name + payment types + all ledger accounts
+  const [invoices, _paymentTypeId, accounts] = await Promise.all([
+    client.list<Invoice>("/invoice", {
+      customerName: customerName || undefined,
       invoiceDateFrom: "2025-01-01",
       invoiceDateTo: "2026-12-31",
       from: "0",
-      count: "10",
-    });
+      count: "20",
+    } as Record<string, string>),
+    getPaymentTypeId(client),
+    loadAllAccounts(client),
+  ]);
 
-    const unpaid = invoices.values.find(inv => inv.amountOutstanding > 0 || inv.amountOutstandingTotal > 0);
-    if (unpaid) {
-      console.log(`[Handler] Found unpaid invoice: #${unpaid.invoiceNumber} (outstanding: ${unpaid.amountOutstandingTotal})`);
+  const payTypeId = _paymentTypeId;
 
-      const paymentTypes = await client.list<{ id: number; description: string }>("/invoice/paymentType", {
-        from: "0",
-        count: "10",
-      });
-      const payTypeId = paymentTypes.values[0]?.id;
-
-      if (payTypeId) {
-        const paidAmount = paymentNok > 0 ? paymentNok : Math.round(unpaid.amountOutstandingTotal * (paymentRate || 1));
-        await client.put(
-          `/invoice/${unpaid.id}/:payment?paymentDate=${today()}&paymentTypeId=${payTypeId}&paidAmount=${paidAmount}`,
-          {},
-        );
-        console.log(`[Handler] Registered FX payment: ${paidAmount} NOK`);
-        invoicePaid = true;
-      }
-    }
-  } catch (err) {
-    console.warn(`[Handler] Could not find/pay invoice: ${err instanceof Error ? err.message : err}`);
+  // 2. Register payment on unpaid invoice
+  let invoicePaid = false;
+  const unpaid = invoices.values.find(inv => inv.amountOutstanding > 0 || inv.amountOutstandingTotal > 0);
+  if (unpaid && payTypeId) {
+    console.log(`[Handler] Found unpaid invoice: #${unpaid.invoiceNumber} (outstanding: ${unpaid.amountOutstandingTotal})`);
+    const paidAmount = paymentNok > 0 ? paymentNok : Math.round(unpaid.amountOutstandingTotal * (paymentRate || 1));
+    await client.put(
+      `/invoice/${unpaid.id}/:payment?paymentDate=${today()}&paymentTypeId=${payTypeId}&paidAmount=${paidAmount}`,
+      {},
+    );
+    console.log(`[Handler] Registered FX payment: ${paidAmount} NOK`);
+    invoicePaid = true;
   }
 
   // 3. Post exchange difference voucher
   if (Math.abs(diff) > 0.01) {
     const isLoss = diff < 0;
     const absDiff = Math.abs(Math.round(diff));
-    const [fxAccount, bankAccount] = await Promise.all([
-      findAccount(client, isLoss ? 8160 : 8060),
-      findAccount(client, 1920),
-    ]);
+    const fxAccount = accounts.get(isLoss ? 8160 : 8060);
+    const bankAccount = accounts.get(1920);
+    if (!fxAccount) throw new Error(`Ledger account ${isLoss ? 8160 : 8060} not found`);
+    if (!bankAccount) throw new Error("Ledger account 1920 not found");
 
     const postings = isLoss
       ? [
@@ -155,9 +121,10 @@ export async function handleFxPayment(
     });
     console.log(`[Handler] Created FX voucher: id=${result.value.id} (${isLoss ? "disagio" : "agio"}: ${absDiff} NOK)`);
   } else if (!invoicePaid) {
-    // Fallback: no diff and no payment — create a generic FX voucher
-    const bankAccount = await findAccount(client, 1920);
-    const fxAccount = await findAccount(client, 8160);
+    const bankAccount = accounts.get(1920);
+    const fxAccount = accounts.get(8160);
+    if (!fxAccount) throw new Error("Ledger account 8160 not found");
+    if (!bankAccount) throw new Error("Ledger account 1920 not found");
     const amount = paymentNok > 0 ? paymentNok : 1000;
     const result = await client.post<{ id: number }>("/ledger/voucher", {
       date: today(),

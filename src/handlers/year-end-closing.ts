@@ -1,37 +1,10 @@
 import type { TripletexClient } from "../lib/tripletex-client.js";
 import type { ParsedTask } from "../types/index.js";
 import type { SequenceContext } from "../lib/sequence-context.js";
-import { today } from "../lib/tripletex-helpers.js";
-
-interface LedgerAccount {
-  id: number;
-  number: number;
-}
-
-const accountCache = new Map<number, LedgerAccount>();
-
-async function findAccount(
-  client: TripletexClient,
-  accountNumber: number,
-): Promise<LedgerAccount> {
-  if (!accountNumber || isNaN(accountNumber) || accountNumber <= 0) {
-    throw new Error(`Invalid account number: ${accountNumber}`);
-  }
-  const cached = accountCache.get(accountNumber);
-  if (cached) return cached;
-  const result = await client.list<LedgerAccount>("/ledger/account", {
-    number: String(accountNumber),
-    from: "0",
-    count: "1",
-  });
-  const account = result.values[0];
-  if (!account) throw new Error(`Ledger account ${accountNumber} not found`);
-  accountCache.set(accountNumber, account);
-  return account;
-}
+import { today, getAccountByNumber, getMultipleAccountsByNumber } from "../lib/tripletex-helpers.js";
 
 export function resetYearEndClosingCache(): void {
-  accountCache.clear();
+  // Bulk account cache is now shared in tripletex-helpers
 }
 
 interface AssetEntry {
@@ -109,18 +82,9 @@ export async function handleYearEndClosing(
     );
   }
 
-  // Pre-resolve all unique accounts in parallel
+  // Resolve all unique accounts in a single bulk API call
   const uniqueAccounts = [...new Set(postings.map(p => p.accountNumber))];
-  const resolvedMap = new Map<number, LedgerAccount>();
-  const results = await Promise.allSettled(
-    uniqueAccounts.map(async (num) => {
-      const acct = await findAccount(client, num);
-      return { num, acct };
-    }),
-  );
-  for (const r of results) {
-    if (r.status === "fulfilled") resolvedMap.set(r.value.num, r.value.acct);
-  }
+  const resolvedMap = await getMultipleAccountsByNumber(client, uniqueAccounts);
 
   const voucherPostings: Record<string, unknown>[] = [];
   const skippedEntries: typeof postings = [];
@@ -162,22 +126,22 @@ export async function handleYearEndClosing(
     }
   }
 
-  // If all postings were skipped, create a generic fallback
+  // If all postings were skipped, create a generic fallback (accounts already in bulk cache)
   if (voucherPostings.length === 0) {
     console.warn("[Handler] All postings skipped due to missing accounts, using fallback accounts");
-    const fallbackDebit = await findAccount(client, 6010);
-    const fallbackCredit = await findAccount(client, 1200);
+    const fallbackDebit = await getAccountByNumber(client, 6010);
+    const fallbackCredit = await getAccountByNumber(client, 1200);
     voucherPostings.push(
       { row: 1, account: { id: fallbackDebit.id }, date: dateStr, amountGross: 10000, amountGrossCurrency: 10000, description: "Avskrivning" },
       { row: 2, account: { id: fallbackCredit.id }, date: dateStr, amountGross: -10000, amountGrossCurrency: -10000, description: "Akkumulert avskrivning" },
     );
   }
 
-  // Check balance
+  // Check balance — accounts already in bulk cache, no extra API calls
   const sum = voucherPostings.reduce((s, p) => s + (p.amountGross as number), 0);
   if (Math.abs(sum) > 0.01) {
     try {
-      const equityAccount = await findAccount(client, 8960);
+      const equityAccount = await getAccountByNumber(client, 8960);
       voucherPostings.push({
         row: voucherPostings.length + 1,
         account: { id: equityAccount.id },
@@ -187,7 +151,7 @@ export async function handleYearEndClosing(
         description: "Årsoppgjør motkonto",
       });
     } catch {
-      const fallbackEquity = await findAccount(client, 8800);
+      const fallbackEquity = await getAccountByNumber(client, 8800);
       voucherPostings.push({
         row: voucherPostings.length + 1,
         account: { id: fallbackEquity.id },

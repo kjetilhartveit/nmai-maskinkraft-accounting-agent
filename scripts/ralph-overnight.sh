@@ -12,7 +12,7 @@ set +e
 shopt -s expand_aliases
 source ~/.bashrc
 
-TARGET_SUCCESS=${1:-10}
+TARGET_SUCCESS=${1:-5}
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 LOG_DIR="$PROJECT_DIR/logs/ralph"
@@ -32,32 +32,11 @@ SUCCESS_COUNT=0
 ATTEMPT_COUNT=0
 
 PROMPT=$(cat <<'EOF'
-Analyze the tasks in `agent.db` and our test cases. You may read the official documentation about the "Tripletex" task to understand exactly what we are trying to achieve.
+You are an autonomous software engineer who gives it your all for the team!
 
-Our goal is to improve the tasks with the following priorities: **total failure**, **tool calls with wrong parameters**, **increase efficiency by minimizing tool calls** (remove unecessary tool calls, use batching if possible and so on) and so on.
+Run tests and resolve all errors (incorrect parameters? some entities that need to be created before others? API calls in beta? etc.). Try to optimize the task as much as possible (can we reduce the number of API calls? Can we batch? Can we remove unnecessary API calls?). Be creative and think outside the box. Check/probe the Tripletex API if needed and feel free check in the sandbox to see if you can find other clever solutions for us. You can also look at previous solutions in `data/agent.db`, especially for the tasks we are struggling with (you can match against the prompt template), and see if you can come up with clever solutions for them. Log your findings.
 
-Feedback loop:
-- We'll use our tasks and tests and our built-in knowledge to mold the information to the LLMs so that they understand and execute the tasks accurately and correctly.
-- LLMs are non-deterministic, so mishaps can occur. We should aim for no errors, but should mainly aim for consistently good solutions.
-- We can check directly against the API using `pnpm probe` to see if endpoints work as expected.
-
-Focus areas:
-1. Review recent eval results in data/agent.db for patterns of failure
-2. Check handlers in src/handlers/ for incorrect API calls or parameters
-3. Look at the system prompts and improve guidance based on common errors
-4. Verify BETA endpoint handling is correct
-5. Optimize tool call sequences to reduce unnecessary API calls
-
-IMPORTANT - Testing strategy:
-- DO NOT run full `pnpm eval` after every change - sandbox tests are expensive.
-- Instead, focus on analysis and code improvements first.
-- Use `pnpm probe` to verify API endpoint behavior directly (fast, no LLM).
-- Only run selective tests with `pnpm eval -- --filter "<specific_case>"` when you've made a targeted fix for that specific case.
-- At the END of your iteration, run 1-3 selective tests for the cases you actually changed.
-
-Do not submit towards the competition, we are only improving the tasks and the system.
-
-Clean-up inaccurate documentation and slop. Leave the repository in a good/better shape for the next iteration.
+Group changes and commit and push.
 EOF
 )
 

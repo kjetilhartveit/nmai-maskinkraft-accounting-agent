@@ -241,7 +241,7 @@ export const testCases: TestCase[] = [
         bonus: 8000,
       },
     ],
-    expectedApiCalls: { max: 6, maxErrors: 0 },
+    expectedApiCalls: { max: 4, maxErrors: 0 },
   },
 
   {
@@ -259,7 +259,7 @@ export const testCases: TestCase[] = [
         accountNumber: 6300,
       },
     ],
-    expectedApiCalls: { max: 5, maxErrors: 0 },
+    expectedApiCalls: { max: 3, maxErrors: 0 },
   },
 
   {
@@ -277,7 +277,7 @@ export const testCases: TestCase[] = [
         linkedDimensionValue: "Nord-Norge",
       },
     ],
-    expectedApiCalls: { max: 5, maxErrors: 0 },
+    expectedApiCalls: { max: 4, maxErrors: 0 },
   },
 
   {
@@ -420,7 +420,7 @@ export const testCases: TestCase[] = [
     tier: 3,
     taskType: "ledger_audit",
     expectedEntities: [],
-    expectedApiCalls: { max: 5, maxErrors: 0 },
+    expectedApiCalls: { max: 4, maxErrors: 0 },
   },
 
   {
@@ -447,7 +447,7 @@ export const testCases: TestCase[] = [
         taxRate: 22,
       },
     ],
-    expectedApiCalls: { max: 11, maxErrors: 0 },
+    expectedApiCalls: { max: 2, maxErrors: 0 },
   },
 
   {
@@ -458,7 +458,7 @@ export const testCases: TestCase[] = [
     tier: 3,
     taskType: "monthly_closing",
     expectedEntities: [],
-    expectedApiCalls: { max: 6, maxErrors: 0 },
+    expectedApiCalls: { max: 2, maxErrors: 0 },
     notes: "Accrual: 15000 (1710→6300). Depreciation: 5000 (6010/1209). Salary provision: 180000 (5000/2900).",
   },
 
@@ -479,7 +479,7 @@ export const testCases: TestCase[] = [
         paymentRate: 11.2,
       },
     ],
-    expectedApiCalls: { max: 5, maxErrors: 0 },
+    expectedApiCalls: { max: 4, maxErrors: 0 },
   },
 
   {
@@ -497,7 +497,7 @@ export const testCases: TestCase[] = [
         budgetAmount: 500000,
       },
     ],
-    expectedApiCalls: { max: 17, maxErrors: 0 },
+    expectedApiCalls: { max: 16, maxErrors: 0 },
   },
 
   {
@@ -515,6 +515,6 @@ export const testCases: TestCase[] = [
         creditAccount: 3400,
       },
     ],
-    expectedApiCalls: { max: 12, maxErrors: 0 },
+    expectedApiCalls: { max: 10, maxErrors: 0 },
   },
 ];

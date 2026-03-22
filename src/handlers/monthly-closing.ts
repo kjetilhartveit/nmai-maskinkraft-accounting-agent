@@ -1,37 +1,10 @@
 import type { TripletexClient } from "../lib/tripletex-client.js";
 import type { ParsedTask } from "../types/index.js";
 import type { SequenceContext } from "../lib/sequence-context.js";
-import { today } from "../lib/tripletex-helpers.js";
-
-interface LedgerAccount {
-  id: number;
-  number: number;
-}
-
-const accountCache = new Map<number, LedgerAccount>();
-
-async function findAccount(
-  client: TripletexClient,
-  accountNumber: number,
-): Promise<LedgerAccount> {
-  if (!accountNumber || isNaN(accountNumber) || accountNumber <= 0) {
-    throw new Error(`Invalid account number: ${accountNumber}`);
-  }
-  const cached = accountCache.get(accountNumber);
-  if (cached) return cached;
-  const result = await client.list<LedgerAccount>("/ledger/account", {
-    number: String(accountNumber),
-    from: "0",
-    count: "1",
-  });
-  const account = result.values[0];
-  if (!account) throw new Error(`Ledger account ${accountNumber} not found`);
-  accountCache.set(accountNumber, account);
-  return account;
-}
+import { today, getMultipleAccountsByNumber } from "../lib/tripletex-helpers.js";
 
 export function resetMonthlyClosingCache(): void {
-  accountCache.clear();
+  // Bulk account cache is now shared in tripletex-helpers
 }
 
 interface AccrualReversal {
@@ -146,18 +119,9 @@ export async function handleMonthlyClosing(
     );
   }
 
-  // Pre-resolve all unique accounts in parallel
+  // Resolve all unique accounts in a single bulk API call
   const uniqueAccounts = [...new Set(entries.flatMap(e => [e.debitAccount, e.creditAccount]))];
-  const resolvedMap = new Map<number, LedgerAccount>();
-  const lookupResults = await Promise.allSettled(
-    uniqueAccounts.map(async (num) => {
-      const acct = await findAccount(client, num);
-      return { num, acct };
-    }),
-  );
-  for (const r of lookupResults) {
-    if (r.status === "fulfilled") resolvedMap.set(r.value.num, r.value.acct);
-  }
+  const resolvedMap = await getMultipleAccountsByNumber(client, uniqueAccounts);
 
   const postings: Record<string, unknown>[] = [];
   for (const entry of entries) {

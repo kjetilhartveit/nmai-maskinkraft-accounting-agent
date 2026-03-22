@@ -1,34 +1,10 @@
 import type { TripletexClient } from "../lib/tripletex-client.js";
 import type { ParsedTask } from "../types/index.js";
 import type { SequenceContext } from "../lib/sequence-context.js";
-import { today } from "../lib/tripletex-helpers.js";
-
-interface LedgerAccount {
-  id: number;
-  number: number;
-}
-
-const accountCache = new Map<number, LedgerAccount>();
-
-async function findAccount(
-  client: TripletexClient,
-  accountNumber: number,
-): Promise<LedgerAccount> {
-  const cached = accountCache.get(accountNumber);
-  if (cached) return cached;
-  const result = await client.list<LedgerAccount>("/ledger/account", {
-    number: String(accountNumber),
-    from: "0",
-    count: "1",
-  });
-  const account = result.values[0];
-  if (!account) throw new Error(`Ledger account ${accountNumber} not found`);
-  accountCache.set(accountNumber, account);
-  return account;
-}
+import { today, getMultipleAccountsByNumber } from "../lib/tripletex-helpers.js";
 
 export function resetSupplierInvoiceCache(): void {
-  accountCache.clear();
+  // Bulk account cache is now shared in tripletex-helpers
 }
 
 /**
@@ -121,13 +97,15 @@ export async function handleCreateSupplierInvoice(
     vat = 0;
   }
 
-  // 3. Look up all accounts in parallel
+  // 3. Look up all accounts in single bulk call
   const accountNumbers = [expenseAccountNumber, ...(vat > 0 ? [2710] : []), 2400];
-  const accounts = await Promise.all(accountNumbers.map((n) => findAccount(client, n)));
+  const accountsMap = await getMultipleAccountsByNumber(client, accountNumbers);
 
-  const expenseAccount = accounts[0];
-  const vatAccount = vat > 0 ? accounts[1] : null;
-  const payableAccount = accounts[accounts.length - 1];
+  const expenseAccount = accountsMap.get(expenseAccountNumber);
+  const vatAccount = vat > 0 ? accountsMap.get(2710) : null;
+  const payableAccount = accountsMap.get(2400);
+  if (!expenseAccount) throw new Error(`Account ${expenseAccountNumber} not found`);
+  if (!payableAccount) throw new Error("Account 2400 not found");
 
   // 4. Build voucher postings
   const voucherDate = today();

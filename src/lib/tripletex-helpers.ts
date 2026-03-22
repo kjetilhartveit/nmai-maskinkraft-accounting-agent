@@ -394,6 +394,56 @@ export function resetCaches(): void {
   cachedCompanyId = null;
   bankAccountConfigured = false;
   cachedProjectManagerId = null;
+  bulkAccountMap = null;
+}
+
+// === Bulk Account Loader ===
+// Fetches all ledger accounts in a single API call and caches them by number.
+// Dramatically reduces API calls for handlers that need multiple accounts.
+
+interface BulkLedgerAccount {
+  id: number;
+  number: number;
+  name: string;
+  bankAccountNumber?: string;
+}
+
+let bulkAccountMap: Map<number, BulkLedgerAccount> | null = null;
+
+export async function loadAllAccounts(client: TripletexClient): Promise<Map<number, BulkLedgerAccount>> {
+  if (bulkAccountMap) return bulkAccountMap;
+  const result = await client.list<BulkLedgerAccount>("/ledger/account", {
+    from: "0",
+    count: "1000",
+  });
+  bulkAccountMap = new Map();
+  for (const acc of result.values) {
+    bulkAccountMap.set(acc.number, acc);
+  }
+  return bulkAccountMap;
+}
+
+export async function getAccountByNumber(
+  client: TripletexClient,
+  accountNumber: number,
+): Promise<BulkLedgerAccount> {
+  const accounts = await loadAllAccounts(client);
+  const account = accounts.get(accountNumber);
+  if (!account) throw new Error(`Ledger account ${accountNumber} not found`);
+  return account;
+}
+
+export async function getMultipleAccountsByNumber(
+  client: TripletexClient,
+  accountNumbers: number[],
+): Promise<Map<number, BulkLedgerAccount>> {
+  const accounts = await loadAllAccounts(client);
+  const result = new Map<number, BulkLedgerAccount>();
+  for (const num of accountNumbers) {
+    const account = accounts.get(num);
+    if (account) result.set(num, account);
+  }
+  return result;
 }
 
 // === Bank Account Configuration ===

@@ -6,6 +6,7 @@ import {
   findEmployeeByName,
   getDefaultDepartmentId,
   today,
+  getMultipleAccountsByNumber,
 } from "../lib/tripletex-helpers.js";
 
 /**
@@ -73,29 +74,8 @@ export async function handleCreatePayroll(
   await createPayrollVoucher(client, employeeId, baseSalary, bonus, firstName, lastName);
 }
 
-interface LedgerAccount {
-  id: number;
-  number: number;
-}
-
-const accountCache = new Map<number, LedgerAccount>();
-
-async function findAccount(client: TripletexClient, accountNumber: number): Promise<LedgerAccount> {
-  const cached = accountCache.get(accountNumber);
-  if (cached) return cached;
-  const result = await client.list<LedgerAccount>("/ledger/account", {
-    number: String(accountNumber),
-    from: "0",
-    count: "1",
-  });
-  const account = result.values[0];
-  if (!account) throw new Error(`Ledger account ${accountNumber} not found`);
-  accountCache.set(accountNumber, account);
-  return account;
-}
-
 export function resetPayrollCache(): void {
-  accountCache.clear();
+  // Bulk account cache is now shared in tripletex-helpers
 }
 
 async function createPayrollVoucher(
@@ -106,11 +86,11 @@ async function createPayrollVoucher(
   firstName: string,
   lastName: string,
 ): Promise<void> {
-  const [salaryAccount, taxAccount, bankAccount] = await Promise.all([
-    findAccount(client, 5000),
-    findAccount(client, 2780),
-    findAccount(client, 1920),
-  ]);
+  const accounts = await getMultipleAccountsByNumber(client, [5000, 2780, 1920]);
+  const salaryAccount = accounts.get(5000);
+  const taxAccount = accounts.get(2780);
+  const bankAccount = accounts.get(1920);
+  if (!salaryAccount || !taxAccount || !bankAccount) throw new Error("Required accounts not found");
 
   const totalSalary = baseSalary + bonus;
   const employerTax = Math.round(totalSalary * 0.141);

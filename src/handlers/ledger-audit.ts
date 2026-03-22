@@ -1,12 +1,7 @@
 import type { TripletexClient } from "../lib/tripletex-client.js";
 import type { ParsedTask } from "../types/index.js";
 import type { SequenceContext } from "../lib/sequence-context.js";
-import { today } from "../lib/tripletex-helpers.js";
-
-interface LedgerAccount {
-  id: number;
-  number: number;
-}
+import { today, getMultipleAccountsByNumber } from "../lib/tripletex-helpers.js";
 
 interface Voucher {
   id: number;
@@ -23,30 +18,8 @@ interface VoucherPosting {
   description?: string;
 }
 
-const accountCache = new Map<number, LedgerAccount>();
-
-async function findAccount(
-  client: TripletexClient,
-  accountNumber: number,
-): Promise<LedgerAccount> {
-  if (!accountNumber || isNaN(accountNumber) || accountNumber <= 0) {
-    throw new Error(`Invalid account number: ${accountNumber}`);
-  }
-  const cached = accountCache.get(accountNumber);
-  if (cached) return cached;
-  const result = await client.list<LedgerAccount>("/ledger/account", {
-    number: String(accountNumber),
-    from: "0",
-    count: "1",
-  });
-  const account = result.values[0];
-  if (!account) throw new Error(`Ledger account ${accountNumber} not found`);
-  accountCache.set(accountNumber, account);
-  return account;
-}
-
 export function resetLedgerAuditCache(): void {
-  accountCache.clear();
+  // Bulk account cache is now shared in tripletex-helpers
 }
 
 /**
@@ -94,16 +67,7 @@ export async function handleLedgerAudit(
   // If entity extraction gave us corrections, use them (skip heavy voucher queries)
   if (corrections.length > 0) {
     const uniqueAccounts = [...new Set([...corrections.map(c => c.accountNumber), 1920])];
-    const resolvedMap = new Map<number, LedgerAccount>();
-    const lookupResults = await Promise.allSettled(
-      uniqueAccounts.map(async (num) => {
-        const acct = await findAccount(client, num);
-        return { num, acct };
-      }),
-    );
-    for (const r of lookupResults) {
-      if (r.status === "fulfilled") resolvedMap.set(r.value.num, r.value.acct);
-    }
+    const resolvedMap = await getMultipleAccountsByNumber(client, uniqueAccounts);
 
     const postings: Record<string, unknown>[] = [];
     for (const corr of corrections) {
@@ -166,11 +130,11 @@ export async function handleLedgerAudit(
   const allVouchers = [...janVouchers.values, ...febVouchers.values];
   console.log(`[Handler] Found ${allVouchers.length} vouchers in Jan-Feb 2026 (Jan: ${janVouchers.values.length}, Feb: ${febVouchers.values.length})`);
 
-  // Fallback: create a general audit correction voucher
-  const [account6300, account1920] = await Promise.all([
-    findAccount(client, 6300),
-    findAccount(client, 1920),
-  ]);
+  // Fallback: create a general audit correction voucher (accounts from bulk cache)
+  const fallbackAccounts = await getMultipleAccountsByNumber(client, [6300, 1920]);
+  const account6300 = fallbackAccounts.get(6300);
+  const account1920 = fallbackAccounts.get(1920);
+  if (!account6300 || !account1920) throw new Error("Required accounts not found");
 
   const result = await client.post<{ id: number }>("/ledger/voucher", {
     date: dateStr,
