@@ -25,6 +25,7 @@ The 31 templates and their variable schemas are defined in `task-classifier.ts` 
 **Architecture**: Refactored from 5-step (classify → extract → build → council → execute) to 3-step pipeline. Removed `unknown` type, LLM council, and 4 speculative types. Added 3 new types: `employee_contract_pdf`, `supplier_invoice_pdf`, `ledger_analysis`.
 
 **Eval system** (2026-03-22): Cleaned up to **31 canonical test cases** — one per task type (`src/eval/test-cases.ts`). Each case has:
+
 - English prompt matching the competition template structure
 - Precise expected entities (what the entity extractor must produce)
 - Expected API sequence (from Python reference `templates.py`)
@@ -32,6 +33,7 @@ The 31 templates and their variable schemas are defined in `task-classifier.ts` 
 - File-based types have fixtures in `data/pdf/` and `data/csv/`
 
 **Next priorities:**
+
 1. Run `pnpm eval` to get baseline across all 31 task types
 2. Fix failing task types one by one using the feedback loop
 3. For each type: ensure 0 API errors, correct classification, correct entity extraction
@@ -131,6 +133,7 @@ Handlers share state via `SequenceContext` which tracks IDs for customers, emplo
 **Important**: Only **write operations** (POST, PUT, DELETE) count towards efficiency scoring. GET calls are free and unlimited — use as many as needed for lookups, searches, and data retrieval.
 
 This means:
+
 - Handlers should feel free to do multiple GET calls to find accounts, customers, employees, etc.
 - The `max` bound in `expectedApiCalls` refers to write calls only
 - Eval reports show "write" column (not "api") for the count that matters
@@ -152,6 +155,9 @@ pnpm eval -- --task-type create_invoice
 
 # Focused — top N worst-performing types from solve history
 pnpm eval -- --worst 5
+
+# Run against a custom server (e.g., local dev server). This is useful to test without interferring with the production server at port 3000 or 8000.
+SERVER_URL=http://localhost:4323 pnpm eval
 
 # Other flags
 pnpm eval -- --file-tasks                    # run only file-based task types (PDF/CSV)
