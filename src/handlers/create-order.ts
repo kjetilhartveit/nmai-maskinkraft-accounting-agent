@@ -185,12 +185,13 @@ export async function handleCreateOrder(
         ) ?? paymentTypes.values[0];
 
         if (paymentType) {
-          await client.put(`/invoice/${invoiceId}/:createPayment`, {
+          const qs = new URLSearchParams({
             paymentDate: today(),
-            paymentTypeId: paymentType.id,
-            paidAmount: invoiceAmount,
-            paidAmountCurrency: invoiceAmount,
-          });
+            paymentTypeId: String(paymentType.id),
+            paidAmount: String(invoiceAmount),
+            paidAmountCurrency: String(invoiceAmount),
+          }).toString();
+          await client.put(`/invoice/${invoiceId}/:payment?${qs}`, undefined);
           console.log(`[Handler] Registered full payment on invoice ${invoiceId}: ${invoiceAmount} NOK`);
         }
       }
