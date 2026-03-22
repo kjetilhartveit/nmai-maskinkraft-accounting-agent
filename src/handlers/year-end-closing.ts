@@ -9,6 +9,8 @@ interface LedgerAccount {
 }
 
 const ACCOUNT_FALLBACKS: Record<number, number[]> = {
+  6010: [6020, 6000],
+  6020: [6010, 6000],
   6030: [6020, 6010, 6000],
   1209: [1200],
   1229: [1230, 1200],

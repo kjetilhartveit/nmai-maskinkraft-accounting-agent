@@ -26,12 +26,15 @@ export async function handleEmployeeOnboardingPdf(
   const salaryRaw = entity.salary ?? entity.baseSalary ?? entity.annualSalary ?? 0;
   const salary = Number(String(salaryRaw).replace(/[^\d.]/g, ""));
   const position = String(entity.position ?? entity.jobTitle ?? entity.title ?? "");
+  const occupationCode = String(entity.occupationCode ?? entity.styrkCode ?? "");
   const departmentName = String(entity.departmentName ?? entity.department ?? "");
   const userType = String(entity.userType ?? (email ? "EXTENDED" : "NO_ACCESS"));
   const employmentPercentage = Number(entity.employmentPercentage ?? entity.percentage ?? 100);
   const workingHoursPerWeek = Number(entity.workingHours ?? entity.hoursPerWeek ?? 0);
-  const address = String(entity.address ?? "");
-  const nationalIdNumber = String(entity.nationalIdNumber ?? entity.ssn ?? "");
+  const address = String(entity.address ?? entity.streetAddress ?? "");
+  const postalCode = String(entity.postalCode ?? entity.zipCode ?? "");
+  const city = String(entity.city ?? "");
+  const nationalIdNumber = String(entity.identityNumber ?? entity.nationalIdNumber ?? entity.ssn ?? entity.personnummer ?? "");
 
   // Check if employee already exists
   let employeeId: number | null = null;
@@ -83,7 +86,13 @@ export async function handleEmployeeOnboardingPdf(
   if (dateOfBirth) body.dateOfBirth = dateOfBirth;
   if (userType) body.userType = userType;
   if (nationalIdNumber) body.nationalIdentityNumber = nationalIdNumber;
-  if (address) body.address = { addressLine1: address };
+  if (address || postalCode || city) {
+    const addr: Record<string, string> = {};
+    if (address) addr.addressLine1 = address;
+    if (postalCode) addr.postalCode = postalCode;
+    if (city) addr.city = city;
+    body.address = addr;
+  }
 
   const result = await client.post<{ id: number }>("/employee", body);
   employeeId = result.value.id;
@@ -120,7 +129,11 @@ export async function handleEmployeeOnboardingPdf(
           };
           if (salary > 0) detailsBody.annualSalary = salary;
           if (employmentPercentage) detailsBody.percentageOfFullTimeEquivalent = employmentPercentage;
-          if (position) detailsBody.occupationCode = { nameNO: position };
+          if (occupationCode) {
+            detailsBody.occupationCode = { code: occupationCode };
+          } else if (position) {
+            detailsBody.occupationCode = { nameNO: position };
+          }
           await client.post("/employee/employment/details", detailsBody);
           console.log(`[Handler] Created employment details: salary=${salary}, pct=${employmentPercentage}, position=${position}`);
         } catch {
