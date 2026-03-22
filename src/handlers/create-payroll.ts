@@ -119,35 +119,61 @@ async function createPayrollVoucher(
   const voucherDate = today();
   const empName = firstName && lastName ? `${firstName} ${lastName}` : "ansatt";
 
+  const postings: Record<string, unknown>[] = [];
+  let row = 1;
+
+  // Base salary posting with employee reference
+  if (baseSalary > 0) {
+    postings.push({
+      row: row++,
+      account: { id: salaryAccount.id },
+      date: voucherDate,
+      amountGross: baseSalary,
+      amountGrossCurrency: baseSalary,
+      description: `Lønn ${empName}`,
+      employee: { id: employeeId },
+    });
+  }
+
+  // Bonus as separate posting (if applicable)
+  if (bonus > 0) {
+    postings.push({
+      row: row++,
+      account: { id: salaryAccount.id },
+      date: voucherDate,
+      amountGross: bonus,
+      amountGrossCurrency: bonus,
+      description: `Bonus ${empName}`,
+      employee: { id: employeeId },
+    });
+  }
+
+  // Employer tax posting
+  postings.push({
+    row: row++,
+    account: { id: taxAccount.id },
+    date: voucherDate,
+    amountGross: employerTax,
+    amountGrossCurrency: employerTax,
+    description: `Arbeidsgiveravgift ${empName}`,
+    employee: { id: employeeId },
+  });
+
+  // Bank credit posting
+  postings.push({
+    row: row++,
+    account: { id: bankAccount.id },
+    date: voucherDate,
+    amountGross: -totalCredit,
+    amountGrossCurrency: -totalCredit,
+    description: `Utbetaling lønn ${empName}`,
+    employee: { id: employeeId },
+  });
+
   const body = {
     date: voucherDate,
     description: `Lønn ${empName}`,
-    postings: [
-      {
-        row: 1,
-        account: { id: salaryAccount.id },
-        date: voucherDate,
-        amountGross: totalSalary,
-        amountGrossCurrency: totalSalary,
-        description: "Lønn",
-      },
-      {
-        row: 2,
-        account: { id: taxAccount.id },
-        date: voucherDate,
-        amountGross: employerTax,
-        amountGrossCurrency: employerTax,
-        description: "Arbeidsgiveravgift",
-      },
-      {
-        row: 3,
-        account: { id: bankAccount.id },
-        date: voucherDate,
-        amountGross: -totalCredit,
-        amountGrossCurrency: -totalCredit,
-        description: "Utbetaling",
-      },
-    ],
+    postings,
   };
 
   const result = await client.post<{ id: number }>("/ledger/voucher", body);
