@@ -5,6 +5,7 @@ import {
   today,
   findCustomerByName,
   findOrCreateProduct,
+  findProductByName,
   ensureBankAccountConfigured,
 } from "../lib/tripletex-helpers.js";
 
@@ -33,8 +34,6 @@ export async function handleCreateCreditNote(
 ): Promise<void> {
   const entity = task.entities[0] ?? {};
 
-  await ensureBankAccountConfigured(client);
-
   const customerName = String(
     entity.customerName ?? entity.customer ?? entity.name ?? "",
   );
@@ -43,42 +42,37 @@ export async function handleCreateCreditNote(
     entity.productName ?? entity.description ?? entity.service ?? entity.comment ?? "Tjeneste",
   );
 
-  // Resolve customer
   let customerId: number | null = null;
-  if (customerName) {
-    const ctxId = ctx.getCustomerId(customerName);
-    if (ctxId) {
-      console.log(`[Handler] Using customer from context: ${customerName} → id=${ctxId}`);
-      customerId = ctxId;
-    } else {
-      const customer = await findCustomerByName(client, customerName);
-      if (customer) customerId = customer.id;
-    }
-  }
+  const ctxId = customerName ? ctx.getCustomerId(customerName) : undefined;
+  const ctxInvoiceId = customerName ? ctx.getInvoiceId(customerName) : undefined;
 
-  if (!customerId) {
-    console.warn("[Handler] No customer found for credit note");
-    return;
-  }
+  // Maximize parallelism based on what we already know from context
+  let invoiceId: number | null = ctxInvoiceId ?? null;
+  let cachedProduct: { id: number; name: string } | null = null;
 
-  // Find an existing invoice for this customer to credit
-  let invoiceId: number | null = null;
-  const ctxInvoiceId = ctx.getInvoiceId(customerName);
-  if (ctxInvoiceId) {
+  if (ctxId && ctxInvoiceId) {
+    customerId = ctxId;
     invoiceId = ctxInvoiceId;
+    console.log(`[Handler] Using customer from context: ${customerName} → id=${ctxId}`);
     console.log(`[Handler] Using invoice from context: id=${invoiceId}`);
-  }
+    await ensureBankAccountConfigured(client);
+  } else if (ctxId) {
+    customerId = ctxId;
+    console.log(`[Handler] Using customer from context: ${customerName} → id=${ctxId}`);
+    // Parallel: bank + invoice search + product search (all independent)
+    const [, invoices, foundProduct] = await Promise.all([
+      ensureBankAccountConfigured(client),
+      client.list<Invoice>("/invoice", {
+        customerName,
+        invoiceDateFrom: "2020-01-01",
+        invoiceDateTo: "2030-12-31",
+        from: "0",
+        count: "10",
+      }),
+      findProductByName(client, description),
+    ]);
+    cachedProduct = foundProduct;
 
-  if (!invoiceId) {
-    const invoices = await client.list<Invoice>("/invoice", {
-      customerName,
-      invoiceDateFrom: "2020-01-01",
-      invoiceDateTo: "2030-12-31",
-      from: "0",
-      count: "10",
-    });
-
-    // Prefer an invoice matching the amount (check both ex-VAT and total)
     const match = invoices.values.find((inv) => {
       if (amount <= 0) return true;
       return (
@@ -86,18 +80,51 @@ export async function handleCreateCreditNote(
         Math.abs(inv.amount - amount) < 1
       );
     });
-
     if (match) {
       invoiceId = match.id;
       console.log(`[Handler] Found existing invoice: id=${invoiceId}`);
     }
+  } else if (customerName) {
+    const [, customer] = await Promise.all([
+      ensureBankAccountConfigured(client),
+      findCustomerByName(client, customerName),
+    ]);
+    if (customer) customerId = customer.id;
+
+    if (customerId) {
+      const invoices = await client.list<Invoice>("/invoice", {
+        customerName,
+        invoiceDateFrom: "2020-01-01",
+        invoiceDateTo: "2030-12-31",
+        from: "0",
+        count: "10",
+      });
+      const match = invoices.values.find((inv) => {
+        if (amount <= 0) return true;
+        return (
+          Math.abs(inv.amountExcludingVat - amount) < 1 ||
+          Math.abs(inv.amount - amount) < 1
+        );
+      });
+      if (match) {
+        invoiceId = match.id;
+        console.log(`[Handler] Found existing invoice: id=${invoiceId}`);
+      }
+    }
+  } else {
+    await ensureBankAccountConfigured(client);
+  }
+
+  if (!customerId) {
+    console.warn("[Handler] No customer found for credit note");
+    return;
   }
 
   // If no existing invoice, create one so we can credit it
   if (!invoiceId) {
     console.log("[Handler] No existing invoice found, creating one to credit");
 
-    const product = await findOrCreateProduct(client, description, amount || 10000);
+    const product = cachedProduct ?? await findOrCreateProduct(client, description, amount || 10000, undefined, true);
 
     const order = await client.post<Order>("/order", {
       customer: { id: customerId },

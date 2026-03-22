@@ -43,12 +43,15 @@ export async function handleReversePayment(
   const amountExVat = Number(entity.amount ?? 0);
   const invoiceDescription = String(entity.description ?? entity.service ?? entity.productName ?? "");
 
-  // 1. Find customer
+  // 1. Parallel: find customer + pre-fetch payment type (independent lookups)
   let customerId: number | undefined;
   if (customerName) {
     customerId = ctx.getCustomerId(customerName);
     if (!customerId) {
-      const existing = await findCustomerByName(client, customerName);
+      const [existing] = await Promise.all([
+        findCustomerByName(client, customerName),
+        getPaymentTypeId(client).catch(() => null),
+      ]);
       if (existing) {
         customerId = existing.id;
         ctx.registerCustomer(customerName, customerId);

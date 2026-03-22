@@ -26,24 +26,28 @@ export async function handleLedgerAnalysis(
 ): Promise<void> {
   const entity = task.entities[0] ?? {};
 
-  // Parallel: resolve PM + department + query both voucher periods (4 calls → same count but parallel)
-  const [pmId, departmentId, janVouchers, febVouchers] = await Promise.all([
+  // Parallel: resolve PM + department + query both voucher periods in one call (3 API calls)
+  const [pmId, departmentId, allVouchers] = await Promise.all([
     getProjectManagerEmployeeId(client),
     getDefaultDepartmentId(client),
     client.list<Voucher>("/ledger/voucher", {
       dateFrom: "2026-01-01",
-      dateTo: "2026-01-31",
-      from: "0",
-      count: "1000",
-    }),
-    client.list<Voucher>("/ledger/voucher", {
-      dateFrom: "2026-02-01",
       dateTo: "2026-02-28",
       from: "0",
       count: "1000",
     }),
   ]);
   if (!pmId) throw new Error("No employee found to use as project manager");
+
+  // Split vouchers by month client-side
+  const janVouchers = allVouchers.values.filter((v) => {
+    const d = (v as unknown as { date?: string }).date;
+    return d && d < "2026-02-01";
+  });
+  const febVouchers = allVouchers.values.filter((v) => {
+    const d = (v as unknown as { date?: string }).date;
+    return d && d >= "2026-02-01";
+  });
 
   // Aggregate expense per account (accounts 4000-7999) per period
   const janTotals = new Map<number, { total: number; name: string }>();
@@ -63,8 +67,8 @@ export async function handleLedgerAnalysis(
     }
   }
 
-  aggregate(janVouchers.values, janTotals);
-  aggregate(febVouchers.values, febTotals);
+  aggregate(janVouchers, janTotals);
+  aggregate(febVouchers, febTotals);
 
   // Calculate increases
   const increases: { accountNumber: number; name: string; increase: number }[] = [];
@@ -88,52 +92,48 @@ export async function handleLedgerAnalysis(
     (Array.isArray(entity.accounts) ? entity.accounts : []) as Array<{ accountNumber: number; name?: string }>
   ).map(a => ({ accountNumber: Number(a.accountNumber), name: a.name ?? `Konto ${a.accountNumber}`, increase: 0 }));
 
-  if (accountsToProcess.length === 0) {
-    // Last resort: create 3 generic cost analysis projects
-    for (let i = 1; i <= 3; i++) {
-      const project = await client.post<{ id: number }>("/project", {
-        name: `Kostnadsanalyse ${i}`,
-        projectManager: { id: pmId },
-        department: { id: departmentId },
-        startDate: today(),
-        isInternal: true,
-      });
-      console.log(`[Handler] Created generic analysis project ${i}: id=${project.value.id}`);
+  const items = accountsToProcess.length > 0
+    ? accountsToProcess.map((a) => a.name.slice(0, 255))
+    : [1, 2, 3].map((i) => `Kostnadsanalyse ${i}`);
 
-      try {
-        await client.post("/activity", {
-          name: `Kostnadsanalyse ${i} ${Date.now()}`,
-          activityType: "PROJECT_GENERAL_ACTIVITY",
-        });
-      } catch {
-        console.warn(`[Handler] Could not create activity for project ${project.value.id}`);
-      }
-    }
-    return;
+  // Batch-create projects in one API call (fallback to parallel POSTs if BETA restriction)
+  const projectBodies = items.map((name) => ({
+    name,
+    projectManager: { id: pmId },
+    department: { id: departmentId },
+    startDate: today(),
+    isInternal: true,
+  }));
+
+  let projectIds: number[];
+  try {
+    const batchResult = await client.postList<{ id: number }>("/project/list", projectBodies);
+    projectIds = batchResult.values.map((r) => r.id);
+    console.log(`[Handler] Batch-created ${projectIds.length} projects`);
+  } catch {
+    console.log("[Handler] Batch project creation failed, falling back to parallel POSTs");
+    const results = await Promise.all(
+      projectBodies.map((body) => client.post<{ id: number }>("/project", body)),
+    );
+    projectIds = results.map((r) => r.value.id);
   }
 
-  for (const acct of accountsToProcess) {
-    const projectName = `${acct.name}`;
-
-    const project = await client.post<{ id: number }>("/project", {
-      name: projectName.slice(0, 255),
-      projectManager: { id: pmId },
-      department: { id: departmentId },
-      startDate: today(),
-      isInternal: true,
-    });
-    console.log(`[Handler] Created analysis project: ${projectName} (id=${project.value.id})`);
-    ctx.registerProject(projectName, project.value.id);
-
-    try {
-      const activityName = `${acct.name} analyse ${Date.now()}`;
-      await client.post("/activity", {
-        name: activityName.slice(0, 255),
-        activityType: "PROJECT_GENERAL_ACTIVITY",
-      });
-      console.log(`[Handler] Created activity for project ${project.value.id}`);
-    } catch (err) {
-      console.warn(`[Handler] Could not create activity: ${err instanceof Error ? err.message : err}`);
+  for (let i = 0; i < items.length; i++) {
+    console.log(`[Handler] Created analysis project: ${items[i]} (id=${projectIds[i]})`);
+    if (accountsToProcess.length > 0) {
+      ctx.registerProject(accountsToProcess[i].name, projectIds[i]);
     }
+  }
+
+  // Batch-create activities in one API call
+  try {
+    const ts = Date.now();
+    await client.postList("/activity/list", items.map((name, i) => ({
+      name: `${name} analyse ${ts + i}`.slice(0, 255),
+      activityType: "PROJECT_GENERAL_ACTIVITY",
+    })));
+    console.log(`[Handler] Batch-created ${items.length} activities`);
+  } catch (err) {
+    console.warn(`[Handler] Could not batch-create activities: ${err instanceof Error ? err.message : err}`);
   }
 }

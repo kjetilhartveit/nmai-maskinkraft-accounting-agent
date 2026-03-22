@@ -185,7 +185,7 @@ export const testCases: TestCase[] = [
         amount: 18000,
       },
     ],
-    expectedApiCalls: { max: 4, maxErrors: 0 },
+    expectedApiCalls: { max: 3, maxErrors: 0 },
   },
 
   {
@@ -431,7 +431,7 @@ export const testCases: TestCase[] = [
     tier: 3,
     taskType: "ledger_analysis",
     expectedEntities: [],
-    expectedApiCalls: { max: 10, maxErrors: 0 },
+    expectedApiCalls: { max: 5, maxErrors: 0 },
   },
 
   {
@@ -497,7 +497,7 @@ export const testCases: TestCase[] = [
         budgetAmount: 500000,
       },
     ],
-    expectedApiCalls: { max: 13, maxErrors: 0 },
+    expectedApiCalls: { max: 12, maxErrors: 0 },
   },
 
   {

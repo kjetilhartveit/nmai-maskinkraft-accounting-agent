@@ -5,6 +5,7 @@ import {
   findCustomerByName,
   findEmployeeByName,
   findEmployeeByEmail,
+  loadEmployees,
   getDefaultDepartmentId,
   today,
   getProjectManagerEmployeeId,
@@ -38,25 +39,34 @@ export async function handleProjectFixedPrice(
   const pmLastName = String(entity.projectManagerLastName ?? "");
   const pmEmail = String(entity.projectManagerEmail ?? "");
 
-  // 1. Find or create customer
+  // 1. Parallel: resolve customer + employees + department (saves sequential round-trips)
   let customerId: number | undefined;
-  if (customerName) {
-    customerId = ctx.getCustomerId(customerName);
-    if (!customerId) {
-      const existing = await findCustomerByName(client, customerName);
-      if (existing) {
-        customerId = existing.id;
-      } else {
-        const body: Record<string, unknown> = { name: customerName, isCustomer: true };
-        if (orgNumber) body.organizationNumber = orgNumber;
-        const created = await client.post<{ id: number }>("/customer", body);
-        customerId = created.value.id;
-      }
-      ctx.registerCustomer(customerName, customerId);
-    }
+  const ctxCustomerId = customerName ? ctx.getCustomerId(customerName) : undefined;
+
+  const [customerResult, , departmentId] = await Promise.all([
+    ctxCustomerId
+      ? Promise.resolve(null)
+      : customerName
+        ? findCustomerByName(client, customerName)
+        : Promise.resolve(null),
+    loadEmployees(client),
+    getDefaultDepartmentId(client),
+  ]);
+
+  if (ctxCustomerId) {
+    customerId = ctxCustomerId;
+  } else if (customerResult) {
+    customerId = customerResult.id;
+    ctx.registerCustomer(customerName, customerId);
+  } else if (customerName) {
+    const body: Record<string, unknown> = { name: customerName, isCustomer: true };
+    if (orgNumber) body.organizationNumber = orgNumber;
+    const created = await client.post<{ id: number }>("/customer", body);
+    customerId = created.value.id;
+    ctx.registerCustomer(customerName, customerId);
   }
 
-  // 2. Resolve project manager
+  // 2. Resolve project manager (employee cache already warm)
   let pmId: number | null = null;
   if (pmFirstName && pmLastName) {
     const ctxId = ctx.getEmployeeId(`${pmFirstName} ${pmLastName}`);
@@ -75,9 +85,6 @@ export async function handleProjectFixedPrice(
     pmId = await getProjectManagerEmployeeId(client);
   }
   if (!pmId) throw new Error("No project manager found");
-
-  // 3. Create project with fixed price settings
-  const departmentId = await getDefaultDepartmentId(client);
   const projectBody: Record<string, unknown> = {
     name: projectName || "Prosjekt",
     projectManager: { id: pmId },

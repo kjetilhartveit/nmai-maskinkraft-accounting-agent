@@ -53,7 +53,7 @@ const handlers: Record<TaskType, TaskHandler> = {
   create_invoice: handleCreateInvoice,             // 8 calls: bank config + order + products + invoice
   send_invoice: handleSendInvoice,                 // 7 calls: bank config + order + product + invoice + send
   create_order: handleCreateOrder,                 // 5 calls: customer + order + products + lines
-  create_payment: handleCreatePayment,             // 4 calls: accounts + invoice + paymentType + PUT
+  create_payment: handleCreatePayment,             // 3 calls: invoice + paymentType (parallel) + PUT
   create_credit_note: handleCreateCreditNote,      // 8 calls: customer + accounts + invoice + credit
   create_travel_expense: handleCreateTravelExpense, // 2 calls: employee cache + POST
   create_payroll: handleCreatePayroll,             // 3 calls: employee cache + accounts + voucher
@@ -70,11 +70,11 @@ const handlers: Record<TaskType, TaskHandler> = {
   supplier_invoice_pdf: handleCreateSupplierInvoice,    // same handler, entities from PDF
   bank_reconciliation: handleBankReconciliation,   // 5-10 calls: bank txns + ledger matching
   ledger_audit: handleLedgerAudit,                 // 4 calls: voucher search + accounts + voucher
-  ledger_analysis: handleLedgerAnalysis,           // 10 calls: employees + dept + vouchers + projects
+  ledger_analysis: handleLedgerAnalysis,           // 5 calls: emp + dept + vouchers + batch projects + batch activities
   year_end_closing: handleYearEndClosing,          // 2 calls: accounts + voucher
   monthly_closing: handleMonthlyClosing,           // 2 calls: accounts + voucher
   fx_payment: handleFxPayment,                     // 3 calls: invoice + accounts + FX voucher
-  project_lifecycle: handleProjectLifecycle,       // 13 calls: project + hours + supplier + invoice
+  project_lifecycle: handleProjectLifecycle,       // 12 calls: project + batch hours + supplier + invoice
   reminder_fee: handleReminderFee,                 // 9 calls: invoices + accounts + voucher + invoice + send
 };
 

@@ -6,6 +6,7 @@ import {
   findCustomerByName,
   ensureBankAccountFromBulkAccounts,
   findOrCreateProduct,
+  findProductByName,
   loadAllAccounts,
 } from "../lib/tripletex-helpers.js";
 
@@ -75,8 +76,8 @@ export async function handleReminderFee(
   const debitAccountNumber = parseNum(entity.debitAccount ?? entity.debitAccountNumber, 1500);
   const creditAccountNumber = parseNum(entity.creditAccount ?? entity.creditAccountNumber, 3400);
 
-  // 1. Parallel: load accounts + search invoices (paymentType deferred until needed)
-  const [accountsMap, allInvoices] = await Promise.all([
+  // 1. Parallel: load accounts + search invoices + pre-fetch paymentType + product search
+  const [accountsMap, allInvoices, , existingProduct] = await Promise.all([
     loadAllAccounts(client),
     client.list<Invoice>("/invoice", {
       invoiceDateFrom: "2020-01-01",
@@ -84,6 +85,8 @@ export async function handleReminderFee(
       from: "0",
       count: "50",
     }),
+    getPaymentTypeId(client).catch(() => null),
+    findProductByName(client, "Purregebyr"),
   ]);
 
   // Use bulk accounts for bank config check (saves 1 API call vs ensureBankAccountConfigured)
@@ -165,8 +168,8 @@ export async function handleReminderFee(
   });
   console.log(`[Handler] Posted reminder fee voucher: ${reminderFeeAmount} NOK (debit ${debitAccountNumber}, credit ${creditAccountNumber})`);
 
-  // 4. Create reminder fee invoice and send it
-  const product = await findOrCreateProduct(client, "Purregebyr", reminderFeeAmount);
+  // 4. Create reminder fee invoice and send it (use pre-fetched product if available)
+  const product = existingProduct ?? await findOrCreateProduct(client, "Purregebyr", reminderFeeAmount, undefined, true);
 
   const order = await client.post<{ id: number }>("/order", {
     customer: { id: customerId },

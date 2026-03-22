@@ -99,8 +99,6 @@ export async function handleCreatePayment(
   const rawAmount = Number(entity.amount ?? entity.paidAmount ?? 0);
   const paymentDate = String(entity.paymentDate ?? entity.date ?? today());
 
-  await ensureBankAccountConfigured(client);
-
   console.log(
     `[Handler] Searching for invoice — customer: "${customerName}", amount: ${rawAmount}`,
   );
@@ -119,16 +117,18 @@ export async function handleCreatePayment(
     }
   }
 
+  // Parallel: search invoice + pre-fetch payment type (independent lookups)
   if (!invoice) {
-    invoice = await findInvoiceForPayment(
-      client,
-      customerName || undefined,
-      rawAmount || undefined,
-    );
+    const [foundInvoice] = await Promise.all([
+      findInvoiceForPayment(client, customerName || undefined, rawAmount || undefined),
+      getPaymentTypeId(client).catch(() => null),
+    ]);
+    invoice = foundInvoice;
   }
 
   if (!invoice) {
-    // If no invoice found, we might need to create the whole chain
+    // Bank config only needed when creating invoices (not for payment registration)
+    await ensureBankAccountConfigured(client);
     console.log("[Handler] No existing invoice found — creating invoice chain");
 
     let customerId: number;

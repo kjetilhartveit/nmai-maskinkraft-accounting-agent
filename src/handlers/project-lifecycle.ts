@@ -67,11 +67,11 @@ export async function handleProjectLifecycle(
     ? { supplierName: String(supplierCostRaw.supplierName ?? ""), amount: Number(supplierCostRaw.amount), description: String(supplierCostRaw.description ?? "") }
     : null;
 
-  // 1. Parallel: resolve customer + PM + department
+  // 1. Parallel: resolve customer + PM + department + accounts (saves 1 sequential call)
   let customerId: number | undefined;
   const ctxCustomerId = customerName ? ctx.getCustomerId(customerName) : undefined;
 
-  const [customerResult, pmId, departmentId] = await Promise.all([
+  const [customerResult, pmId, departmentId, accts] = await Promise.all([
     ctxCustomerId
       ? Promise.resolve(null)
       : customerName
@@ -79,6 +79,7 @@ export async function handleProjectLifecycle(
         : Promise.resolve(null),
     getProjectManagerEmployeeId(client),
     getDefaultDepartmentId(client),
+    loadAllAccounts(client),
   ]);
 
   if (ctxCustomerId) {
@@ -136,8 +137,11 @@ export async function handleProjectLifecycle(
     console.log("[Handler] Could not create activity, proceeding without");
   }
 
-  // 5. Register hours for each employee
+  // 5. Register hours for each employee (batch when possible)
   let totalHoursRevenue = 0;
+  const timesheetBodies: Record<string, unknown>[] = [];
+  const validEntries: EmployeeEntry[] = [];
+
   for (let i = 0; i < employeeEntries.length; i++) {
     const emp = employeeEntries[i];
     if (emp.hours <= 0) continue;
@@ -155,37 +159,64 @@ export async function handleProjectLifecycle(
 
     const baseOffset = 60 + (i * 7) + Math.floor(Date.now() / 100000) % 30;
     const entryDate = daysFromNow(baseOffset);
-    const timesheetBody: Record<string, unknown> = {
+    const body: Record<string, unknown> = {
       employee: { id: empId },
       project: { id: projectId },
       date: entryDate,
       hours: emp.hours,
     };
-    if (defaultActivityId) timesheetBody.activity = { id: defaultActivityId };
+    if (defaultActivityId) body.activity = { id: defaultActivityId };
+    timesheetBodies.push(body);
+    validEntries.push(emp);
+  }
 
+  if (timesheetBodies.length > 1) {
     try {
-      await client.post("/timesheet/entry", timesheetBody);
+      await client.postList("/timesheet/entry/list", timesheetBodies);
+      for (const emp of validEntries) {
+        console.log(`[Handler] Registered ${emp.hours}h for ${emp.firstName} ${emp.lastName}`);
+        totalHoursRevenue += emp.hours * (emp.hourlyRate ?? 0);
+      }
+    } catch {
+      console.warn("[Handler] Batch timesheet failed, falling back to individual POSTs");
+      for (let i = 0; i < timesheetBodies.length; i++) {
+        try {
+          await client.post("/timesheet/entry", timesheetBodies[i]);
+          const emp = validEntries[i];
+          console.log(`[Handler] Registered ${emp.hours}h for ${emp.firstName} ${emp.lastName}`);
+          totalHoursRevenue += emp.hours * (emp.hourlyRate ?? 0);
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          if (msg.includes("409") || msg.includes("allerede")) {
+            const baseOffset = 60 + (i * 7) + Math.floor(Date.now() / 100000) % 30;
+            timesheetBodies[i].date = daysFromNow(baseOffset + i + 15);
+            try {
+              await client.post("/timesheet/entry", timesheetBodies[i]);
+              totalHoursRevenue += validEntries[i].hours * (validEntries[i].hourlyRate ?? 0);
+            } catch { /* skip */ }
+          }
+        }
+      }
+    }
+  } else if (timesheetBodies.length === 1) {
+    try {
+      await client.post("/timesheet/entry", timesheetBodies[0]);
+      const emp = validEntries[0];
       console.log(`[Handler] Registered ${emp.hours}h for ${emp.firstName} ${emp.lastName}`);
       totalHoursRevenue += emp.hours * (emp.hourlyRate ?? 0);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       if (msg.includes("409") || msg.includes("allerede")) {
-        timesheetBody.date = daysFromNow(baseOffset + i + 15);
+        timesheetBodies[0].date = daysFromNow(90);
         try {
-          await client.post("/timesheet/entry", timesheetBody);
-          console.log(`[Handler] Registered ${emp.hours}h on alternate date`);
-          totalHoursRevenue += emp.hours * (emp.hourlyRate ?? 0);
-        } catch {
-          console.warn(`[Handler] Timesheet retry also failed`);
-        }
-      } else {
-        console.warn(`[Handler] Timesheet entry failed: ${msg}`);
+          await client.post("/timesheet/entry", timesheetBodies[0]);
+          totalHoursRevenue += validEntries[0].hours * (validEntries[0].hourlyRate ?? 0);
+        } catch { /* skip */ }
       }
     }
   }
 
-  // 6. Register supplier cost as voucher (uses bulk account cache)
-  const accts = await loadAllAccounts(client);
+  // 6. Register supplier cost as voucher (uses pre-loaded accounts from parallel block)
   if (supplierCost && supplierCost.amount > 0) {
     try {
       const expenseAcct = accts.get(6300);
