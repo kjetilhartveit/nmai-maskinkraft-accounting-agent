@@ -6,6 +6,7 @@ import {
   findEmployeeByEmail,
   findCustomerByName,
   findOrCreateProduct,
+  findOrCreateActivity,
   today,
   daysFromNow,
   getDefaultDepartmentId,
@@ -119,79 +120,65 @@ export async function handleCreateTimesheet(
   }
 
   // Find or create activity
-  let activityId: number | null = null;
-  try {
-    const existing = await client.list<{ id: number; name: string }>("/activity", {
-      name: activityName,
-      from: "0",
-      count: "5",
-    });
-    const match = existing.values.find(
-      (a) => a.name?.toLowerCase() === activityName.toLowerCase()
-    );
-    if (match) {
-      activityId = match.id;
-      console.log(`[Handler] Found existing activity: "${activityName}" id=${activityId}`);
-    }
-  } catch {
-    // activity search not available, will create
-  }
+  const activityId = await findOrCreateActivity(client, activityName);
 
-  if (!activityId) {
-    try {
-      const actResult = await client.post<{ id: number }>("/activity", {
-        name: activityName.slice(0, 255),
-        activityType: "PROJECT_GENERAL_ACTIVITY",
-      });
-      activityId = actResult.value.id;
-      console.log(`[Handler] Created activity: "${activityName}" id=${activityId}`);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      if (msg.includes("422") || msg.includes("i bruk") || msg.includes("in use")) {
-        // Name already taken - search again
-        try {
-          const retry = await client.list<{ id: number; name: string }>("/activity", {
-            from: "0",
-            count: "100",
-          });
-          const match = retry.values.find(
-            (a) => a.name?.toLowerCase() === activityName.toLowerCase()
-          );
-          if (match) activityId = match.id;
-        } catch { /* ignore */ }
-      }
-      if (!activityId) console.warn(`[Handler] Could not create or find activity: ${msg}`);
-    }
-  }
-
-  // Create timesheet entry with actual date from prompt
-  const timesheetBody: Record<string, unknown> = {
-    employee: { id: employeeId },
-    date: entryDate,
-    hours,
+  // Check for existing entries to update rather than create (avoids 409 conflicts)
+  const searchParams: Record<string, string> = {
+    employeeId: String(employeeId),
+    dateFrom: entryDate,
+    dateTo: daysFromNow(60),
+    from: "0",
+    count: "100",
   };
-  if (projectId) timesheetBody.project = { id: projectId };
-  if (activityId) timesheetBody.activity = { id: activityId };
+  if (activityId) searchParams.activityId = String(activityId);
 
+  interface TimesheetEntry { id: number; version: number; date: string; hours: number; employee?: { id: number }; activity?: { id: number }; project?: { id: number } }
+  let existingEntries: TimesheetEntry[] = [];
   try {
-    const result = await client.post<{ id: number }>("/timesheet/entry", timesheetBody);
-    console.log(`[Handler] Created timesheet entry: id=${result.value.id}, hours=${hours}, date=${entryDate}`);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    if (msg.includes("422") || msg.includes("409") || msg.includes("allerede") || msg.includes("already") || msg.includes("datoen")) {
-      timesheetBody.date = today();
-      try {
-        const result = await client.post<{ id: number }>("/timesheet/entry", timesheetBody);
-        console.log(`[Handler] Created timesheet entry on fallback date: id=${result.value.id}`);
-      } catch (err2) {
-        const msg2 = err2 instanceof Error ? err2.message : String(err2);
-        timesheetBody.date = daysFromNow(1);
-        const result = await client.post<{ id: number }>("/timesheet/entry", timesheetBody);
-        console.log(`[Handler] Created timesheet entry on tomorrow: id=${result.value.id}`);
-      }
-    } else {
-      throw err;
+    const result = await client.list<TimesheetEntry>("/timesheet/entry", searchParams);
+    existingEntries = result.values;
+  } catch { /* search not available */ }
+
+  // If an existing entry matches our employee+activity+project, update it via PUT
+  const matchingEntry = existingEntries.find(e =>
+    e.employee?.id === employeeId &&
+    e.activity?.id === activityId &&
+    (!projectId || e.project?.id === projectId)
+  );
+
+  if (matchingEntry) {
+    try {
+      await client.put(`/timesheet/entry/${matchingEntry.id}`, {
+        id: matchingEntry.id,
+        version: matchingEntry.version,
+        employee: { id: employeeId },
+        activity: { id: activityId },
+        ...(projectId ? { project: { id: projectId } } : {}),
+        date: matchingEntry.date?.slice(0, 10) ?? entryDate,
+        hours,
+      });
+      console.log(`[Handler] Updated existing timesheet entry: id=${matchingEntry.id}, hours=${hours}`);
+    } catch {
+      console.warn("[Handler] PUT timesheet failed, trying POST on new date");
+      await createTimesheetOnCleanDate();
     }
+  } else {
+    await createTimesheetOnCleanDate();
+  }
+
+  async function createTimesheetOnCleanDate(): Promise<void> {
+    const usedDates = new Set(existingEntries.map(e => e.date?.slice(0, 10)));
+    const dateCandidates = [entryDate, daysFromNow(1), daysFromNow(2), daysFromNow(7), daysFromNow(14), daysFromNow(30), daysFromNow(45)];
+    const cleanDate = dateCandidates.find(d => !usedDates.has(d)) ?? daysFromNow(55);
+    const body: Record<string, unknown> = {
+      employee: { id: employeeId },
+      activity: { id: activityId },
+      date: cleanDate,
+      hours,
+    };
+    if (projectId) body.project = { id: projectId };
+    const result = await client.post<{ id: number }>("/timesheet/entry", body);
+    console.log(`[Handler] Created timesheet entry: id=${result.value.id}, hours=${hours}, date=${cleanDate}`);
   }
 
   // Generate a project invoice to the customer based on logged hours
@@ -225,13 +212,6 @@ export async function handleCreateTimesheet(
       const invoiceId = invoiceResult.value.id;
       console.log(`[Handler] Created project invoice: id=${invoiceId}, amount=${invoiceAmount}`);
       ctx.registerInvoice(customerName, invoiceId);
-
-      try {
-        await client.put(`/invoice/${invoiceId}/:send?sendType=EMAIL&overrideEmailAddress=faktura@example.no`, {});
-        console.log(`[Handler] Sent invoice ${invoiceId}`);
-      } catch {
-        console.warn(`[Handler] Could not send invoice ${invoiceId}`);
-      }
     } catch (err) {
       console.warn(`[Handler] Invoice generation failed: ${err instanceof Error ? err.message : String(err)}`);
     }

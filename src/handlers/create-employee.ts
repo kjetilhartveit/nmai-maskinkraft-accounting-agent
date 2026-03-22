@@ -4,7 +4,6 @@ import type { SequenceContext } from "../lib/sequence-context.js";
 import {
   getDefaultDepartmentId,
   getCompanyId,
-  setCompanyId,
   findEmployeeByEmail,
   findEmployeeByName,
 } from "../lib/tripletex-helpers.js";
@@ -228,10 +227,6 @@ export async function handleCreateEmployee(
     }
     const empId = result.value.id;
     console.log(`[Handler] Created employee: id=${empId}`);
-
-    if (result.value.companyId) {
-      setCompanyId(result.value.companyId);
-    }
 
     const createdAsExtended = hasEmail;
 

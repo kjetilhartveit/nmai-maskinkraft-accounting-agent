@@ -15,11 +15,6 @@ interface Product {
   name: string;
 }
 
-let vatTypeBroken = false;
-
-export function resetProductCache(): void {
-  vatTypeBroken = false;
-}
 
 function buildProductBody(
   entity: Record<string, unknown>,
@@ -96,18 +91,14 @@ export async function handleCreateProduct(
   const NO_VAT_FALLBACK_ID = 6;
 
   async function postProductWithFallback(body: Record<string, unknown>): Promise<Product> {
-    if (vatTypeBroken) {
-      delete body.vatType;
-    }
     try {
       const result = await client.post<Product>("/product", body);
       return result.value;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       const isVatError = msg.includes("vatTypeId") || msg.includes("mva-kode") || msg.includes("vatType");
-      if (isVatError && !vatTypeBroken) {
-        console.warn(`[Handler] vatType rejected, retrying without vatType for all products`);
-        vatTypeBroken = true;
+      if (isVatError) {
+        console.warn(`[Handler] vatType rejected, retrying without vatType`);
         delete body.vatType;
         try {
           const result = await client.post<Product>("/product", body);

@@ -192,21 +192,11 @@ export async function handleReversePayment(
   );
 }
 
-let cachedPaymentTypeId: number | null = null;
-
 async function getPaymentTypeId(client: TripletexClient): Promise<number> {
-  if (cachedPaymentTypeId) return cachedPaymentTypeId;
   const result = await client.list<{ id: number; description: string }>("/invoice/paymentType", {
     from: "0",
     count: "20",
   });
-  if (result.values.length > 0) {
-    cachedPaymentTypeId = result.values[0].id;
-    return cachedPaymentTypeId;
-  }
+  if (result.values.length > 0) return result.values[0].id;
   throw new Error("No payment types available");
-}
-
-export function resetReversePaymentCache(): void {
-  cachedPaymentTypeId = null;
 }

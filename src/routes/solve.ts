@@ -3,21 +3,6 @@ import { SolveRequestSchema } from "../types/index.js";
 import type { ApiCallLog, ParsedTaskSequence, SolveResponse, TaskType } from "../types/index.js";
 import { TripletexClient } from "../lib/tripletex-client.js";
 import { executeTaskSequence } from "../handlers/index.js";
-import { resetCaches } from "../lib/tripletex-helpers.js";
-import { resetPaymentCache } from "../handlers/create-payment.js";
-import { resetTravelExpenseCache } from "../handlers/create-travel-expense.js";
-import { resetVoucherCache } from "../handlers/create-voucher.js";
-import { resetProductCache } from "../handlers/create-product.js";
-import { resetPayrollCache } from "../handlers/create-payroll.js";
-import { resetSupplierInvoiceCache } from "../handlers/create-supplier-invoice.js";
-import { resetDimensionCache } from "../handlers/create-dimension.js";
-import { resetGenericHandlerCache } from "../handlers/generic-handler.js";
-import { resetYearEndClosingCache } from "../handlers/year-end-closing.js";
-import { resetMonthlyClosingCache } from "../handlers/monthly-closing.js";
-import { resetLedgerAuditCache } from "../handlers/ledger-audit.js";
-import { resetFxPaymentCache } from "../handlers/fx-payment.js";
-import { resetReversePaymentCache } from "../handlers/reverse-payment.js";
-import { resetBankReconciliationCache } from "../handlers/bank-reconciliation.js";
 import { logSolveRequest, logRawRequest } from "../lib/solve-logger.js";
 import { config } from "../lib/config.js";
 import { createSolveTrace } from "../lib/solve-trace.js";
@@ -60,23 +45,6 @@ solveRouter.post("/solve", async (c) => {
   let prompt = "";
   let filesCount = 0;
   let baseUrl = "";
-
-  // Reset all caches
-  resetCaches();
-  resetPaymentCache();
-  resetTravelExpenseCache();
-  resetVoucherCache();
-  resetProductCache();
-  resetPayrollCache();
-  resetSupplierInvoiceCache();
-  resetDimensionCache();
-  resetGenericHandlerCache();
-  resetYearEndClosingCache();
-  resetMonthlyClosingCache();
-  resetLedgerAuditCache();
-  resetFxPaymentCache();
-  resetReversePaymentCache();
-  resetBankReconciliationCache();
 
   try {
     const rawBody = await c.req.json();

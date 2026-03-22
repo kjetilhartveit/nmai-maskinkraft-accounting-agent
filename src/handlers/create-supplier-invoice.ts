@@ -8,14 +8,10 @@ interface LedgerAccount {
   number: number;
 }
 
-const accountCache = new Map<number, LedgerAccount>();
-
 async function findAccount(
   client: TripletexClient,
   accountNumber: number,
 ): Promise<LedgerAccount> {
-  const cached = accountCache.get(accountNumber);
-  if (cached) return cached;
   const result = await client.list<LedgerAccount>("/ledger/account", {
     number: String(accountNumber),
     from: "0",
@@ -23,12 +19,7 @@ async function findAccount(
   });
   const account = result.values[0];
   if (!account) throw new Error(`Ledger account ${accountNumber} not found`);
-  accountCache.set(accountNumber, account);
   return account;
-}
-
-export function resetSupplierInvoiceCache(): void {
-  accountCache.clear();
 }
 
 /**
@@ -127,14 +118,14 @@ export async function handleCreateSupplierInvoice(
     vat = 0;
   }
 
-  // 3. Look up accounts: expense + AP (VAT handled via vatType)
-  const accountNumbers = [expenseAccountNumber, 2400];
+  // 3. Look up accounts: expense + input VAT (2710) + accounts payable (2400)
+  const accountNumbers = [expenseAccountNumber, 2710, 2400];
   const accounts = await Promise.all(accountNumbers.map((n) => findAccount(client, n)));
 
   const expenseAccount = accounts[0];
-  const payableAccount = accounts[1];
+  const vatAccount = accounts[1];
+  const payableAccount = accounts[2];
 
-  // 4. Build voucher postings — use vatType for automatic VAT handling
   const voucherDate = invoiceDate && /^\d{4}-\d{2}-\d{2}$/.test(invoiceDate) ? invoiceDate : today();
   const desc = invoiceNumber
     ? `Leverandørfaktura ${invoiceNumber} ${supplierName}`
@@ -142,61 +133,45 @@ export async function handleCreateSupplierInvoice(
 
   const gross = net + vat;
 
-  // Expense posting with vatType lets Tripletex auto-split net/VAT
-  // vatType 1 = "Fradrag inngående avgift, høy sats" (25% input VAT)
-  const vatTypeMap: Record<number, number> = { 25: 1, 15: 11, 12: 13, 0: 0 };
-  const resolvedVatRate = vatRate > 20 ? 25 : vatRate > 13 ? 15 : vatRate > 5 ? 12 : 0;
-  const vatTypeId = vatTypeMap[resolvedVatRate] ?? 1;
-
+  // Explicit 3-line postings: expense (net) + input VAT + AP credit (gross)
   const postings: Record<string, unknown>[] = [
     {
       row: 1,
       account: { id: expenseAccount.id },
       date: voucherDate,
-      amountGross: gross,
-      amountGrossCurrency: gross,
+      amountGross: net,
+      amountGrossCurrency: net,
       description: description || "Kostnad",
-      ...(vat > 0 ? { vatType: { id: vatTypeId } } : {}),
-    },
-    {
-      row: 2,
-      account: { id: payableAccount.id },
-      date: voucherDate,
-      amountGross: -gross,
-      amountGrossCurrency: -gross,
-      description: "Leverandørgjeld",
-      supplier: { id: supplierId },
     },
   ];
 
-  // 5. Create voucher with vendor invoice number for traceability
-  const body: Record<string, unknown> = {
+  if (vat > 0) {
+    postings.push({
+      row: 2,
+      account: { id: vatAccount.id },
+      date: voucherDate,
+      amountGross: vat,
+      amountGrossCurrency: vat,
+      description: "Inngående mva",
+    });
+  }
+
+  postings.push({
+    row: vat > 0 ? 3 : 2,
+    account: { id: payableAccount.id },
+    date: voucherDate,
+    amountGross: -gross,
+    amountGrossCurrency: -gross,
+    description: "Leverandørgjeld",
+    supplier: { id: supplierId },
+  });
+
+  const result = await client.post<{ id: number }>("/ledger/voucher", {
     date: voucherDate,
     description: desc,
     postings,
-  };
-  if (invoiceNumber) body.vendorInvoiceNumber = invoiceNumber;
-  if (invoiceNumber) body.externalVoucherNumber = invoiceNumber;
-  if (supplierId) body.supplier = { id: supplierId };
-
-  try {
-    const result = await client.post<{ id: number }>("/ledger/voucher", body);
-    console.log(
-      `[Handler] Created supplier invoice voucher: id=${result.value.id} (net=${net}, vat=${vat}, gross=${gross})`,
-    );
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    // If 422, try without supplier reference on the payable posting (some sandbox configs reject it)
-    if (msg.includes("422")) {
-      console.warn("[Handler] Voucher with supplier ref failed, retrying without supplier ref");
-      const lastPosting = postings[postings.length - 1];
-      delete lastPosting.supplier;
-      const retryResult = await client.post<{ id: number }>("/ledger/voucher", body);
-      console.log(
-        `[Handler] Created supplier invoice voucher (no supplier ref): id=${retryResult.value.id}`,
-      );
-    } else {
-      throw err;
-    }
-  }
+  });
+  console.log(
+    `[Handler] Created supplier invoice voucher: id=${result.value.id} (net=${net}, vat=${vat}, gross=${gross})`,
+  );
 }

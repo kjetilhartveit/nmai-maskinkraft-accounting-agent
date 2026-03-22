@@ -28,8 +28,6 @@ interface VatType {
   percentage?: number;
 }
 
-let cachedVatTypes: VatType[] | null = null;
-
 interface ProductUnit {
   id: number;
   name: string;
@@ -40,130 +38,81 @@ interface Product {
   name: string;
 }
 
-let cachedDefaultDepartmentId: number | null = null;
-let cachedNokCurrencyId: number | null = null;
-let cachedProductVatTypeId: number | null = null;
-let cachedProductUnitId: number | null = null;
-let cachedCompanyId: number | null = null;
-
-export function setCompanyId(id: number): void {
-  cachedCompanyId = id;
-}
-
 export async function getCompanyId(
   client: TripletexClient,
 ): Promise<number> {
-  if (cachedCompanyId) return cachedCompanyId;
   const result = await client.list<{ companyId: number }>("/employee", {
     from: "0",
     count: "1",
   });
   const emp = result.values?.[0];
-  if (emp?.companyId) {
-    cachedCompanyId = emp.companyId;
-    return emp.companyId;
-  }
+  if (emp?.companyId) return emp.companyId;
   throw new Error("Could not determine company ID");
 }
 
 export async function getDefaultDepartmentId(
   client: TripletexClient,
 ): Promise<number> {
-  if (cachedDefaultDepartmentId !== null) return cachedDefaultDepartmentId;
-
   const result = await client.list<Department>("/department", {
     from: "0",
     count: "1",
   });
 
-  if (result.values.length > 0) {
-    cachedDefaultDepartmentId = result.values[0].id;
-    return cachedDefaultDepartmentId;
-  }
+  if (result.values.length > 0) return result.values[0].id;
 
   const created = await client.post<Department>("/department", {
     name: "Hovedavdeling",
   });
-  cachedDefaultDepartmentId = created.value.id;
-  return cachedDefaultDepartmentId;
+  return created.value.id;
 }
 
 export async function getDefaultCurrencyId(
   client: TripletexClient,
 ): Promise<number> {
-  if (cachedNokCurrencyId !== null) return cachedNokCurrencyId;
-
   const result = await client.list<Currency>("/currency", {
     code: "NOK",
     from: "0",
     count: "1",
   });
 
-  if (result.values.length > 0) {
-    cachedNokCurrencyId = result.values[0].id;
-    return cachedNokCurrencyId;
-  }
-
-  // Fallback: id 1 is typically NOK
-  cachedNokCurrencyId = 1;
-  return cachedNokCurrencyId;
+  if (result.values.length > 0) return result.values[0].id;
+  return 1;
 }
 
 async function loadVatTypes(client: TripletexClient): Promise<VatType[]> {
-  if (cachedVatTypes !== null) return cachedVatTypes;
   const result = await client.list<VatType>("/ledger/vatType", {
     from: "0",
     count: "100",
   });
-  cachedVatTypes = result.values;
-  return cachedVatTypes;
+  return result.values;
 }
 
 export async function getDefaultProductVatTypeId(
   client: TripletexClient,
 ): Promise<number> {
-  if (cachedProductVatTypeId !== null) return cachedProductVatTypeId;
-
   const vatTypes = await loadVatTypes(client);
 
   if (vatTypes.length > 0) {
     const code3 = vatTypes.find((v) => v.number === "3");
-    if (code3) {
-      cachedProductVatTypeId = code3.id;
-      console.log(`[Helper] Using VAT type id=${code3.id} (code 3)`);
-      return cachedProductVatTypeId;
-    }
+    if (code3) return code3.id;
 
     const outgoingHigh = vatTypes.find(
       (v) =>
         v.name?.toLowerCase().includes("utgående") &&
         v.name?.toLowerCase().includes("høy"),
     );
-    if (outgoingHigh) {
-      cachedProductVatTypeId = outgoingHigh.id;
-      console.log(`[Helper] Using VAT type id=${outgoingHigh.id} (${outgoingHigh.name})`);
-      return cachedProductVatTypeId;
-    }
+    if (outgoingHigh) return outgoingHigh.id;
 
     const anyOutgoing = vatTypes.find((v) =>
       v.name?.toLowerCase().includes("utgående"),
     );
-    if (anyOutgoing) {
-      cachedProductVatTypeId = anyOutgoing.id;
-      console.log(`[Helper] Using VAT type id=${anyOutgoing.id} (${anyOutgoing.name})`);
-      return cachedProductVatTypeId;
-    }
+    if (anyOutgoing) return anyOutgoing.id;
 
-    console.log(
-      `[Helper] Available VAT types: ${vatTypes.map((v) => `${v.id}:${v.number}:${v.name}`).join(", ")}`,
-    );
-    cachedProductVatTypeId = vatTypes[0].id;
-    return cachedProductVatTypeId;
+    return vatTypes[0].id;
   }
 
   console.warn("[Helper] No VAT types found, defaulting to id=3");
-  cachedProductVatTypeId = 3;
-  return cachedProductVatTypeId;
+  return 3;
 }
 
 /**
@@ -235,20 +184,13 @@ export async function findVatTypeIdByRate(
 export async function getDefaultProductUnitId(
   client: TripletexClient,
 ): Promise<number> {
-  if (cachedProductUnitId !== null) return cachedProductUnitId;
-
   const result = await client.list<ProductUnit>("/product/unit", {
     from: "0",
     count: "1",
   });
 
-  if (result.values.length > 0) {
-    cachedProductUnitId = result.values[0].id;
-    return cachedProductUnitId;
-  }
-
-  cachedProductUnitId = 1;
-  return cachedProductUnitId;
+  if (result.values.length > 0) return result.values[0].id;
+  return 1;
 }
 
 export async function findEmployeeByName(
@@ -317,18 +259,6 @@ export async function findProductByName(
   return result.values[0] ?? null;
 }
 
-/**
- * Warm the product-creation caches (department, unit, vatType) in a single
- * parallel batch so that subsequent findOrCreateProduct calls hit cache.
- */
-export async function warmProductCaches(client: TripletexClient): Promise<void> {
-  await Promise.all([
-    getDefaultDepartmentId(client),
-    getDefaultProductUnitId(client),
-    getDefaultProductVatTypeId(client),
-  ]);
-}
-
 export async function findOrCreateProduct(
   client: TripletexClient,
   name: string,
@@ -385,21 +315,9 @@ export function daysFromNow(days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-export function resetCaches(): void {
-  cachedDefaultDepartmentId = null;
-  cachedNokCurrencyId = null;
-  cachedProductVatTypeId = null;
-  cachedProductUnitId = null;
-  cachedVatTypes = null;
-  cachedCompanyId = null;
-  bankAccountConfigured = false;
-  cachedProjectManagerId = null;
-}
 
 // === Bank Account Configuration ===
 // Invoice creation requires a configured bank account on ledger account 1920
-
-let bankAccountConfigured = false;
 
 interface LedgerAccount {
   id: number;
@@ -412,9 +330,6 @@ interface LedgerAccount {
 export async function ensureBankAccountConfigured(
   client: TripletexClient,
 ): Promise<void> {
-  if (bankAccountConfigured) return;
-
-  // Find the bank account (1920 - Bankinnskudd)
   const accounts = await client.list<LedgerAccount>("/ledger/account", {
     isBankAccount: "true",
     from: "0",
@@ -427,18 +342,14 @@ export async function ensureBankAccountConfigured(
 
   if (!bankAccount) {
     console.log("[Helper] No bank account found to configure");
-    bankAccountConfigured = true; // Don't retry
     return;
   }
 
-  // Check if already configured
   if (bankAccount.bankAccountNumber && bankAccount.bankAccountNumber.length > 0) {
     console.log(`[Helper] Bank account already configured: ${bankAccount.bankAccountNumber}`);
-    bankAccountConfigured = true;
     return;
   }
 
-  // Configure with a valid Norwegian bank account number (MOD11 validated)
   console.log(`[Helper] Configuring bank account ${bankAccount.number}...`);
   try {
     await client.put(`/ledger/account/${bankAccount.id}`, {
@@ -446,13 +357,11 @@ export async function ensureBankAccountConfigured(
       version: bankAccount.version,
       number: bankAccount.number,
       name: bankAccount.name,
-      bankAccountNumber: "15032686130", // Valid Norwegian MOD11 number
+      bankAccountNumber: "15032686130",
     });
     console.log("[Helper] Bank account configured successfully");
-    bankAccountConfigured = true;
   } catch (err) {
     console.log("[Helper] Failed to configure bank account:", err);
-    bankAccountConfigured = true; // Don't retry
   }
 }
 
@@ -460,23 +369,75 @@ export async function ensureBankAccountConfigured(
 // Projects require an employee with project manager entitlements
 // The first employee in the sandbox typically has these rights
 
-let cachedProjectManagerId: number | null = null;
-
 export async function getProjectManagerEmployeeId(
   client: TripletexClient,
 ): Promise<number | null> {
-  if (cachedProjectManagerId !== null) return cachedProjectManagerId;
-
   const result = await client.list<Employee>("/employee", {
     from: "0",
     count: "1",
   });
 
   if (result.values.length > 0) {
-    cachedProjectManagerId = result.values[0].id;
-    console.log(`[Helper] Using project manager employee id=${cachedProjectManagerId}`);
-    return cachedProjectManagerId;
+    console.log(`[Helper] Using project manager employee id=${result.values[0].id}`);
+    return result.values[0].id;
   }
 
   return null;
+}
+
+// === Activity ===
+
+interface Activity {
+  id: number;
+  name: string;
+}
+
+async function loadActivities(client: TripletexClient): Promise<Activity[]> {
+  const result = await client.list<Activity>("/activity", { from: "0", count: "1000" });
+  return result.values;
+}
+
+/**
+ * Find an existing activity by name or create one. Handles the common sandbox
+ * scenario where activity names persist across test runs.
+ */
+export async function findOrCreateActivity(
+  client: TripletexClient,
+  name: string,
+): Promise<number> {
+  const activities = await loadActivities(client);
+  const match = activities.find(
+    (a) => a.name?.toLowerCase() === name.toLowerCase(),
+  );
+  if (match) {
+    console.log(`[Helper] Found existing activity: "${name}" id=${match.id}`);
+    return match.id;
+  }
+
+  try {
+    const result = await client.post<Activity>("/activity", {
+      name: name.slice(0, 255),
+      activityType: "PROJECT_GENERAL_ACTIVITY",
+    });
+    console.log(`[Helper] Created activity: "${name}" id=${result.value.id}`);
+    return result.value.id;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes("422") || msg.includes("i bruk") || msg.includes("in use")) {
+      const refreshed = await loadActivities(client);
+      const retry = refreshed.find(
+        (a) => a.name?.toLowerCase() === name.toLowerCase(),
+      );
+      if (retry) {
+        console.log(`[Helper] Found activity on retry: "${name}" id=${retry.id}`);
+        return retry.id;
+      }
+      if (refreshed.length > 0) {
+        const fallback = refreshed[0];
+        console.log(`[Helper] Using fallback activity: "${fallback.name}" id=${fallback.id}`);
+        return fallback.id;
+      }
+    }
+    throw new Error(`Cannot find or create activity "${name}": ${msg}`);
+  }
 }

@@ -13,17 +13,7 @@ interface CostCategory {
   description: string;
 }
 
-let cachedPaymentTypeId: number | null = null;
-let cachedCostCategories: CostCategory[] | null = null;
-
-export function resetTravelExpenseCache(): void {
-  cachedPaymentTypeId = null;
-  cachedCostCategories = null;
-}
-
 async function getDefaultPaymentTypeId(client: TripletexClient): Promise<number> {
-  if (cachedPaymentTypeId !== null) return cachedPaymentTypeId;
-
   const result = await client.list<PaymentType>("/travelExpense/paymentType", {
     from: "0",
     count: "10",
@@ -36,27 +26,21 @@ async function getDefaultPaymentTypeId(client: TripletexClient): Promise<number>
         p.name?.toLowerCase().includes("kort") ||
         p.name?.toLowerCase().includes("firma"),
     );
-    cachedPaymentTypeId = companyCard?.id ?? result.values[0].id;
-    return cachedPaymentTypeId;
+    return companyCard?.id ?? result.values[0].id;
   }
 
-  cachedPaymentTypeId = 1;
-  return cachedPaymentTypeId;
+  return 1;
 }
 
 async function getCostCategories(client: TripletexClient): Promise<CostCategory[]> {
-  if (cachedCostCategories !== null) return cachedCostCategories;
-
   try {
     const result = await client.list<CostCategory>("/travelExpense/costCategory", {
       from: "0",
       count: "100",
     });
-    cachedCostCategories = result.values;
-    return cachedCostCategories;
+    return result.values;
   } catch {
-    cachedCostCategories = [];
-    return cachedCostCategories;
+    return [];
   }
 }
 

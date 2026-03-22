@@ -78,11 +78,7 @@ interface LedgerAccount {
   number: number;
 }
 
-const accountCache = new Map<number, LedgerAccount>();
-
 async function findAccount(client: TripletexClient, accountNumber: number): Promise<LedgerAccount> {
-  const cached = accountCache.get(accountNumber);
-  if (cached) return cached;
   const result = await client.list<LedgerAccount>("/ledger/account", {
     number: String(accountNumber),
     from: "0",
@@ -90,12 +86,7 @@ async function findAccount(client: TripletexClient, accountNumber: number): Prom
   });
   const account = result.values[0];
   if (!account) throw new Error(`Ledger account ${accountNumber} not found`);
-  accountCache.set(accountNumber, account);
   return account;
-}
-
-export function resetPayrollCache(): void {
-  accountCache.clear();
 }
 
 async function createPayrollVoucher(

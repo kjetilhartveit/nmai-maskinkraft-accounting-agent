@@ -1,7 +1,7 @@
 import type { TripletexClient } from "../lib/tripletex-client.js";
 import type { ParsedTask } from "../types/index.js";
 import type { SequenceContext } from "../lib/sequence-context.js";
-import { today, getDefaultDepartmentId, getProjectManagerEmployeeId } from "../lib/tripletex-helpers.js";
+import { today, getDefaultDepartmentId, getProjectManagerEmployeeId, findOrCreateActivity } from "../lib/tripletex-helpers.js";
 
 interface Posting {
   account: { id: number; number: number; name: string };
@@ -116,15 +116,7 @@ export async function handleLedgerAnalysis(
         isInternal: true,
       });
       console.log(`[Handler] Created generic analysis project ${i}: id=${project.value.id}`);
-
-      try {
-        await client.post("/activity", {
-          name,
-          activityType: "PROJECT_GENERAL_ACTIVITY",
-        });
-      } catch {
-        console.warn(`[Handler] Could not create activity for project ${project.value.id}`);
-      }
+      await findOrCreateActivity(client, name);
     }
     return;
   }
@@ -141,15 +133,6 @@ export async function handleLedgerAnalysis(
     });
     console.log(`[Handler] Created analysis project: ${projectName} (id=${project.value.id})`);
     ctx.registerProject(projectName, project.value.id);
-
-    try {
-      await client.post("/activity", {
-        name: projectName.slice(0, 255),
-        activityType: "PROJECT_GENERAL_ACTIVITY",
-      });
-      console.log(`[Handler] Created activity: ${projectName}`);
-    } catch (err) {
-      console.warn(`[Handler] Could not create activity: ${err instanceof Error ? err.message : err}`);
-    }
+    await findOrCreateActivity(client, projectName);
   }
 }

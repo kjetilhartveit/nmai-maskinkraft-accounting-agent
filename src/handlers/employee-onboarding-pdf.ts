@@ -95,24 +95,34 @@ export async function handleEmployeeOnboardingPdf(
   // Create employment record if start date provided
   if (startDate) {
     try {
+      // Employment requires division (virksomhet) reference
+      let divisionId: number | undefined;
+      try {
+        const divs = await client.list<{ id: number }>("/division", { from: "0", count: "1" });
+        divisionId = divs.values[0]?.id;
+      } catch { /* division lookup optional */ }
+
       const employmentBody: Record<string, unknown> = {
         employee: { id: employeeId },
         startDate,
-        
       };
+      if (divisionId) employmentBody.division = { id: divisionId };
 
       const empResult = await client.post<{ id: number }>("/employee/employment", employmentBody);
-      console.log(`[Handler] Created employment id=${empResult.value.id} starting ${startDate}, pct=${employmentPercentage}`);
+      console.log(`[Handler] Created employment id=${empResult.value.id} starting ${startDate}`);
 
-      if (position) {
+      // Set employment details: salary, percentage, position, occupation code
+      if (salary > 0 || employmentPercentage !== 100 || position) {
         try {
           const detailsBody: Record<string, unknown> = {
             employment: { id: empResult.value.id },
             date: startDate,
           };
-          detailsBody.occupationCode = { nameNO: position };
+          if (salary > 0) detailsBody.annualSalary = salary;
+          if (employmentPercentage) detailsBody.percentageOfFullTimeEquivalent = employmentPercentage;
+          if (position) detailsBody.occupationCode = { nameNO: position };
           await client.post("/employee/employment/details", detailsBody);
-          console.log(`[Handler] Created employment details: position=${position}`);
+          console.log(`[Handler] Created employment details: salary=${salary}, pct=${employmentPercentage}, position=${position}`);
         } catch {
           console.warn(`[Handler] Could not set employment details`);
         }
@@ -124,47 +134,4 @@ export async function handleEmployeeOnboardingPdf(
       }
     }
   }
-
-  // If salary info is provided, create payroll voucher
-  if (salary > 0) {
-    try {
-      const [salaryAcc, taxAcc, bankAcc] = await Promise.all([
-        findAccountByNumber(client, 5000),
-        findAccountByNumber(client, 2780),
-        findAccountByNumber(client, 1920),
-      ]);
-
-      const employerTax = Math.round(salary * 0.141);
-      const total = salary + employerTax;
-      const today = new Date().toISOString().slice(0, 10);
-      const empName = `${firstName} ${lastName}`.trim();
-
-      await client.post("/ledger/voucher", {
-        date: today,
-        description: `Lønn ${empName}`,
-        postings: [
-          { row: 1, account: { id: salaryAcc.id }, date: today, amountGross: salary, amountGrossCurrency: salary, description: "Lønn" },
-          { row: 2, account: { id: taxAcc.id }, date: today, amountGross: employerTax, amountGrossCurrency: employerTax, description: "Arbeidsgiveravgift" },
-          { row: 3, account: { id: bankAcc.id }, date: today, amountGross: -total, amountGrossCurrency: -total, description: "Utbetaling" },
-        ],
-      });
-      console.log(`[Handler] Created salary voucher for onboarded employee`);
-    } catch (err) {
-      console.warn(`[Handler] Salary voucher failed: ${err}`);
-    }
-  }
-}
-
-async function findAccountByNumber(
-  client: TripletexClient,
-  accountNumber: number,
-): Promise<{ id: number; number: number }> {
-  const result = await client.list<{ id: number; number: number }>("/ledger/account", {
-    number: String(accountNumber),
-    from: "0",
-    count: "1",
-  });
-  const account = result.values[0];
-  if (!account) throw new Error(`Ledger account ${accountNumber} not found`);
-  return account;
 }

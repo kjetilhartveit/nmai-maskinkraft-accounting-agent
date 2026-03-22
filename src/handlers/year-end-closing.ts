@@ -8,8 +8,6 @@ interface LedgerAccount {
   number: number;
 }
 
-const accountCache = new Map<number, LedgerAccount>();
-
 const ACCOUNT_FALLBACKS: Record<number, number[]> = {
   6030: [6020, 6010, 6000],
   1209: [1200],
@@ -25,16 +23,12 @@ async function findAccountRaw(
   accountNumber: number,
 ): Promise<LedgerAccount | null> {
   if (!accountNumber || isNaN(accountNumber) || accountNumber <= 0) return null;
-  const cached = accountCache.get(accountNumber);
-  if (cached) return cached;
   const result = await client.list<LedgerAccount>("/ledger/account", {
     number: String(accountNumber),
     from: "0",
     count: "1",
   });
-  const account = result.values[0];
-  if (account) accountCache.set(accountNumber, account);
-  return account ?? null;
+  return result.values[0] ?? null;
 }
 
 async function findAccount(
@@ -50,17 +44,12 @@ async function findAccount(
       const acct = await findAccountRaw(client, fb);
       if (acct) {
         console.log(`[Handler] Account ${accountNumber} not found, using fallback ${fb}`);
-        accountCache.set(accountNumber, acct);
         return acct;
       }
     }
   }
 
   throw new Error(`Ledger account ${accountNumber} not found (no fallbacks available)`);
-}
-
-export function resetYearEndClosingCache(): void {
-  accountCache.clear();
 }
 
 interface AssetEntry {
@@ -226,7 +215,6 @@ export async function handleYearEndClosing(
   let totalDepreciation = 0;
 
   if (separateVouchers) {
-    // Each asset gets its own voucher
     for (const g of depreciationGroups) {
       await createVoucher(g.description, [{
         debitAcctNum: g.debitAcctNum,
@@ -236,7 +224,6 @@ export async function handleYearEndClosing(
       }]);
       totalDepreciation += g.amount;
     }
-    // Prepaid as separate voucher
     if (prepaidPostings.length > 0) {
       await createVoucher("Tilbakeføring forskuddsbetalt", prepaidPostings.map(p => ({
         debitAcctNum: p.debitAcctNum,
@@ -245,8 +232,21 @@ export async function handleYearEndClosing(
         postingDesc: p.description,
       })));
     }
+    if (taxRate > 0) {
+      const estimatedIncome = totalDepreciation > 0 ? Math.round(totalDepreciation * 2) : 100000;
+      const taxAmount = Math.round(estimatedIncome * taxRate);
+      const effectiveDebit = isValidAccount(taxDebitAcct) ? taxDebitAcct : 8300;
+      const effectiveCredit = isValidAccount(taxCreditAcct) ? taxCreditAcct : 2500;
+      await createVoucher(`Skatteavsetning ${fiscalYear}`, [{
+        debitAcctNum: effectiveDebit,
+        creditAcctNum: effectiveCredit,
+        amount: taxAmount,
+        postingDesc: "Skattekostnad",
+      }]);
+    }
   } else {
-    // Everything in one voucher
+    // Everything in one voucher — depreciation + prepaid + tax provision
+    totalDepreciation = depreciationGroups.reduce((s, g) => s + g.amount, 0);
     const allEntries = [
       ...depreciationGroups.map(g => ({
         debitAcctNum: g.debitAcctNum,
@@ -261,24 +261,23 @@ export async function handleYearEndClosing(
         postingDesc: p.description,
       })),
     ];
-    totalDepreciation = depreciationGroups.reduce((s, g) => s + g.amount, 0);
+
+    if (taxRate > 0) {
+      const estimatedIncome = totalDepreciation > 0 ? Math.round(totalDepreciation * 2) : 100000;
+      const taxAmount = Math.round(estimatedIncome * taxRate);
+      const effectiveDebit = isValidAccount(taxDebitAcct) ? taxDebitAcct : 8300;
+      const effectiveCredit = isValidAccount(taxCreditAcct) ? taxCreditAcct : 2500;
+      allEntries.push({
+        debitAcctNum: effectiveDebit,
+        creditAcctNum: effectiveCredit,
+        amount: taxAmount,
+        postingDesc: "Skattekostnad",
+      });
+    }
+
     if (allEntries.length > 0) {
       await createVoucher(`Årsavslutning ${fiscalYear}`, allEntries);
     }
-  }
-
-  // 3. Tax provision
-  if (taxRate > 0) {
-    const estimatedIncome = totalDepreciation > 0 ? Math.round(totalDepreciation * 2) : 100000;
-    const taxAmount = Math.round(estimatedIncome * taxRate);
-    const effectiveDebit = isValidAccount(taxDebitAcct) ? taxDebitAcct : 8300;
-    const effectiveCredit = isValidAccount(taxCreditAcct) ? taxCreditAcct : 2500;
-    await createVoucher(`Skatteavsetning ${fiscalYear}`, [{
-      debitAcctNum: effectiveDebit,
-      creditAcctNum: effectiveCredit,
-      amount: taxAmount,
-      postingDesc: "Skattekostnad",
-    }]);
   }
 
   // Fallback if nothing was created

@@ -7,6 +7,7 @@ import {
   findEmployeeByEmail,
   getDefaultDepartmentId,
   getProjectManagerEmployeeId,
+  findOrCreateActivity,
   today,
   daysFromNow,
   ensureBankAccountConfigured,
@@ -126,42 +127,7 @@ export async function handleProjectLifecycle(
   ctx.registerProject(projectName, projectId);
 
   // 4. Find or create project activity
-  let defaultActivityId: number | null = null;
-  const activityName = projectName;
-  try {
-    const existing = await client.list<{ id: number; name: string }>("/activity", {
-      name: activityName,
-      from: "0",
-      count: "5",
-    });
-    const match = existing.values.find(
-      (a) => a.name?.toLowerCase() === activityName.toLowerCase(),
-    );
-    if (match) {
-      defaultActivityId = match.id;
-    }
-  } catch { /* search not available */ }
-
-  if (!defaultActivityId) {
-    try {
-      const actResult = await client.post<{ id: number }>("/activity", {
-        name: activityName.slice(0, 255),
-        activityType: "PROJECT_GENERAL_ACTIVITY",
-      });
-      defaultActivityId = actResult.value.id;
-      console.log(`[Handler] Created activity: id=${defaultActivityId}`);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      if (msg.includes("422") || msg.includes("i bruk") || msg.includes("in use")) {
-        try {
-          const retry = await client.list<{ id: number; name: string }>("/activity", { from: "0", count: "100" });
-          const match = retry.values.find((a) => a.name?.toLowerCase() === activityName.toLowerCase());
-          if (match) defaultActivityId = match.id;
-        } catch { /* ignore */ }
-      }
-      if (!defaultActivityId) console.warn(`[Handler] Activity creation failed: ${msg}`);
-    }
-  }
+  const defaultActivityId = await findOrCreateActivity(client, projectName);
 
   // 5. Register hours for each employee
   let totalHoursRevenue = 0;
@@ -180,13 +146,16 @@ export async function handleProjectLifecycle(
     }
     if (!empId && emp.firstName && emp.lastName) {
       try {
-        const created = await client.post<{ id: number }>("/employee", {
+        const email = emp.email || `${emp.firstName.toLowerCase()}.${emp.lastName.toLowerCase()}@example.com`;
+        const empBody: Record<string, unknown> = {
           firstName: emp.firstName,
           lastName: emp.lastName,
-          email: emp.email,
           dateOfBirth: "1990-01-01",
-          startDate: today(),
-        });
+          department: { id: departmentId },
+          email,
+          userType: "EXTENDED",
+        };
+        const created = await client.post<{ id: number }>("/employee", empBody);
         empId = created.value.id;
         console.log(`[Handler] Created employee: ${emp.firstName} ${emp.lastName} (id=${empId})`);
       } catch (err) {
@@ -195,33 +164,32 @@ export async function handleProjectLifecycle(
     }
     if (!empId) empId = pmId;
 
-    const entryDate = today();
+    const dateCandidates = [today(), daysFromNow(1 + i), daysFromNow(5 + i), daysFromNow(10 + i)];
     const timesheetBody: Record<string, unknown> = {
       employee: { id: empId },
       project: { id: projectId },
-      date: entryDate,
+      activity: { id: defaultActivityId },
       hours: emp.hours,
     };
-    if (defaultActivityId) timesheetBody.activity = { id: defaultActivityId };
 
-    try {
-      await client.post("/timesheet/entry", timesheetBody);
-      console.log(`[Handler] Registered ${emp.hours}h for ${emp.firstName} ${emp.lastName}`);
-      totalHoursRevenue += emp.hours * (emp.hourlyRate ?? 0);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      if (msg.includes("409") || msg.includes("allerede")) {
-        timesheetBody.date = daysFromNow(1);
-        try {
-          await client.post("/timesheet/entry", timesheetBody);
-          console.log(`[Handler] Registered ${emp.hours}h on alternate date`);
-          totalHoursRevenue += emp.hours * (emp.hourlyRate ?? 0);
-        } catch {
-          console.warn(`[Handler] Timesheet retry also failed`);
-        }
-      } else {
+    let timesheetCreated = false;
+    for (const date of dateCandidates) {
+      timesheetBody.date = date;
+      try {
+        await client.post("/timesheet/entry", timesheetBody);
+        console.log(`[Handler] Registered ${emp.hours}h for ${emp.firstName} ${emp.lastName} on ${date}`);
+        totalHoursRevenue += emp.hours * (emp.hourlyRate ?? 0);
+        timesheetCreated = true;
+        break;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (msg.includes("409") || msg.includes("allerede")) continue;
         console.warn(`[Handler] Timesheet entry failed: ${msg}`);
+        break;
       }
+    }
+    if (!timesheetCreated) {
+      console.warn(`[Handler] Could not create timesheet for ${emp.firstName}`);
     }
   }
 

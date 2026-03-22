@@ -8,26 +8,16 @@ interface LedgerAccount {
   number: number;
 }
 
-const accountCache = new Map<number, LedgerAccount>();
-
 async function findAccountByNumber(
   client: TripletexClient,
   accountNumber: number,
 ): Promise<LedgerAccount | null> {
-  const cached = accountCache.get(accountNumber);
-  if (cached) return cached;
   const result = await client.list<LedgerAccount>("/ledger/account", {
     number: String(accountNumber),
     from: "0",
     count: "1",
   });
-  const account = result.values[0] ?? null;
-  if (account) accountCache.set(accountNumber, account);
-  return account;
-}
-
-export function resetVoucherCache(): void {
-  accountCache.clear();
+  return result.values[0] ?? null;
 }
 
 function ensureDateFormat(value: unknown): string {

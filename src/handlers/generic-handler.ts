@@ -332,8 +332,6 @@ function fixVoucherPostings(body: Record<string, unknown>): void {
   }
 }
 
-let cachedDefaultDeptId: number | null = null;
-
 async function autoFixPostBody(
   client: TripletexClient,
   endpoint: string,
@@ -341,15 +339,10 @@ async function autoFixPostBody(
 ): Promise<void> {
   if (endpoint === "/employee" || endpoint.endsWith("/employee")) {
     if (!body.department) {
-      if (!cachedDefaultDeptId) {
-        try {
-          const res = await client.list<{ id: number }>("/department", { from: "0", count: "1" });
-          if (res.values[0]) cachedDefaultDeptId = res.values[0].id;
-        } catch { /* ignore */ }
-      }
-      if (cachedDefaultDeptId) {
-        body.department = { id: cachedDefaultDeptId };
-      }
+      try {
+        const res = await client.list<{ id: number }>("/department", { from: "0", count: "1" });
+        if (res.values[0]) body.department = { id: res.values[0].id };
+      } catch { /* ignore */ }
     }
     const ut = String(body.userType ?? "").toUpperCase();
     if (!ut || ut === "0") {
@@ -367,10 +360,6 @@ function enrich403Error(endpoint: string, errorMsg: string): string {
   return errorMsg;
 }
 
-export function resetGenericHandlerCache(): void {
-  cachedDefaultDeptId = null;
-  // Note: sandbox data is cleared via clearSandboxData() in handlers/index.ts
-}
 
 export async function handleGenericTask(
   client: TripletexClient,

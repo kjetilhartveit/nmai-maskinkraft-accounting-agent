@@ -8,8 +8,6 @@ interface LedgerAccount {
   number: number;
 }
 
-const accountCache = new Map<number, LedgerAccount>();
-
 const ACCOUNT_FALLBACKS: Record<number, number[]> = {
   1209: [1200],
   6030: [6020, 6010],
@@ -25,16 +23,12 @@ async function findAccountRaw(
   accountNumber: number,
 ): Promise<LedgerAccount | null> {
   if (!accountNumber || isNaN(accountNumber) || accountNumber <= 0) return null;
-  const cached = accountCache.get(accountNumber);
-  if (cached) return cached;
   const result = await client.list<LedgerAccount>("/ledger/account", {
     number: String(accountNumber),
     from: "0",
     count: "1",
   });
-  const account = result.values[0];
-  if (account) accountCache.set(accountNumber, account);
-  return account ?? null;
+  return result.values[0] ?? null;
 }
 
 async function findAccount(
@@ -50,17 +44,12 @@ async function findAccount(
       const acct = await findAccountRaw(client, fb);
       if (acct) {
         console.log(`[Handler] Account ${accountNumber} not found, using fallback ${fb}`);
-        accountCache.set(accountNumber, acct);
         return acct;
       }
     }
   }
 
   throw new Error(`Ledger account ${accountNumber} not found (no fallbacks available)`);
-}
-
-export function resetMonthlyClosingCache(): void {
-  accountCache.clear();
 }
 
 interface AccrualReversal {

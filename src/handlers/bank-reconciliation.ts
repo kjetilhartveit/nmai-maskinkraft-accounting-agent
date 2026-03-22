@@ -8,24 +8,17 @@ interface LedgerAccount {
   number: number;
 }
 
-const accountCache = new Map<number, LedgerAccount>();
-
 async function findAccount(
   client: TripletexClient,
   accountNumber: number,
 ): Promise<LedgerAccount | null> {
   if (!accountNumber || isNaN(accountNumber) || accountNumber <= 0) return null;
-  const cached = accountCache.get(accountNumber);
-  if (cached) return cached;
   const result = await client.list<LedgerAccount>("/ledger/account", {
     number: String(accountNumber),
     from: "0",
     count: "1",
   });
-  const account = result.values[0];
-  if (!account) return null;
-  accountCache.set(accountNumber, account);
-  return account;
+  return result.values[0] ?? null;
 }
 
 async function findAccountOrFallback(
@@ -40,10 +33,6 @@ async function findAccountOrFallback(
     if (acct) return acct;
   }
   throw new Error(`No account found for ${accountNumber} or fallbacks ${fallbacks}`);
-}
-
-export function resetBankReconciliationCache(): void {
-  accountCache.clear();
 }
 
 interface Transaction {
@@ -163,60 +152,48 @@ export async function handleBankReconciliation(
     if (acct) resolvedAccounts.set(num, acct);
   }
 
-  // Group adjustments by date so each voucher is balanced
-  const byDate = new Map<string, typeof adjustments>();
+  // Build all postings into a single voucher — all postings use the same date
+  // since Tripletex requires postings to balance per date within a voucher
+  const postings: Record<string, unknown>[] = [];
+  let bankTotal = 0;
+
   for (const adj of adjustments) {
     const targetAcct = resolvedAccounts.get(adj.accountNumber);
     if (!targetAcct) {
       console.warn(`[Handler] Account ${adj.accountNumber} not found, skipping`);
       continue;
     }
-    const d = adj.date || dateStr;
-    if (!byDate.has(d)) byDate.set(d, []);
-    byDate.get(d)!.push(adj);
+    postings.push({
+      row: postings.length + 1,
+      account: { id: targetAcct.id },
+      date: dateStr,
+      amountGross: adj.amount,
+      amountGrossCurrency: adj.amount,
+      description: adj.description,
+    });
+    bankTotal -= adj.amount;
   }
 
-  if (byDate.size === 0) {
+  if (postings.length === 0) {
     console.warn("[Handler] No valid adjustments could be created");
     return;
   }
 
-  let voucherCount = 0;
-  for (const [vDate, dateAdjs] of byDate) {
-    const postings: Record<string, unknown>[] = [];
-    let bankTotal = 0;
-
-    for (const adj of dateAdjs) {
-      const targetAcct = resolvedAccounts.get(adj.accountNumber)!;
-      postings.push({
-        row: postings.length + 1,
-        account: { id: targetAcct.id },
-        date: vDate,
-        amountGross: adj.amount,
-        amountGrossCurrency: adj.amount,
-        description: adj.description,
-      });
-      bankTotal -= adj.amount;
-    }
-
-    if (Math.abs(bankTotal) > 0.01) {
-      postings.push({
-        row: postings.length + 1,
-        account: { id: bankAccount.id },
-        date: vDate,
-        amountGross: bankTotal,
-        amountGrossCurrency: bankTotal,
-        description: "Bank motkonto",
-      });
-    }
-
-    const result = await client.post<{ id: number }>("/ledger/voucher", {
-      date: vDate,
-      description: `Bankavstemmelse ${vDate}`,
-      postings,
+  if (Math.abs(bankTotal) > 0.01) {
+    postings.push({
+      row: postings.length + 1,
+      account: { id: bankAccount.id },
+      date: dateStr,
+      amountGross: bankTotal,
+      amountGrossCurrency: bankTotal,
+      description: "Bank motkonto",
     });
-    voucherCount++;
-    console.log(`[Handler] Created bank reconciliation voucher ${voucherCount}: id=${result.value.id} (date=${vDate}, ${postings.length} postings)`);
   }
-  console.log(`[Handler] Bank reconciliation complete: ${voucherCount} vouchers created`);
+
+  const result = await client.post<{ id: number }>("/ledger/voucher", {
+    date: dateStr,
+    description: "Bankavstemmelse",
+    postings,
+  });
+  console.log(`[Handler] Created bank reconciliation voucher: id=${result.value.id} (${postings.length} postings)`);
 }
