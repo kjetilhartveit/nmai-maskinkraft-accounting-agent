@@ -39,7 +39,7 @@ export const testCases: TestCase[] = [
     expectedEntities: [
       { _type: "employee", firstName: "Erik", lastName: "Hansen" },
     ],
-    expectedApiCalls: { max: 2, maxErrors: 0 },
+    expectedApiCalls: { max: 0, maxErrors: 0 },
   },
 
   {
@@ -80,7 +80,7 @@ export const testCases: TestCase[] = [
     expectedEntities: [
       { _type: "product", name: "Premium Konsulentpakke" },
     ],
-    expectedApiCalls: { max: 4, maxErrors: 0 },
+    expectedApiCalls: { max: 0, maxErrors: 0 },
   },
 
   // ═══════════════════════════════════════════════════════════════════
@@ -97,7 +97,7 @@ export const testCases: TestCase[] = [
     expectedEntities: [
       { _type: "project", name: "Nettside Redesign" },
     ],
-    expectedApiCalls: { max: 6, maxErrors: 0 },
+    expectedApiCalls: { max: 1, maxErrors: 0 },
   },
 
   {
@@ -111,7 +111,7 @@ export const testCases: TestCase[] = [
       { _type: "customer", name: "Bergen Handel AS" },
       { _type: "invoice" },
     ],
-    expectedApiCalls: { max: 8, maxErrors: 0 },
+    expectedApiCalls: { max: 4, maxErrors: 0 },
     notes: "Three products with different VAT rates: 25%, 15% (food), 0% (exempt).",
   },
 
@@ -126,7 +126,7 @@ export const testCases: TestCase[] = [
       { _type: "customer", name: "Vestland Tech AS" },
       { _type: "invoice" },
     ],
-    expectedApiCalls: { max: 7, maxErrors: 0 },
+    expectedApiCalls: { max: 5, maxErrors: 0 },
   },
 
   {
@@ -139,7 +139,7 @@ export const testCases: TestCase[] = [
     expectedEntities: [
       { _type: "order" },
     ],
-    expectedApiCalls: { max: 5, maxErrors: 0 },
+    expectedApiCalls: { max: 4, maxErrors: 0 },
   },
 
   {
@@ -152,7 +152,7 @@ export const testCases: TestCase[] = [
     expectedEntities: [
       { _type: "payment" },
     ],
-    expectedApiCalls: { max: 4, maxErrors: 0 },
+    expectedApiCalls: { max: 1, maxErrors: 0 },
   },
 
   {
@@ -166,7 +166,7 @@ export const testCases: TestCase[] = [
       { _type: "customer", name: "Fjellet Eiendom AS" },
       { _type: "creditNote" },
     ],
-    expectedApiCalls: { max: 8, maxErrors: 0 },
+    expectedApiCalls: { max: 5, maxErrors: 0 },
   },
 
   {
@@ -192,7 +192,7 @@ export const testCases: TestCase[] = [
     expectedEntities: [
       { _type: "voucher", description: "Lønn" },
     ],
-    expectedApiCalls: { max: 6, maxErrors: 0 },
+    expectedApiCalls: { max: 1, maxErrors: 0 },
   },
 
   {
@@ -219,7 +219,7 @@ export const testCases: TestCase[] = [
     expectedEntities: [
       { _type: "voucher" },
     ],
-    expectedApiCalls: { max: 5, maxErrors: 0 },
+    expectedApiCalls: { max: 1, maxErrors: 0 },
   },
 
   {
@@ -232,7 +232,7 @@ export const testCases: TestCase[] = [
     expectedEntities: [
       { _type: "payment" },
     ],
-    expectedApiCalls: { max: 4, maxErrors: 0 },
+    expectedApiCalls: { max: 1, maxErrors: 0 },
   },
 
   {
@@ -246,7 +246,7 @@ export const testCases: TestCase[] = [
       { _type: "project", name: "ERP Implementering" },
       { _type: "invoice" },
     ],
-    expectedApiCalls: { max: 11, maxErrors: 0 },
+    expectedApiCalls: { max: 4, maxErrors: 0 },
   },
 
   {
@@ -352,7 +352,7 @@ export const testCases: TestCase[] = [
     expectedEntities: [
       { _type: "voucher" },
     ],
-    expectedApiCalls: { max: 5, maxErrors: 0 },
+    expectedApiCalls: { max: 1, maxErrors: 0 },
   },
 
   {
@@ -379,7 +379,7 @@ export const testCases: TestCase[] = [
     expectedEntities: [
       { _type: "voucher", description: "Årsavslutning" },
     ],
-    expectedApiCalls: { max: 11, maxErrors: 0 },
+    expectedApiCalls: { max: 2, maxErrors: 0 },
   },
 
   {
@@ -392,7 +392,7 @@ export const testCases: TestCase[] = [
     expectedEntities: [
       { _type: "voucher", description: "Månedsavslutning" },
     ],
-    expectedApiCalls: { max: 6, maxErrors: 0 },
+    expectedApiCalls: { max: 1, maxErrors: 0 },
     notes: "Accrual: 15000 (1710→6300). Depreciation: 5000 (6010/1209). Salary provision: 180000 (5000/2900).",
   },
 
@@ -434,6 +434,6 @@ export const testCases: TestCase[] = [
       { _type: "voucher" },
       { _type: "invoice" },
     ],
-    expectedApiCalls: { max: 12, maxErrors: 0 },
+    expectedApiCalls: { max: 6, maxErrors: 0 },
   },
 ];
