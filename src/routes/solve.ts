@@ -129,22 +129,34 @@ solveRouter.post("/solve", async (c) => {
     // ══════════════════════════════════════════════════════════════════
     // STEP 1: Classify the prompt
     // ══════════════════════════════════════════════════════════════════
-    const classifyStart = performance.now();
-    const classification = await classifyPrompt(prompt);
-    const classifyMs = Math.round(performance.now() - classifyStart);
+    let classification;
+    try {
+      const classifyStart = performance.now();
+      classification = await classifyPrompt(prompt);
+      const classifyMs = Math.round(performance.now() - classifyStart);
 
-    if (!classification) {
-      throw new Error("Classification failed");
+      if (!classification) {
+        throw new Error("Classification returned null");
+      }
+      trace.logClassification(classification.type, classification.method, undefined, classifyMs);
+    } catch (classifyError) {
+      console.error("[Solve] Classification error:", classifyError);
+      throw new Error(`Classification failed: ${classifyError instanceof Error ? classifyError.message : String(classifyError)}`);
     }
 
     const taskType = classification.type as TaskType;
-    trace.logClassification(taskType, classification.method, undefined, classifyMs);
 
     // ══════════════════════════════════════════════════════════════════
     // STEP 2: Extract entities based on task type
     // ══════════════════════════════════════════════════════════════════
-    const extraction = await extractEntities(taskType, prompt, files);
-    trace.logEntityExtraction(taskType, extraction.entities, extraction.durationMs);
+    let extraction;
+    try {
+      extraction = await extractEntities(taskType, prompt, files);
+      trace.logEntityExtraction(taskType, extraction.entities, extraction.durationMs);
+    } catch (extractError) {
+      console.error("[Solve] Entity extraction error:", extractError);
+      throw new Error(`Entity extraction failed: ${extractError instanceof Error ? extractError.message : String(extractError)}`);
+    }
 
     // ══════════════════════════════════════════════════════════════════
     // STEP 3: Build task sequence (with prerequisites)
@@ -214,7 +226,9 @@ solveRouter.post("/solve", async (c) => {
   } catch (error) {
     const elapsed = Math.round(performance.now() - start);
     const message = error instanceof Error ? error.message : String(error);
-    console.error(`[Solve] ${solveId} | Error after ${elapsed}ms:`, error);
+    const stack = error instanceof Error ? error.stack : "";
+    console.error(`[Solve] ${solveId} | Error after ${elapsed}ms:`, message);
+    console.error(`[Solve] ${solveId} | Stack trace:`, stack);
 
     const stats = client?.stats ?? { total: 0, errors: 0, totalDuration: 0 };
     const source = detectSource(evalMode, baseUrl);

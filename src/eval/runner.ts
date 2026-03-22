@@ -85,7 +85,24 @@ export async function runEvalCase(
   }
 
   const elapsedRoundtrip = Math.round(performance.now() - start);
-  const json: unknown = await res.json();
+  const responseText = await res.text();
+
+  let json: unknown;
+  try {
+    json = JSON.parse(responseText);
+  } catch {
+    return {
+      testCaseId: tc.id,
+      config: evalConfig,
+      apiCalls: { count: 0, errors: 0 },
+      apiCallDetails: [],
+      elapsedMs: elapsedRoundtrip,
+      success: false,
+      serverReportedSuccess: false,
+      parseMatch: false,
+      error: `Server returned non-JSON (${res.status}): ${responseText.slice(0, 200)}`,
+    };
+  }
 
   if (!isEvalBody(json)) {
     return {

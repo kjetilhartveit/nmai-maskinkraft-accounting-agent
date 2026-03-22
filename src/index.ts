@@ -5,6 +5,18 @@ import { solveRouter } from "./routes/solve.js";
 
 const app = new Hono();
 
+// Global error handler
+app.onError((err, c) => {
+  console.error("[Server] Unhandled error:", err);
+  return c.json({
+    status: "completed",
+    success: false,
+    apiCallStats: { total: 0, errors: 0, details: [] },
+    elapsedMs: 0,
+    error: err instanceof Error ? err.message : String(err),
+  }, 200);
+});
+
 app.use("*", async (c, next) => {
   const start = performance.now();
   const method = c.req.method;
