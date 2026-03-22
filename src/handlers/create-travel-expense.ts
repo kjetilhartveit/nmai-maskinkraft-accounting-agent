@@ -63,7 +63,7 @@ async function getCostCategories(client: TripletexClient): Promise<CostCategory[
 function matchCostCategory(categories: CostCategory[], description: string): CostCategory | undefined {
   const desc = description.toLowerCase();
   const keywords: [string[], string][] = [
-    [["diett", "per diem", "diem", "dietas", "indemnité"], "diett"],
+    [["diett", "per diem", "diem", "dietas", "indemnité", "tagegeld", "tagesgeld", "diaria"], "diett"],
     [["fly", "flight", "avion", "vuelo", "flug"], "fly"],
     [["taxi"], "taxi"],
     [["hotel", "hotell", "alojamiento", "hébergement", "unterkunft"], "hotel"],
