@@ -1,4 +1,6 @@
 import "dotenv/config";
+import * as fs from "fs";
+import * as path from "path";
 import type { ApiCallLog, ParsedTaskSequence } from "../types/index.js";
 import type { SolveEvalResponseBody } from "../routes/solve.js";
 import { config } from "../lib/config.js";
@@ -53,6 +55,27 @@ export async function runEvalCase(
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 240_000);
 
+  const files = [];
+  if (tc.requiresFile && tc.fileType === "pdf") {
+    let filename = "";
+    if (tc.taskType === "employee_onboarding_pdf") filename = "onboarding.pdf";
+    else if (tc.taskType === "employee_contract_pdf") filename = "contract.pdf";
+    else if (tc.taskType === "supplier_invoice_pdf") filename = "supplier_invoice.pdf";
+    else filename = `${tc.taskType}.pdf`;
+
+    const filepath = path.join(process.cwd(), "data", "pdf", filename);
+    if (fs.existsSync(filepath)) {
+      const content = fs.readFileSync(filepath).toString("base64");
+      files.push({
+        filename,
+        content_base64: content,
+        mime_type: "application/pdf"
+      });
+    } else {
+      console.warn(`[Eval] Missing required file fixture for ${tc.id} at ${filepath}`);
+    }
+  }
+
   let res: Response;
   try {
     res = await fetch(`${serverUrl.replace(/\/+$/, "")}/solve`, {
@@ -61,7 +84,7 @@ export async function runEvalCase(
       signal: controller.signal,
       body: JSON.stringify({
         prompt: tc.prompt,
-        files: [],
+        files,
         tripletex_credentials: creds,
       }),
     });
