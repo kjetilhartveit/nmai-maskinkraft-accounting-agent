@@ -206,7 +206,7 @@ export const testCases: TestCase[] = [
       { _type: "supplier", name: "Renhold Pluss AS" },
       { _type: "voucher" },
     ],
-    expectedApiCalls: { max: 5, maxErrors: 0 },
+    expectedApiCalls: { max: 2, maxErrors: 0 },
   },
 
   {
@@ -260,7 +260,7 @@ export const testCases: TestCase[] = [
       { _type: "activity" },
       { _type: "timesheetEntry" },
     ],
-    expectedApiCalls: { max: 6, maxErrors: 0 },
+    expectedApiCalls: { max: 4, maxErrors: 0 },
   },
 
   // ═══════════════════════════════════════════════════════════════════
@@ -277,7 +277,7 @@ export const testCases: TestCase[] = [
     expectedEntities: [
       { _type: "voucher" },
     ],
-    expectedApiCalls: { max: 5, maxErrors: 0 },
+    expectedApiCalls: { max: 3, maxErrors: 0 },
     requiresFile: true,
     fileType: "pdf",
   },
@@ -290,9 +290,9 @@ export const testCases: TestCase[] = [
     tier: 3,
     taskType: "employee_onboarding_pdf",
     expectedEntities: [
-      { _type: "employee" },
+      { _type: "employee", firstName: "Kari", lastName: "Nordmann" },
     ],
-    expectedApiCalls: { max: 2, maxErrors: 0 },
+    expectedApiCalls: { max: 5, maxErrors: 0 },
     requiresFile: true,
     fileType: "pdf",
   },
@@ -305,7 +305,7 @@ export const testCases: TestCase[] = [
     tier: 3,
     taskType: "employee_contract_pdf",
     expectedEntities: [
-      { _type: "employee" },
+      { _type: "employee", firstName: "Ola", lastName: "Hansen" },
     ],
     expectedApiCalls: { max: 8, maxErrors: 0 },
     requiresFile: true,
@@ -320,9 +320,10 @@ export const testCases: TestCase[] = [
     tier: 3,
     taskType: "supplier_invoice_pdf",
     expectedEntities: [
+      { _type: "supplier", name: "Renhold Pluss AS" },
       { _type: "voucher" },
     ],
-    expectedApiCalls: { max: 4, maxErrors: 0 },
+    expectedApiCalls: { max: 2, maxErrors: 0 },
     requiresFile: true,
     fileType: "pdf",
   },
@@ -337,9 +338,9 @@ export const testCases: TestCase[] = [
     expectedEntities: [
       { _type: "voucher" },
     ],
-    expectedApiCalls: { max: 15, maxErrors: 0 },
+    expectedApiCalls: { max: 1, maxErrors: 0 },
     requiresFile: true,
-    fileType: "pdf",
+    fileType: "csv",
   },
 
   {
@@ -366,7 +367,7 @@ export const testCases: TestCase[] = [
       { _type: "project", _minCount: 3 },
       { _type: "activity", _minCount: 3 },
     ],
-    expectedApiCalls: { max: 10, maxErrors: 0 },
+    expectedApiCalls: { max: 3, maxErrors: 0 },
   },
 
   {
@@ -379,7 +380,7 @@ export const testCases: TestCase[] = [
     expectedEntities: [
       { _type: "voucher", description: "Årsavslutning" },
     ],
-    expectedApiCalls: { max: 2, maxErrors: 0 },
+    expectedApiCalls: { max: 1, maxErrors: 0 },
   },
 
   {
@@ -420,7 +421,7 @@ export const testCases: TestCase[] = [
       { _type: "project", name: "Digital Transformasjon" },
       { _type: "invoice" },
     ],
-    expectedApiCalls: { max: 17, maxErrors: 0 },
+    expectedApiCalls: { max: 7, maxErrors: 0 },
   },
 
   {

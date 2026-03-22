@@ -1,0 +1,16 @@
+Date;Description;Amount;Reference;Balance
+2026-01-02;Opening balance;0.00;;125000.00
+2026-01-05;Payment from Acme AS;15000.00;10001;140000.00
+2026-01-08;Bank fee monthly;-150.00;;139850.00
+2026-01-10;Payment to Supplier Norge AS;-8500.00;20001;131350.00
+2026-01-12;Payment from Nordic Solutions;22500.00;10002;153850.00
+2026-01-15;Payment from TechCorp partial;5000.00;10003;158850.00
+2026-01-18;Interest income;125.50;;158975.50
+2026-01-20;Payment to Office Supplies Ltd;-3200.00;20002;155775.50
+2026-01-22;Payment from Hansen Consulting;18750.00;10004;174525.50
+2026-01-25;Payment to Elektro AS;-12000.00;20003;162525.50
+2026-01-28;ATM withdrawal;-2000.00;;160525.50
+2026-01-30;Payment from Berg Industries;31250.00;10005;191775.50
+2026-02-01;Salary transfer;-45000.00;;146775.50
+2026-02-03;Payment to IT Services AS partial;-7500.00;20004;139275.50
+2026-02-05;Payment from Coastal Trading;9800.00;10006;149075.50

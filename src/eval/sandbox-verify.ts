@@ -55,7 +55,7 @@ export async function verifySandboxEntities(
     let found = false;
 
     try {
-      if (hasSearchableFields(fields)) {
+      if (hasSearchableFields(fields) || hasGetVerifier(_type as EntityType)) {
         found = await verifyViaGet(client, _type as EntityType, fields, minCount);
       }
       if (!found) {
@@ -80,6 +80,12 @@ function hasSearchableFields(fields: Record<string, unknown>): boolean {
   );
 }
 
+const GET_VERIFIABLE_TYPES = new Set<string>(["activity", "timesheetEntry"]);
+
+function hasGetVerifier(type: EntityType): boolean {
+  return GET_VERIFIABLE_TYPES.has(type);
+}
+
 async function verifyViaGet(
   client: TripletexClient,
   type: EntityType,
@@ -100,6 +106,10 @@ async function verifyViaGet(
       return verifyByNameSearch(client, "/project", fields, minCount);
     case "voucher":
       return verifyVoucher(client, fields);
+    case "activity":
+      return verifyActivityExists(client, minCount);
+    case "timesheetEntry":
+      return verifyTimesheetExists(client, minCount);
     default:
       return false;
   }
@@ -151,6 +161,27 @@ async function verifyVoucher(
   return result.values.some(
     (v) => v.description?.toLowerCase().includes(description.toLowerCase()),
   );
+}
+
+async function verifyActivityExists(
+  client: TripletexClient,
+  minCount: number,
+): Promise<boolean> {
+  const result = await client.list<{ id: number }>("/activity", { from: "0", count: "1000" });
+  return result.values.length >= minCount;
+}
+
+async function verifyTimesheetExists(
+  client: TripletexClient,
+  minCount: number,
+): Promise<boolean> {
+  const result = await client.list<{ id: number }>("/timesheet/entry", {
+    dateFrom: todayStr(),
+    dateTo: tomorrowStr(),
+    from: "0",
+    count: "100",
+  });
+  return result.values.length >= minCount;
 }
 
 function verifyViaApiLog(

@@ -23,6 +23,7 @@ function parseArgs(argv: string[]): {
   worst?: number;
   updateBaselines?: boolean;
   skipFileTasks?: boolean;
+  fileTasks?: boolean;
   verbose?: boolean;
   setMax?: string[];
 } {
@@ -53,6 +54,8 @@ function parseArgs(argv: string[]): {
       out.updateBaselines = true;
     } else if (a === "--skip-file-tasks") {
       out.skipFileTasks = true;
+    } else if (a === "--file-tasks") {
+      out.fileTasks = true;
     } else if (a === "--verbose" || a === "-v") {
       out.verbose = true;
     } else if (a === "--set-max" && argv[i + 1]) {
@@ -142,6 +145,9 @@ async function main() {
   if (args.skipFileTasks) {
     cases = cases.filter((tc) => !tc.requiresFile);
   }
+  if (args.fileTasks) {
+    cases = cases.filter((tc) => tc.requiresFile);
+  }
   if (args.tier) {
     cases = cases.filter((tc) => args.tier!.includes(tc.tier));
   }
@@ -195,6 +201,7 @@ async function main() {
   if (args.onePerType) labels.push("one-per-type");
   if (args.worst) labels.push(`worst ${args.worst}`);
   if (args.skipFileTasks) labels.push("skip-file-tasks");
+  if (args.fileTasks) labels.push("file-tasks-only");
   const filterLabel = labels.length > 0 ? ` (${labels.join(", ")})` : "";
   const fileTaskCount = cases.filter(tc => tc.requiresFile).length;
   const fileNote = fileTaskCount > 0 ? ` [${fileTaskCount} require files]` : "";

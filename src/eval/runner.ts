@@ -81,8 +81,6 @@ export async function runEvalCase(
     else if (tc.taskType === "employee_contract_pdf") filename = "contract.pdf";
     else if (tc.taskType === "supplier_invoice_pdf")
       filename = "supplier_invoice.pdf";
-    else if (tc.taskType === "bank_reconciliation")
-      filename = "bank_reconciliation.pdf";
     else filename = `${tc.taskType}.pdf`;
 
     const filepath = path.join(process.cwd(), "data", "pdf", filename);
@@ -92,6 +90,24 @@ export async function runEvalCase(
         filename,
         content_base64: content,
         mime_type: "application/pdf",
+      });
+    } else {
+      console.warn(
+        `[Eval] Missing required file fixture for ${tc.id} at ${filepath}`
+      );
+    }
+  } else if (tc.requiresFile && tc.fileType === "csv") {
+    let filename = "";
+    if (tc.taskType === "bank_reconciliation") filename = "bank-statement.csv";
+    else filename = `${tc.taskType}.csv`;
+
+    const filepath = path.join(process.cwd(), "data", "csv", filename);
+    if (fs.existsSync(filepath)) {
+      const content = fs.readFileSync(filepath).toString("base64");
+      files.push({
+        filename,
+        content_base64: content,
+        mime_type: "text/csv",
       });
     } else {
       console.warn(
