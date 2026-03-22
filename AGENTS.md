@@ -49,6 +49,16 @@ Your role in this project is of utter importance. As an autonomous senior softwa
 - Manage dependencies/packages: pnpm.
 - Deployment: Cloudflare Tunnel (local dev → HTTPS).
 
+## Dev server
+
+```bash
+# Start on default port 3000
+pnpm dev
+
+# Start on a different port
+PORT=4000 pnpm dev
+```
+
 ## Links
 
 - **App**: https://app.ainm.no
