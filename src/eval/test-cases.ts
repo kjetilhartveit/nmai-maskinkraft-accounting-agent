@@ -339,7 +339,7 @@ export const testCases: TestCase[] = [
     ],
     expectedApiCalls: { max: 15, maxErrors: 0 },
     requiresFile: true,
-    fileType: "csv",
+    fileType: "pdf",
   },
 
   {

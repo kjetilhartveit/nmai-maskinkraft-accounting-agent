@@ -1563,6 +1563,8 @@
     "language": "pt",
     "tier": 3,
     "taskType": "bank_reconciliation",
+    "requiresFile": true,
+    "fileType": "pdf",
     "expectedEntities": [],
     "expectedApiCalls": {
       "max": 25,

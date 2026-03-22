@@ -13,10 +13,11 @@ const DEFAULT_SERVER = process.env.SERVER_URL || "http://localhost:3000";
 
 function getCredentials(): { base_url: string; session_token: string } {
   const base_url = process.env.SANDBOX_API_URL || config.sandbox.apiUrl;
-  const session_token = process.env.SANDBOX_SESSION_TOKEN || config.sandbox.sessionToken;
+  const session_token =
+    process.env.SANDBOX_SESSION_TOKEN || config.sandbox.sessionToken;
   if (!base_url || !session_token) {
     throw new Error(
-      "Missing SANDBOX_API_URL / SANDBOX_SESSION_TOKEN (or config.sandbox) for eval requests",
+      "Missing SANDBOX_API_URL / SANDBOX_SESSION_TOKEN (or config.sandbox) for eval requests"
     );
   }
   return { base_url, session_token };
@@ -37,7 +38,7 @@ function makeFailResult(
   tc: TestCase,
   evalConfig: EvalConfig,
   elapsedMs: number,
-  error: string,
+  error: string
 ): EvalResult {
   return {
     testCaseId: tc.id,
@@ -57,7 +58,7 @@ function makeFailResult(
 export async function runEvalCase(
   serverUrl: string,
   evalConfig: EvalConfig,
-  tc: TestCase,
+  tc: TestCase
 ): Promise<EvalResult> {
   const creds = getCredentials();
   const headers: Record<string, string> = {
@@ -78,15 +79,24 @@ export async function runEvalCase(
     let filename = "";
     if (tc.taskType === "employee_onboarding_pdf") filename = "onboarding.pdf";
     else if (tc.taskType === "employee_contract_pdf") filename = "contract.pdf";
-    else if (tc.taskType === "supplier_invoice_pdf") filename = "supplier_invoice.pdf";
+    else if (tc.taskType === "supplier_invoice_pdf")
+      filename = "supplier_invoice.pdf";
+    else if (tc.taskType === "bank_reconciliation")
+      filename = "bank_reconciliation.pdf";
     else filename = `${tc.taskType}.pdf`;
 
     const filepath = path.join(process.cwd(), "data", "pdf", filename);
     if (fs.existsSync(filepath)) {
       const content = fs.readFileSync(filepath).toString("base64");
-      files.push({ filename, content_base64: content, mime_type: "application/pdf" });
+      files.push({
+        filename,
+        content_base64: content,
+        mime_type: "application/pdf",
+      });
     } else {
-      console.warn(`[Eval] Missing required file fixture for ${tc.id} at ${filepath}`);
+      console.warn(
+        `[Eval] Missing required file fixture for ${tc.id} at ${filepath}`
+      );
     }
   }
 
@@ -96,13 +106,22 @@ export async function runEvalCase(
       method: "POST",
       headers,
       signal: controller.signal,
-      body: JSON.stringify({ prompt: tc.prompt, files, tripletex_credentials: creds }),
+      body: JSON.stringify({
+        prompt: tc.prompt,
+        files,
+        tripletex_credentials: creds,
+      }),
     });
   } catch (err) {
     clearTimeout(timeout);
     const elapsed = Math.round(performance.now() - start);
     const msg = err instanceof Error ? err.message : String(err);
-    return makeFailResult(tc, evalConfig, elapsed, `Fetch failed (timeout/network): ${msg}`);
+    return makeFailResult(
+      tc,
+      evalConfig,
+      elapsed,
+      `Fetch failed (timeout/network): ${msg}`
+    );
   } finally {
     clearTimeout(timeout);
   }
@@ -114,11 +133,21 @@ export async function runEvalCase(
   try {
     json = JSON.parse(responseText);
   } catch {
-    return makeFailResult(tc, evalConfig, elapsedRoundtrip, `Server returned non-JSON (${res.status}): ${responseText.slice(0, 200)}`);
+    return makeFailResult(
+      tc,
+      evalConfig,
+      elapsedRoundtrip,
+      `Server returned non-JSON (${res.status}): ${responseText.slice(0, 200)}`
+    );
   }
 
   if (!isEvalBody(json)) {
-    return makeFailResult(tc, evalConfig, elapsedRoundtrip, `Unexpected response (${res.status}): ${JSON.stringify(json)}`);
+    return makeFailResult(
+      tc,
+      evalConfig,
+      elapsedRoundtrip,
+      `Unexpected response (${res.status}): ${JSON.stringify(json)}`
+    );
   }
 
   const parsedSequence = json.parsedSequence as ParsedTaskSequence | undefined;
@@ -134,12 +163,23 @@ export async function runEvalCase(
   let sandboxFailures: string[] = [];
   if (tc.expectedEntities.length > 0 && res.ok) {
     try {
-      const verifyClient = new TripletexClient(creds.base_url, creds.session_token);
-      const verification = await verifySandboxEntities(verifyClient, tc.expectedEntities, details);
+      const verifyClient = new TripletexClient(
+        creds.base_url,
+        creds.session_token
+      );
+      const verification = await verifySandboxEntities(
+        verifyClient,
+        tc.expectedEntities,
+        details
+      );
       sandboxVerified = verification.verified;
       sandboxFailures = verification.failures;
     } catch (err) {
-      console.warn(`[Eval] ${tc.id}: sandbox verification error: ${err instanceof Error ? err.message : err}`);
+      console.warn(
+        `[Eval] ${tc.id}: sandbox verification error: ${
+          err instanceof Error ? err.message : err
+        }`
+      );
       sandboxVerified = false;
       sandboxFailures = ["verification query failed"];
     }
@@ -148,17 +188,28 @@ export async function runEvalCase(
   const success = parseMatch && boundsOk && sandboxVerified && res.ok;
 
   if (!success && !parseMatch) {
-    const actualTypes = parsedSequence?.tasks.map(t => t.taskType).join("→") ?? "none";
-    console.warn(`[Eval] ${tc.id}: taskType mismatch (expected=${tc.taskType}, got=${actualTypes})`);
+    const actualTypes =
+      parsedSequence?.tasks.map((t) => t.taskType).join("→") ?? "none";
+    console.warn(
+      `[Eval] ${tc.id}: taskType mismatch (expected=${tc.taskType}, got=${actualTypes})`
+    );
   }
   if (!success && !sandboxVerified) {
-    console.warn(`[Eval] ${tc.id}: sandbox verification failed: ${sandboxFailures.join(", ")}`);
+    console.warn(
+      `[Eval] ${tc.id}: sandbox verification failed: ${sandboxFailures.join(
+        ", "
+      )}`
+    );
   }
 
-  const errorCalls = details.filter(d => d.isError);
+  const errorCalls = details.filter((d) => d.isError);
   if (errorCalls.length > 0) {
     for (const ec of errorCalls) {
-      console.warn(`[Eval] ${tc.id}: API error ${ec.method} ${ec.endpoint} → ${ec.status}${ec.errorBody ? `: ${ec.errorBody.slice(0, 100)}` : ""}`);
+      console.warn(
+        `[Eval] ${tc.id}: API error ${ec.method} ${ec.endpoint} → ${ec.status}${
+          ec.errorBody ? `: ${ec.errorBody.slice(0, 100)}` : ""
+        }`
+      );
     }
   }
 
@@ -185,7 +236,7 @@ export async function runEval(
     serverUrl?: string;
     iterations?: number;
     onResult?: (result: EvalResult, index: number, total: number) => void;
-  },
+  }
 ): Promise<EvalResult[]> {
   const serverUrl = options?.serverUrl ?? DEFAULT_SERVER;
   const iterations = options?.iterations ?? 1;
