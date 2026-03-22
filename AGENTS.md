@@ -24,34 +24,19 @@ The 30 templates and their variable schemas are defined in `task-classifier.ts` 
 
 **Architecture**: Refactored from 5-step (classify → extract → build → council → execute) to 3-step pipeline. Removed `unknown` type, LLM council, and 4 speculative types. Added 3 new types: `employee_contract_pdf`, `supplier_invoice_pdf`, `ledger_analysis`.
 
-**Baseline results** (2026-03-21, `--one-per-type`, 30 cases):
-- **19/30 passed (63%)**
-
-**Confidently working (19 types):** create_employee, create_department, send_invoice, create_supplier, create_customer, create_invoice, create_credit_note, create_payment, create_dimension, create_product, create_supplier_invoice, create_order, reverse_payment, fx_payment, bank_reconciliation, reminder_fee, receipt_expense, employee_onboarding_pdf, ledger_audit.
-
-**11 failures by category:**
-
-**Misclassification (4):**
-- `create_timesheet` → classified as `create_customer` (Norwegian prompt)
-- `ledger_analysis` → classified as `create_project`
-- `employee_contract_pdf` → classified as `create_department`
-- `supplier_invoice_pdf` → classified as `create_invoice`
-
-**Entity extraction failures (5):**
-- `create_project` → missing employee prerequisite in sequence
-- `create_travel_expense` → entity fields not matching expectations
-- `project_fixed_price` → entity extraction issue
-- `year_end_closing` → entity extraction issue (complex multi-part prompt)
-- `monthly_closing` → entity extraction issue (complex multi-part prompt)
-
-**Handler execution failures (2):**
-- `create_payroll` → 8 calls, 2 errors — handler or API issue
-- `project_lifecycle` → 3 calls, 1 error — handler likely broken
+**Eval system** (2026-03-22): Cleaned up to **30 canonical test cases** — one per task type (`src/eval/test-cases.ts`). Each case has:
+- English prompt matching the competition template structure
+- Precise expected entities (what the entity extractor must produce)
+- Expected API sequence (from Python reference `templates.py`)
+- API call bounds with `maxErrors: 0` target
+- 5 file-based types marked with `requiresFile` (need PDF/CSV fixtures)
 
 **Next priorities:**
-1. Fix 4 misclassifications — likely regex fallback issues or classifier prompt needs refinement
-2. Fix entity extraction for the 5 failing types — variable schemas may need tuning
-3. Fix 2 handler execution failures
+1. Run `pnpm eval -- --skip-file-tasks` to get new baseline across 25 non-file types
+2. Fix failing task types one by one using the feedback loop
+3. For each type: ensure 0 API errors, correct classification, correct entity extraction
+4. Secondary: optimize API call counts (batching, remove duplicates)
+5. Add file fixtures for the 5 file-based types (receipt_expense, employee_onboarding_pdf, employee_contract_pdf, supplier_invoice_pdf, bank_reconciliation)
 
 ## Agent's role
 
@@ -134,31 +119,32 @@ Handlers share state via `SequenceContext` which tracks IDs for customers, emplo
 
 ## Evaluation system
 
-**Never run eval against all tests.** With 100+ cases each taking seconds, a full run wastes time and API quota. Always scope runs to the task type you are working on.
+There are exactly **30 test cases** — one per task type — defined in `src/eval/test-cases.ts`. Each case runs the full solver pipeline (classify → extract → execute) against the Tripletex sandbox.
 
 ### Eval commands
 
 ```bash
-# Targeted — run one task type
+# Run all 30 types (excluding file-based)
+pnpm eval -- --skip-file-tasks
+
+# Run a single task type
 pnpm eval -- --task-type create_invoice
 
-# Fast — one representative test per task type (16 cases total)
-pnpm eval -- --one-per-type
+# Run all 30 types including file-based (5 will fail without fixtures)
+pnpm eval
 
 # Focused — top N worst-performing types from solve history
-pnpm eval -- --worst 5 --one-per-type
-
-# Combine filters
-pnpm eval -- --task-type create_credit_note --tier 2,3
-pnpm eval -- --worst 5 --tier 2,3 --one-per-type
+pnpm eval -- --worst 5
 
 # Other flags
 pnpm eval -- --filter "credit_note"          # freetext filter on ID/type/prompt
 pnpm eval -- --iterations 3                  # repeat for confidence (LLMs are non-deterministic)
 pnpm eval -- --update-baselines              # tighten API call bounds after improvements
+pnpm eval -- --verbose                       # show API call details for all results
+pnpm eval -- --tier 1                        # filter by tier (1, 2, or 3)
 ```
 
-Each case prints a colored PASS/FAIL line immediately as it completes, so you get continuous terminal feedback.
+Each case prints a colored PASS/FAIL line immediately as it completes. Failed cases automatically show API call details (method, endpoint, status, error).
 
 ### Task type analysis
 
@@ -191,10 +177,10 @@ This shows all test case variations (by language, tier, multi-task pipelines) an
 ### Step 3: Diagnose — run a single targeted eval
 
 ```bash
-pnpm eval -- --task-type <task_type> --one-per-type
+pnpm eval -- --task-type <task_type>
 ```
 
-This runs exactly one test case for that type. Read the PASS/FAIL output and the error message. If the handler code needs investigation, check the relevant file in `src/handlers/`.
+This runs the canonical test case for that type. Read the PASS/FAIL output and the error message. If the handler code needs investigation, check the relevant file in `src/handlers/`.
 
 For API-level debugging, use `pnpm probe` to test the exact endpoint sequence the handler uses.
 
@@ -211,31 +197,33 @@ Fix the handler, prompt, or parsing logic. Common fixes:
 
 ```bash
 # Quick check: one test
-pnpm eval -- --task-type <task_type> --one-per-type
-
-# Broader check: all variations of that type
 pnpm eval -- --task-type <task_type>
 
-# Confidence check: repeat (LLM outputs are non-deterministic)
-pnpm eval -- --task-type <task_type> --one-per-type --iterations 3
+# Confidence check: repeat (LLMs are non-deterministic)
+pnpm eval -- --task-type <task_type> --iterations 3
+
+# Verbose: see all API calls
+pnpm eval -- --task-type <task_type> --verbose
 ```
 
 ### Step 6: Decide — is this task type "solved"?
 
 A task type is considered solved when:
 
-- **`--one-per-type` passes consistently** (3/3 iterations).
-- **All variations pass** (`--task-type <type>` without `--one-per-type`), or failures are limited to edge cases that don't reflect competition prompts.
+- **Passes consistently** (3/3 iterations with `--iterations 3`).
+- **Zero API errors** — no 4xx/5xx responses from Tripletex.
+- **Correct classification and entity extraction** — parse match is true.
 - **`pnpm task-types -- --worst`** no longer lists it near the top.
 
 Once solved, move to the next worst-performing type. Do not re-test solved types unless you change shared code (parser, sequence context, generic handler).
 
 ### Key principles
 
-- **Never test everything at once.** A full eval of 100+ cases takes too long and obscures signal. Always scope to 1–5 cases.
+- **30 canonical tests, one per type.** A full eval takes ~2-3 minutes. Use `--task-type` to focus on a single type.
 - **LLMs are non-deterministic.** A single PASS doesn't mean solved. Run 2–3 iterations for confidence. A single FAIL doesn't necessarily mean broken — check if it reproduces.
 - **Work one task type at a time.** Finish the feedback loop for one type before moving to the next.
 - **Probe before eval.** If the error is an API 422/403, debug with `pnpm probe` first — it's instant and doesn't require the full agent loop.
+- **Zero errors is the target.** Every canonical test should pass with 0 API errors. The `maxErrors: 0` bound enforces this.
 
 # Environment variables
 
